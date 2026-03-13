@@ -1,0 +1,15 @@
+go 1.25.7
+
+use (
+	./cmd/configctl
+	./cmd/consumer
+	./cmd/server
+	./cmd/validator
+	./internal/actors
+	./internal/adapters/kafka
+	./internal/adapters/nats
+	./internal/application
+	./internal/domain
+	./internal/interfaces/http
+	./internal/shared
+)
