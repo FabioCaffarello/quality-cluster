@@ -1,0 +1,12 @@
+{
+  // validator consumes runtime updates published by configctl.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  }
+}

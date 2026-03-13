@@ -1,16 +1,211 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+
+	configctlcontracts "internal/application/configctl/contracts"
+	"internal/shared/problem"
+	"internal/shared/requestctx"
 )
 
-type ConfigctlWebWandler struct {
+type createDraftUseCase interface {
+	Execute(context.Context, configctlcontracts.CreateDraftCommand) (configctlcontracts.CreateDraftReply, *problem.Problem)
 }
 
-func NewConfigctlWebWandler() *ConfigctlWebWandler {
-	return &ConfigctlWebWandler{}
+type getConfigUseCase interface {
+	Execute(context.Context, configctlcontracts.GetConfigQuery) (configctlcontracts.GetConfigReply, *problem.Problem)
 }
 
-func (h *ConfigctlWebWandler) CreateConfig(w http.ResponseWriter, _ *http.Request) {
-	writeStatusResponse(w, http.StatusOK, "ok")
+type getActiveConfigUseCase interface {
+	Execute(context.Context, configctlcontracts.GetActiveConfigQuery) (configctlcontracts.GetActiveConfigReply, *problem.Problem)
+}
+
+type listConfigsUseCase interface {
+	Execute(context.Context, configctlcontracts.ListConfigsQuery) (configctlcontracts.ListConfigsReply, *problem.Problem)
+}
+
+type validateDraftUseCase interface {
+	Execute(context.Context, configctlcontracts.ValidateDraftCommand) (configctlcontracts.ValidateDraftReply, *problem.Problem)
+}
+
+type ConfigctlWebHandler struct {
+	createDraft   createDraftUseCase
+	getConfig     getConfigUseCase
+	getActive     getActiveConfigUseCase
+	listConfigs   listConfigsUseCase
+	validateDraft validateDraftUseCase
+}
+
+type createDraftRequest struct {
+	Name    string `json:"name"`
+	Format  string `json:"format"`
+	Content string `json:"content"`
+}
+
+type createDraftResponse struct {
+	Status string                          `json:"status"`
+	Config configctlcontracts.ConfigRecord `json:"config"`
+}
+
+type getConfigResponse struct {
+	Config configctlcontracts.ConfigRecord `json:"config"`
+}
+
+type listConfigsResponse struct {
+	Configs []configctlcontracts.ConfigRecord `json:"configs"`
+}
+
+type validateDraftRequest struct {
+	Format  string `json:"format"`
+	Content string `json:"content"`
+}
+
+type validateDraftResponse struct {
+	Status     string                                `json:"status"`
+	Validation configctlcontracts.ValidateDraftReply `json:"validation"`
+}
+
+func NewConfigctlWebHandler(
+	createDraft createDraftUseCase,
+	getConfig getConfigUseCase,
+	getActive getActiveConfigUseCase,
+	listConfigs listConfigsUseCase,
+	validateDraft validateDraftUseCase,
+) *ConfigctlWebHandler {
+	return &ConfigctlWebHandler{
+		createDraft:   createDraft,
+		getConfig:     getConfig,
+		getActive:     getActive,
+		listConfigs:   listConfigs,
+		validateDraft: validateDraft,
+	}
+}
+
+func (h *ConfigctlWebHandler) CreateDraft(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.createDraft == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "draft creation is unavailable"))
+		return
+	}
+
+	request, prob := decodeJSONBody[createDraftRequest](r)
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	ctx := requestctx.WithCorrelationID(r.Context(), r.Header.Get("X-Correlation-ID"))
+	result, execProb := h.createDraft.Execute(ctx, configctlcontracts.CreateDraftCommand{
+		Name:    request.Name,
+		Format:  request.Format,
+		Content: request.Content,
+	})
+	if execProb != nil {
+		writeProblemResponse(w, execProb)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusCreated, createDraftResponse{
+		Status: "created",
+		Config: result.Config,
+	})
+}
+
+func (h *ConfigctlWebHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.getConfig == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "config lookup is unavailable"))
+		return
+	}
+
+	result, prob := h.getConfig.Execute(r.Context(), configctlcontracts.GetConfigQuery{
+		ID: r.URL.Query().Get("id"),
+	})
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, getConfigResponse{Config: result.Config})
+}
+
+func (h *ConfigctlWebHandler) GetActiveConfig(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.getActive == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "active config lookup is unavailable"))
+		return
+	}
+
+	result, prob := h.getActive.Execute(r.Context(), configctlcontracts.GetActiveConfigQuery{})
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, getConfigResponse{Config: result.Config})
+}
+
+func (h *ConfigctlWebHandler) ListConfigs(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.listConfigs == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "config listing is unavailable"))
+		return
+	}
+
+	result, prob := h.listConfigs.Execute(r.Context(), configctlcontracts.ListConfigsQuery{})
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, listConfigsResponse{Configs: result.Configs})
+}
+
+func (h *ConfigctlWebHandler) ValidateDraft(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.validateDraft == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "draft validation is unavailable"))
+		return
+	}
+
+	request, prob := decodeJSONBody[validateDraftRequest](r)
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	result, execProb := h.validateDraft.Execute(r.Context(), configctlcontracts.ValidateDraftCommand{
+		Format:  request.Format,
+		Content: request.Content,
+	})
+	if execProb != nil {
+		writeProblemResponse(w, execProb)
+		return
+	}
+
+	status := "invalid"
+	if result.Valid {
+		status = "valid"
+	}
+	writeJSONResponse(w, http.StatusOK, validateDraftResponse{
+		Status:     status,
+		Validation: result,
+	})
+}
+
+func decodeJSONBody[T any](r *http.Request) (T, *problem.Problem) {
+	var zero T
+	defer r.Body.Close()
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	var request T
+	if err := decoder.Decode(&request); err != nil {
+		return zero, problem.Wrap(err, problem.InvalidArgument, "request body must be valid JSON")
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return zero, problem.New(problem.InvalidArgument, "request body must contain a single JSON object")
+	}
+
+	return request, nil
 }

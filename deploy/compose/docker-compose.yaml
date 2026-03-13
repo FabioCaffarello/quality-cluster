@@ -1,0 +1,116 @@
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+  networks:
+    - quality-service-network
+
+x-go-build: &go-build
+  context: ../..
+  dockerfile: deploy/docker/go-service.Dockerfile
+
+x-go-service: &go-service
+  <<: *service-defaults
+  stop_grace_period: 15s
+
+services:
+  nats:
+    <<: *service-defaults
+    image: nats:2.10.18-alpine
+    command: ["-c", "/etc/nats/nats-server.conf"]
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    volumes:
+      - ../nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8222/healthz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  configctl:
+    <<: *go-service
+    build:
+      <<: *go-build
+      args:
+        SERVICE: configctl
+    image: quality-service/configctl:dev
+    command: ["-config", "/etc/quality-service/configctl.jsonc"]
+    volumes:
+      - ../configs/configctl.jsonc:/etc/quality-service/configctl.jsonc:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -r /proc/1/cmdline && grep -qa '/usr/local/bin/service' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    profiles: ["core", "all"]
+
+  server:
+    <<: *go-service
+    build:
+      <<: *go-build
+      args:
+        SERVICE: server
+    image: quality-service/server:dev
+    command: ["-config", "/etc/quality-service/server.jsonc"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../configs/server.jsonc:/etc/quality-service/server.jsonc:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+      configctl:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/readyz | grep -q 'ready'"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    profiles: ["core", "all"]
+
+  validator:
+    <<: *go-service
+    build:
+      <<: *go-build
+      args:
+        SERVICE: validator
+    image: quality-service/validator:dev
+    command: ["-config", "/etc/quality-service/validator.jsonc"]
+    volumes:
+      - ../configs/validator.jsonc:/etc/quality-service/validator.jsonc:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+      configctl:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -r /proc/1/cmdline && grep -qa '/usr/local/bin/service' /proc/1/cmdline"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    profiles: ["runtime", "all"]
+
+networks:
+  quality-service-network:
+    driver: bridge
+
+volumes:
+  nats_data:

@@ -53,6 +53,11 @@ func (e Envelope[T]) WithSource(source string) Envelope[T] {
 	return e
 }
 
+func (e Envelope[T]) WithID(id string) Envelope[T] {
+	e.ID = id
+	return e
+}
+
 func (e Envelope[T]) WithSubject(subject string) Envelope[T] {
 	e.Subject = subject
 	return e
@@ -70,6 +75,11 @@ func (e Envelope[T]) WithCausationID(causationID string) Envelope[T] {
 
 func (e Envelope[T]) WithReplyTo(replyTo string) Envelope[T] {
 	e.ReplyTo = replyTo
+	return e
+}
+
+func (e Envelope[T]) WithContentType(contentType string) Envelope[T] {
+	e.ContentType = contentType
 	return e
 }
 

@@ -4,7 +4,6 @@ go 1.25.6
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.0
-	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.49.0
 )
 

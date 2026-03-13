@@ -1,0 +1,12 @@
+{
+  // Prepared for the future consumer runtime once its executable entrypoint is ready.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  }
+}

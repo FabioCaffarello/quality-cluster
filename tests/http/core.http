@@ -1,0 +1,17 @@
+### ----------------------------------------------------------------------------
+### Core smoke tests
+### ----------------------------------------------------------------------------
+
+@baseUrl = http://127.0.0.1:8080
+
+### Healthz
+GET {{baseUrl}}/healthz
+Accept: application/json
+
+###
+
+### Readyz
+GET {{baseUrl}}/readyz
+Accept: application/json
+
+###

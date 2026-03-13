@@ -1,0 +1,10 @@
+.DS_Store
+.git
+.gitignore
+bin/
+deploy/compose/
+deploy/configs/
+deploy/nats/
+tmp/
+zip/
+*.log

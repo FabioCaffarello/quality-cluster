@@ -176,19 +176,19 @@ func (h HTTPConfig) Validate() *problem.Problem {
 }
 
 func (h HTTPConfig) ReadTimeoutDuration() time.Duration {
-	return parseDurationOrDefault(h.ReadTimeout,  5 * time.Second)
+	return parseDurationOrDefault(h.ReadTimeout, 5*time.Second)
 }
 
 func (h HTTPConfig) WriteTimeoutDuration() time.Duration {
-	return parseDurationOrDefault(h.WriteTimeout,  10 * time.Second)
+	return parseDurationOrDefault(h.WriteTimeout, 10*time.Second)
 }
 
 func (h HTTPConfig) IdleTimeoutDuration() time.Duration {
-	return parseDurationOrDefault(h.IdleTimeout,  time.Minute)
+	return parseDurationOrDefault(h.IdleTimeout, time.Minute)
 }
 
 func (h HTTPConfig) ShutdownTimeoutDuration() time.Duration {
-	return parseDurationOrDefault(h.ShutdownTimeout,  10 * time.Second)
+	return parseDurationOrDefault(h.ShutdownTimeout, 10*time.Second)
 }
 
 func parseDurationOrDefault(raw string, fallback time.Duration) time.Duration {
@@ -235,6 +235,10 @@ func (c NATSConfig) Validate() *problem.Problem {
 	}
 
 	return validationProblem("nats config is invalid", issues...)
+}
+
+func (c NATSConfig) RequestTimeoutDuration() time.Duration {
+	return parseDurationOrDefault(c.RequestTimeout, 2*time.Second)
 }
 
 // KafkaConfig keeps transport-neutral connection metadata required by Kafka-based services.
