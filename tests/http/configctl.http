@@ -1,13 +1,12 @@
 ### ----------------------------------------------------------------------------
-### Configctl smoke tests
+### Configctl control-plane smoke tests
 ### ----------------------------------------------------------------------------
 
 @baseUrl = http://127.0.0.1:8080
 @correlationId = test-http-configctl-001
-# replace when create
-@configId = 4aa70c859b5b5c813d9eabe2ef550569
+@configId = d7a61c8eed779cc8d977cf108f1258df
 
-### Create draft - JSON
+### Create draft
 POST {{baseUrl}}/configctl/configs
 Content-Type: application/json
 Accept: application/json
@@ -16,69 +15,12 @@ X-Correlation-ID: {{correlationId}}
 {
   "name": "payments-prod",
   "format": "json",
-  "content": "{\"config\":{\"name\":\"payments-prod\"},\"bindings\":{\"topics\":[\"billing.payment.created\"]}}"
+  "content": "{\"metadata\":{\"name\":\"Payments Prod\",\"description\":\"baseline quality checks\"},\"bindings\":[{\"name\":\"payments\",\"topic\":\"billing.payment.created\"}],\"fields\":[{\"name\":\"payment_id\",\"type\":\"string\",\"required\":true},{\"name\":\"status\",\"type\":\"string\",\"required\":true}],\"rules\":[{\"name\":\"payment_id_required\",\"field\":\"payment_id\",\"operator\":\"required\",\"severity\":\"error\"},{\"name\":\"status_not_empty\",\"field\":\"status\",\"operator\":\"not_empty\",\"severity\":\"error\"}]}"
 }
 
 ###
 
-### Create draft - YAML
-POST {{baseUrl}}/configctl/configs
-Content-Type: application/json
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-{
-  "name": "orders-prod",
-  "format": "yaml",
-  "content": "config:\n  name: orders-prod\nbindings:\n  topics:\n    - sales.order.created\n"
-}
-
-###
-
-### Create draft - invalid payload
-POST {{baseUrl}}/configctl/configs
-Content-Type: application/json
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-{
-  "name": "",
-  "format": "json",
-  "content": ""
-}
-
-###
-
-### List configs
-GET {{baseUrl}}/configctl/configs
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-###
-
-### Get config by id
-### Replace {{configId}} manually with an ID returned by create draft.
-GET {{baseUrl}}/configctl/configs/by-id?id={{configId}}
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-###
-
-### Get config by id - missing id
-GET {{baseUrl}}/configctl/configs/by-id
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-###
-
-### Get active config
-GET {{baseUrl}}/configctl/configs/active
-Accept: application/json
-X-Correlation-ID: {{correlationId}}
-
-###
-
-### Validate draft - JSON valid
+### Dry-run validate source content
 POST {{baseUrl}}/configctl/configs/validate
 Content-Type: application/json
 Accept: application/json
@@ -86,33 +28,57 @@ X-Correlation-ID: {{correlationId}}
 
 {
   "format": "json",
-  "content": "{\"config\":{\"name\":\"payments-prod\"}}"
+  "content": "{\"metadata\":{\"name\":\"Payments Prod\"},\"bindings\":[{\"name\":\"payments\",\"topic\":\"billing.payment.created\"}],\"fields\":[{\"name\":\"payment_id\",\"type\":\"string\",\"required\":true}],\"rules\":[{\"name\":\"payment_id_required\",\"field\":\"payment_id\",\"operator\":\"required\",\"severity\":\"error\"}]}"
 }
 
 ###
 
-### Validate draft - YAML valid
-POST {{baseUrl}}/configctl/configs/validate
+### Validate persisted draft
+### Replace {{configId}} with the ID returned by create draft.
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/validate
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### Compile validated version
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/compile
+Content-Type: application/json
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+{}
+
+###
+
+### Activate compiled version in the default global scope
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/activate
 Content-Type: application/json
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 
 {
-  "format": "yaml",
-  "content": "config:\n  name: payments-prod\n"
+  "scope_kind": "global",
+  "scope_key": "default"
 }
 
 ###
 
-### Validate draft - invalid input
-POST {{baseUrl}}/configctl/configs/validate
-Content-Type: application/json
+### Get config version detail
+GET {{baseUrl}}/configctl/config-versions/{{configId}}
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 
-{
-  "format": "",
-  "content": ""
-}
+###
+
+### Get active config version detail for the default scope
+GET {{baseUrl}}/configctl/active-config?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
 
 ###
+
+### List config versions (summary shape)
+GET {{baseUrl}}/configctl/config-versions
+Accept: application/json
+X-Correlation-ID: {{correlationId}}

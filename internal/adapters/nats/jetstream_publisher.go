@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"internal/application/configctl/contracts"
+	configdomain "internal/domain/configctl"
+	"internal/shared/events"
 	"internal/shared/problem"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-type RuntimeEventPublisher struct {
+type DomainEventPublisher struct {
 	url      string
 	source   string
 	registry ConfigctlRegistry
@@ -19,15 +20,15 @@ type RuntimeEventPublisher struct {
 	js       jetstream.JetStream
 }
 
-func NewRuntimeEventPublisher(url, source string, registry ConfigctlRegistry) *RuntimeEventPublisher {
-	return &RuntimeEventPublisher{
+func NewDomainEventPublisher(url, source string, registry ConfigctlRegistry) *DomainEventPublisher {
+	return &DomainEventPublisher{
 		url:      url,
 		source:   source,
 		registry: registry,
 	}
 }
 
-func (p *RuntimeEventPublisher) Start() error {
+func (p *DomainEventPublisher) Start() error {
 	nc, err := connect(p.url)
 	if err != nil {
 		return err
@@ -42,9 +43,9 @@ func (p *RuntimeEventPublisher) Start() error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultSetupTimeout)
 	defer cancel()
 
-	if _, err := js.CreateOrUpdateStream(ctx, p.registry.RuntimeUpdated.Stream.Config()); err != nil {
+	if _, err := js.CreateOrUpdateStream(ctx, p.registry.Activated.Stream.Config()); err != nil {
 		nc.Close()
-		return fmt.Errorf("ensure runtime stream: %w", err)
+		return fmt.Errorf("ensure event stream: %w", err)
 	}
 
 	p.nc = nc
@@ -52,33 +53,51 @@ func (p *RuntimeEventPublisher) Start() error {
 	return nil
 }
 
-func (p *RuntimeEventPublisher) Publish(ctx context.Context, event contracts.RuntimeEvent) *problem.Problem {
+func (p *DomainEventPublisher) Publish(ctx context.Context, event events.Event) *problem.Problem {
 	if p == nil || p.js == nil {
-		return problem.New(problem.Unavailable, "runtime event publisher is unavailable")
+		return problem.New(problem.Unavailable, "domain event publisher is unavailable")
 	}
 
-	switch typed := event.(type) {
-	case contracts.RuntimeUpdatedEvent:
-		return p.publishRuntimeUpdated(ctx, typed)
-	default:
-		return problem.New(problem.InvalidArgument, "runtime event type is unsupported")
+	spec, prob := p.specFor(event)
+	if prob != nil {
+		return prob
 	}
-}
-
-func (p *RuntimeEventPublisher) publishRuntimeUpdated(ctx context.Context, event contracts.RuntimeUpdatedEvent) *problem.Problem {
-	data, prob := encodeRuntimeEvent(p.registry.RuntimeUpdated, p.source, event, event.Metadata.CorrelationID)
+	data, prob := encodeEvent(spec, p.source, event, event.EventMetadata().CorrelationID)
 	if prob != nil {
 		return prob
 	}
 
-	if _, err := p.js.Publish(ctx, p.registry.RuntimeUpdated.Subject, data, jetstream.WithMsgID(event.Metadata.ID)); err != nil {
-		return problem.Wrap(err, problem.Unavailable, "publish runtime update")
+	if _, err := p.js.Publish(ctx, spec.Subject, data, jetstream.WithMsgID(event.EventMetadata().ID)); err != nil {
+		return problem.Wrap(err, problem.Unavailable, "publish domain event")
 	}
 
 	return nil
 }
 
-func (p *RuntimeEventPublisher) Close() error {
+func (p *DomainEventPublisher) specFor(event events.Event) (EventSpec, *problem.Problem) {
+	switch event.(type) {
+	case configdomain.DraftCreatedEvent:
+		return p.registry.DraftCreated, nil
+	case configdomain.ConfigValidatedEvent:
+		return p.registry.Validated, nil
+	case configdomain.ConfigCompiledEvent:
+		return p.registry.Compiled, nil
+	case configdomain.ConfigActivatedEvent:
+		return p.registry.Activated, nil
+	case configdomain.ConfigDeactivatedEvent:
+		return p.registry.Deactivated, nil
+	case configdomain.IngestionRuntimeChangedEvent:
+		return p.registry.IngestionRuntimeChanged, nil
+	case configdomain.ConfigArchivedEvent:
+		return p.registry.Archived, nil
+	case configdomain.ConfigRejectedEvent:
+		return p.registry.Rejected, nil
+	default:
+		return EventSpec{}, problem.New(problem.InvalidArgument, "domain event type is unsupported")
+	}
+}
+
+func (p *DomainEventPublisher) Close() error {
 	if p != nil && p.nc != nil {
 		p.nc.Close()
 	}

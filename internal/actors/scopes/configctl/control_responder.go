@@ -49,8 +49,12 @@ func (a *ControlResponderActor) Receive(c *actor.Context) {
 			adapternats.NewTypedControlRoute(a.cfg.Registry.CreateDraft, a.cfg.Source, a.handleCreateDraft),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.GetConfig, a.cfg.Source, a.handleGetConfig),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.GetActive, a.cfg.Source, a.handleGetActive),
+			adapternats.NewTypedControlRoute(a.cfg.Registry.ListActiveIngestionBindings, a.cfg.Source, a.handleListActiveIngestionBindings),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.ListConfigs, a.cfg.Source, a.handleListConfigs),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.ValidateDraft, a.cfg.Source, a.handleValidateDraft),
+			adapternats.NewTypedControlRoute(a.cfg.Registry.ValidateConfig, a.cfg.Source, a.handleValidateConfig),
+			adapternats.NewTypedControlRoute(a.cfg.Registry.CompileConfig, a.cfg.Source, a.handleCompileConfig),
+			adapternats.NewTypedControlRoute(a.cfg.Registry.ActivateConfig, a.cfg.Source, a.handleActivateConfig),
 		}
 		responder := adapternats.NewRequestReplyResponder(a.cfg.URL, routes)
 		if err := responder.Start(); err != nil {
@@ -102,8 +106,40 @@ func (a *ControlResponderActor) handleListConfigs(ctx context.Context, query con
 	return result.Reply, mergeProblems(result.Prob, prob)
 }
 
+func (a *ControlResponderActor) handleListActiveIngestionBindings(ctx context.Context, query contracts.ListActiveIngestionBindingsQuery) (contracts.ListActiveIngestionBindingsReply, *problem.Problem) {
+	result, prob := requestActor[listActiveIngestionBindingsResult](a.engine, a.cfg.ControlRouter, listActiveIngestionBindingsMessage{
+		Query:         query,
+		CorrelationID: requestctx.CorrelationID(ctx),
+	}, a.cfg.RequestTimeout)
+	return result.Reply, mergeProblems(result.Prob, prob)
+}
+
 func (a *ControlResponderActor) handleValidateDraft(ctx context.Context, command contracts.ValidateDraftCommand) (contracts.ValidateDraftReply, *problem.Problem) {
 	result, prob := requestActor[validateDraftResult](a.engine, a.cfg.ControlRouter, validateDraftMessage{
+		Command:       command,
+		CorrelationID: requestctx.CorrelationID(ctx),
+	}, a.cfg.RequestTimeout)
+	return result.Reply, mergeProblems(result.Prob, prob)
+}
+
+func (a *ControlResponderActor) handleValidateConfig(ctx context.Context, command contracts.ValidateConfigCommand) (contracts.ValidateConfigReply, *problem.Problem) {
+	result, prob := requestActor[validateConfigResult](a.engine, a.cfg.ControlRouter, validateConfigMessage{
+		Command:       command,
+		CorrelationID: requestctx.CorrelationID(ctx),
+	}, a.cfg.RequestTimeout)
+	return result.Reply, mergeProblems(result.Prob, prob)
+}
+
+func (a *ControlResponderActor) handleCompileConfig(ctx context.Context, command contracts.CompileConfigCommand) (contracts.CompileConfigReply, *problem.Problem) {
+	result, prob := requestActor[compileConfigResult](a.engine, a.cfg.ControlRouter, compileConfigMessage{
+		Command:       command,
+		CorrelationID: requestctx.CorrelationID(ctx),
+	}, a.cfg.RequestTimeout)
+	return result.Reply, mergeProblems(result.Prob, prob)
+}
+
+func (a *ControlResponderActor) handleActivateConfig(ctx context.Context, command contracts.ActivateConfigCommand) (contracts.ActivateConfigReply, *problem.Problem) {
+	result, prob := requestActor[activateConfigResult](a.engine, a.cfg.ControlRouter, activateConfigMessage{
 		Command:       command,
 		CorrelationID: requestctx.CorrelationID(ctx),
 	}, a.cfg.RequestTimeout)

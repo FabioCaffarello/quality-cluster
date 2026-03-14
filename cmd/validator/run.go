@@ -13,7 +13,11 @@ func Run(config settings.AppConfig) {
 	logger := bootstrap.BuildLogger(config.Log)
 	slog.SetDefault(logger)
 
-	logger.Info("validator starting")
+	if prob := validatoractor.ValidateConfig(config); prob != nil {
+		logger.Error("invalid validator config", "error", prob)
+		os.Exit(1)
+	}
+
 	engine, err := actorcommon.NewDefaultEngine()
 	if err != nil {
 		logger.Error("create actor engine", "error", err)

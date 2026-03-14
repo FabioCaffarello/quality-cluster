@@ -17,7 +17,7 @@ func TestTypedControlRouteHandlesCreateDraft(t *testing.T) {
 			t.Fatalf("expected command name %q, got %q", "core", command.Name)
 		}
 		return contracts.CreateDraftReply{
-			Config: contracts.ConfigRecord{ID: "cfg-123"},
+			Config: contracts.ConfigVersionDetail{ID: "cfg-123"},
 		}, nil
 	})
 

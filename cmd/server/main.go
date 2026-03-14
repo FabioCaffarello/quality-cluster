@@ -13,7 +13,7 @@ func main() {
 
 	cfg, prob := bootstrap.LoadAndValidate(*configPath)
 	if prob != nil {
-		fmt.Fprintf(os.Stderr, "server: config error: %v:", prob)
+		fmt.Fprintf(os.Stderr, "server: config error: %v\n", prob)
 		os.Exit(1)
 	}
 

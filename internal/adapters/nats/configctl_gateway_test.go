@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"internal/application/configctl/contracts"
+	sharedruntime "internal/application/runtimecontracts"
+	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/shared/requestctx"
 )
 
@@ -34,7 +36,7 @@ func TestConfigctlGatewayCreateDraft(t *testing.T) {
 			Content: "{}",
 		})),
 		contracts.CreateDraftReply{
-			Config: contracts.ConfigRecord{ID: "cfg-123"},
+			Config: contracts.ConfigVersionDetail{ID: "cfg-123"},
 		},
 		nil,
 	)
@@ -91,5 +93,158 @@ func TestConfigctlGatewayReturnsRemoteProblem(t *testing.T) {
 	})
 	if prob == nil {
 		t.Fatal("expected problem")
+	}
+}
+
+func TestConfigctlGatewayLifecycleMethods(t *testing.T) {
+	t.Parallel()
+
+	registry := DefaultConfigctlRegistry()
+	request := mustDecodeRequest[contracts.ValidateConfigCommand](t, registry.ValidateConfig, mustEncodeRequest(t, registry.ValidateConfig, contracts.ValidateConfigCommand{
+		VersionID: "cfg-123",
+	}))
+	replyBytes, err := encodeControlReply(
+		registry.ValidateConfig,
+		"configctl",
+		request,
+		contracts.ValidateConfigReply{Valid: true},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode validate reply: %v", err)
+	}
+
+	validateClient := &requestReplyClientSpy{reply: replyBytes}
+	validateReply, prob := NewConfigctlGateway(validateClient, "server.http").ValidateConfig(context.Background(), contracts.ValidateConfigCommand{VersionID: "cfg-123"})
+	if prob != nil {
+		t.Fatalf("validate config: %v", prob)
+	}
+	if validateClient.subject != registry.ValidateConfig.Subject || !validateReply.Valid {
+		t.Fatalf("unexpected validate config gateway result")
+	}
+
+	compileRequest := mustDecodeRequest[contracts.CompileConfigCommand](t, registry.CompileConfig, mustEncodeRequest(t, registry.CompileConfig, contracts.CompileConfigCommand{
+		VersionID: "cfg-123",
+	}))
+	replyBytes, err = encodeControlReply(
+		registry.CompileConfig,
+		"configctl",
+		compileRequest,
+		contracts.CompileConfigReply{Config: contracts.ConfigVersionDetail{ID: "cfg-123", Lifecycle: "compiled"}},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode compile reply: %v", err)
+	}
+
+	compileClient := &requestReplyClientSpy{reply: replyBytes}
+	compileReply, prob := NewConfigctlGateway(compileClient, "server.http").CompileConfig(context.Background(), contracts.CompileConfigCommand{VersionID: "cfg-123"})
+	if prob != nil {
+		t.Fatalf("compile config: %v", prob)
+	}
+	if compileClient.subject != registry.CompileConfig.Subject || compileReply.Config.Lifecycle != "compiled" {
+		t.Fatalf("unexpected compile config gateway result")
+	}
+
+	activateRequest := mustDecodeRequest[contracts.ActivateConfigCommand](t, registry.ActivateConfig, mustEncodeRequest(t, registry.ActivateConfig, contracts.ActivateConfigCommand{
+		VersionID: "cfg-123",
+	}))
+	replyBytes, err = encodeControlReply(
+		registry.ActivateConfig,
+		"configctl",
+		activateRequest,
+		contracts.ActivateConfigReply{Config: contracts.ConfigVersionDetail{ID: "cfg-123", Lifecycle: "active"}},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode activate reply: %v", err)
+	}
+
+	activateClient := &requestReplyClientSpy{reply: replyBytes}
+	activateReply, prob := NewConfigctlGateway(activateClient, "server.http").ActivateConfig(context.Background(), contracts.ActivateConfigCommand{VersionID: "cfg-123"})
+	if prob != nil {
+		t.Fatalf("activate config: %v", prob)
+	}
+	if activateClient.subject != registry.ActivateConfig.Subject || activateReply.Config.Lifecycle != "active" {
+		t.Fatalf("unexpected activate config gateway result")
+	}
+
+	ingestionRequest := mustDecodeRequest[contracts.ListActiveIngestionBindingsQuery](t, registry.ListActiveIngestionBindings, mustEncodeRequest(t, registry.ListActiveIngestionBindings, contracts.ListActiveIngestionBindingsQuery{
+		ScopeKind: "tenant",
+		ScopeKey:  "br",
+	}))
+	replyBytes, err = encodeControlReply(
+		registry.ListActiveIngestionBindings,
+		"configctl",
+		ingestionRequest,
+		contracts.ListActiveIngestionBindingsReply{
+			Bindings: []contracts.ActiveIngestionBindingRecord{{
+				Binding: contracts.BindingRecord{Name: "orders", Topic: "orders.v1"},
+				Fields:  []contracts.FieldRecord{{Name: "order_id", Type: "string", Required: true}},
+				Runtime: sharedruntime.RuntimeRecord{
+					Scope: sharedruntime.ScopeRecord{Kind: "tenant", Key: "br"},
+					Config: sharedruntime.ConfigRecord{
+						SetID:     "set-1",
+						Key:       "core",
+						VersionID: "cfg-123",
+						Version:   1,
+					},
+				},
+			}},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode ingestion bindings reply: %v", err)
+	}
+
+	ingestionClient := &requestReplyClientSpy{reply: replyBytes}
+	ingestionReply, prob := NewConfigctlGateway(ingestionClient, "server.http").ListActiveIngestionBindings(context.Background(), contracts.ListActiveIngestionBindingsQuery{
+		ScopeKind: "tenant",
+		ScopeKey:  "br",
+	})
+	if prob != nil {
+		t.Fatalf("list active ingestion bindings: %v", prob)
+	}
+	if ingestionClient.subject != registry.ListActiveIngestionBindings.Subject || len(ingestionReply.Bindings) != 1 {
+		t.Fatalf("unexpected ingestion bindings gateway result")
+	}
+	if len(ingestionReply.Bindings[0].Fields) != 1 {
+		t.Fatalf("expected bootstrap fields to round-trip, got %+v", ingestionReply.Bindings[0])
+	}
+}
+
+func TestValidatorRuntimeGatewayGetActiveRuntime(t *testing.T) {
+	t.Parallel()
+
+	registry := DefaultValidatorRuntimeRegistry()
+	request := mustDecodeRequest[runtimecontracts.GetActiveRuntimeQuery](t, registry.GetActive, mustEncodeRequest(t, registry.GetActive, runtimecontracts.GetActiveRuntimeQuery{}))
+	replyBytes, err := encodeControlReply(
+		registry.GetActive,
+		"validator.runtime",
+		request,
+		runtimecontracts.GetActiveRuntimeReply{
+			Runtime: runtimecontracts.ActiveRuntimeRecord{
+				RuntimeRecord: sharedruntime.RuntimeRecord{
+					Config: sharedruntime.ConfigRecord{
+						Key:       "core",
+						VersionID: "cfg-123",
+					},
+				},
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode runtime reply: %v", err)
+	}
+
+	client := &requestReplyClientSpy{reply: replyBytes}
+	reply, prob := NewValidatorRuntimeGateway(client, "server.http").GetActiveRuntime(context.Background(), runtimecontracts.GetActiveRuntimeQuery{})
+	if prob != nil {
+		t.Fatalf("get active runtime: %v", prob)
+	}
+	if client.subject != registry.GetActive.Subject || reply.Runtime.Config.VersionID != "cfg-123" {
+		t.Fatalf("unexpected runtime gateway result")
 	}
 }

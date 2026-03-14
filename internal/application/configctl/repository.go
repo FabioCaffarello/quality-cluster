@@ -3,20 +3,27 @@ package configctl
 import (
 	"context"
 
-	"internal/application/configctl/contracts"
-	"internal/domain/configuration"
+	configdomain "internal/domain/configctl"
+	"internal/shared/events"
 	"internal/shared/problem"
 )
 
 type Repository interface {
-	SaveDraft(context.Context, configuration.Config) *problem.Problem
-	Delete(context.Context, string) *problem.Problem
-	GetByID(context.Context, string) (configuration.Config, *problem.Problem)
-	GetActive(context.Context) (configuration.Config, *problem.Problem)
-	List(context.Context) ([]configuration.Config, *problem.Problem)
-	Snapshot(context.Context) (contracts.RuntimeSnapshot, *problem.Problem)
+	SaveConfigSet(context.Context, configdomain.ConfigSet) *problem.Problem
+	DeleteConfigSet(context.Context, string) *problem.Problem
+	GetConfigSetByID(context.Context, string) (configdomain.ConfigSet, *problem.Problem)
+	GetConfigSetByKey(context.Context, string) (configdomain.ConfigSet, *problem.Problem)
+	GetConfigSetByVersionID(context.Context, string) (configdomain.ConfigSet, *problem.Problem)
+	ListConfigSets(context.Context) ([]configdomain.ConfigSet, *problem.Problem)
+	SaveActivation(context.Context, configdomain.Activation) *problem.Problem
+	DeleteActivation(context.Context, string) *problem.Problem
+	GetActivationByScope(context.Context, configdomain.ActivationScope) (configdomain.Activation, *problem.Problem)
+	ListActivationsByVersionID(context.Context, string) ([]configdomain.Activation, *problem.Problem)
+	SaveIngestionRuntime(context.Context, configdomain.IngestionRuntimeProjection) *problem.Problem
+	DeleteIngestionRuntimeByScope(context.Context, configdomain.ActivationScope) *problem.Problem
+	ListIngestionRuntimes(context.Context) ([]configdomain.IngestionRuntimeProjection, *problem.Problem)
 }
 
-type RuntimeEventPublisher interface {
-	Publish(context.Context, contracts.RuntimeEvent) *problem.Problem
+type DomainEventPublisher interface {
+	Publish(context.Context, events.Event) *problem.Problem
 }

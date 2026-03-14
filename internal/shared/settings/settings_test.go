@@ -52,6 +52,39 @@ func TestLoadSupportsJSONCAndDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadSupportsDataPlaneSections(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.jsonc")
+
+	content := `{
+		"kafka": {
+			"enabled": true,
+			"brokers": ["kafka:9092"]
+		},
+		"bootstrap": {
+			"base_url": "http://server:8080"
+		},
+		"emulator": {
+			"publish_interval": "7s"
+		}
+	}`
+
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, prob := Load(path)
+	if prob != nil {
+		t.Fatalf("expected config to load, got %v", prob)
+	}
+	if len(cfg.Kafka.Brokers) != 1 || cfg.Bootstrap.ScopeKind != "global" {
+		t.Fatalf("expected data plane defaults to apply, got %+v", cfg)
+	}
+	if cfg.Emulator.PublishInterval != "7s" {
+		t.Fatalf("expected emulator config to load, got %q", cfg.Emulator.PublishInterval)
+	}
+}
+
 func TestLoadRejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -75,8 +108,6 @@ func TestValidateAggregatesIssues(t *testing.T) {
 	cfg.HTTP.ReadTimeout = "nope"
 	cfg.NATS.Enabled = true
 	cfg.NATS.URL = ""
-	cfg.Kafka.Enabled = true
-	cfg.Kafka.Brokers = nil
 
 	prob := cfg.Validate()
 	if prob == nil {
@@ -92,7 +123,7 @@ func TestValidateAggregatesIssues(t *testing.T) {
 		t.Fatalf("expected typed validation issues, got %#v", rawIssues)
 	}
 
-	if len(issues) != 4 {
+	if len(issues) != 3 {
 		t.Fatalf("expected aggregated issues, got %d", len(issues))
 	}
 }

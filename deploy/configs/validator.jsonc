@@ -1,5 +1,5 @@
 {
-  // validator consumes runtime updates published by configctl.
+  // validator consumes runtime updates from configctl and canonical data-plane messages from JetStream.
   "log": {
     "level": "info",
     "format": "text"

@@ -79,7 +79,7 @@ func decodeControlReply[T any](spec ControlSpec, data []byte) (T, *problem.Probl
 	return env.Payload, nil
 }
 
-func encodeRuntimeEvent[T any](spec EventSpec, source string, payload T, correlationID string) ([]byte, *problem.Problem) {
+func encodeEvent[T any](spec EventSpec, source string, payload T, correlationID string) ([]byte, *problem.Problem) {
 	env := envelope.New(envelope.KindEvent, spec.Type, payload).
 		WithSource(source).
 		WithSubject(spec.Subject).
@@ -98,7 +98,7 @@ func encodeRuntimeEvent[T any](spec EventSpec, source string, payload T, correla
 	return data, nil
 }
 
-func decodeRuntimeEvent[T any](spec EventSpec, data []byte) (envelope.Envelope[T], *problem.Problem) {
+func decodeEvent[T any](spec EventSpec, data []byte) (envelope.Envelope[T], *problem.Problem) {
 	var env envelope.Envelope[T]
 	if err := cbor.Unmarshal(data, &env); err != nil {
 		return env, problem.Wrap(err, problem.InvalidArgument, "invalid runtime event")

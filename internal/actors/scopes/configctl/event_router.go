@@ -20,7 +20,7 @@ type EventRouterConfig struct {
 type EventRouterActor struct {
 	cfg       EventRouterConfig
 	logger    *slog.Logger
-	publisher *adapternats.RuntimeEventPublisher
+	publisher *adapternats.DomainEventPublisher
 }
 
 func NewEventRouterActor(cfg EventRouterConfig) actor.Producer {
@@ -36,9 +36,9 @@ func (a *EventRouterActor) Receive(c *actor.Context) {
 
 	switch msg := c.Message().(type) {
 	case actor.Started:
-		publisher := adapternats.NewRuntimeEventPublisher(a.cfg.URL, a.cfg.Source, a.cfg.Registry)
+		publisher := adapternats.NewDomainEventPublisher(a.cfg.URL, a.cfg.Source, a.cfg.Registry)
 		if err := publisher.Start(); err != nil {
-			a.logger.Error("start runtime event publisher", "error", err)
+			a.logger.Error("start domain event publisher", "error", err)
 			c.Engine().Poison(c.PID())
 			return
 		}
@@ -46,11 +46,11 @@ func (a *EventRouterActor) Receive(c *actor.Context) {
 	case actor.Stopped:
 		if a.publisher != nil {
 			if err := a.publisher.Close(); err != nil {
-				a.logger.Error("close runtime event publisher", "error", err)
+				a.logger.Error("close domain event publisher", "error", err)
 			}
 		}
-	case publishRuntimeEventMessage:
-		reply := publishRuntimeEventResult{}
+	case publishDomainEventMessage:
+		reply := publishDomainEventResult{}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		reply.Prob = a.publisher.Publish(ctx, msg.Event)
 		cancel()

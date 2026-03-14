@@ -36,12 +36,28 @@ func (g *ConfigctlGateway) GetActiveConfig(ctx context.Context, query contracts.
 	return invokeControl[contracts.GetActiveConfigQuery, contracts.GetActiveConfigReply](ctx, g, g.registry.GetActive, query, "request configctl active config")
 }
 
+func (g *ConfigctlGateway) ListActiveIngestionBindings(ctx context.Context, query contracts.ListActiveIngestionBindingsQuery) (contracts.ListActiveIngestionBindingsReply, *problem.Problem) {
+	return invokeControl[contracts.ListActiveIngestionBindingsQuery, contracts.ListActiveIngestionBindingsReply](ctx, g, g.registry.ListActiveIngestionBindings, query, "request configctl active ingestion bindings")
+}
+
 func (g *ConfigctlGateway) ListConfigs(ctx context.Context, query contracts.ListConfigsQuery) (contracts.ListConfigsReply, *problem.Problem) {
 	return invokeControl[contracts.ListConfigsQuery, contracts.ListConfigsReply](ctx, g, g.registry.ListConfigs, query, "request configctl list configs")
 }
 
 func (g *ConfigctlGateway) ValidateDraft(ctx context.Context, command contracts.ValidateDraftCommand) (contracts.ValidateDraftReply, *problem.Problem) {
 	return invokeControl[contracts.ValidateDraftCommand, contracts.ValidateDraftReply](ctx, g, g.registry.ValidateDraft, command, "request configctl validate draft")
+}
+
+func (g *ConfigctlGateway) ValidateConfig(ctx context.Context, command contracts.ValidateConfigCommand) (contracts.ValidateConfigReply, *problem.Problem) {
+	return invokeControl[contracts.ValidateConfigCommand, contracts.ValidateConfigReply](ctx, g, g.registry.ValidateConfig, command, "request configctl validate config")
+}
+
+func (g *ConfigctlGateway) CompileConfig(ctx context.Context, command contracts.CompileConfigCommand) (contracts.CompileConfigReply, *problem.Problem) {
+	return invokeControl[contracts.CompileConfigCommand, contracts.CompileConfigReply](ctx, g, g.registry.CompileConfig, command, "request configctl compile config")
+}
+
+func (g *ConfigctlGateway) ActivateConfig(ctx context.Context, command contracts.ActivateConfigCommand) (contracts.ActivateConfigReply, *problem.Problem) {
+	return invokeControl[contracts.ActivateConfigCommand, contracts.ActivateConfigReply](ctx, g, g.registry.ActivateConfig, command, "request configctl activate config")
 }
 
 func invokeControl[Req any, Res any](ctx context.Context, gateway *ConfigctlGateway, spec ControlSpec, payload Req, action string) (Res, *problem.Problem) {

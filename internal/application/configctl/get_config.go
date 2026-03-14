@@ -25,12 +25,20 @@ func (uc *GetConfigUseCase) Execute(ctx context.Context, query contracts.GetConf
 		return contracts.GetConfigReply{}, prob
 	}
 
-	config, prob := uc.repository.GetByID(ctx, query.ID)
+	set, prob := uc.repository.GetConfigSetByVersionID(ctx, query.VersionID)
+	if prob != nil {
+		return contracts.GetConfigReply{}, prob
+	}
+	version, ok := set.VersionByID(query.VersionID)
+	if !ok {
+		return contracts.GetConfigReply{}, problem.New(problem.NotFound, "config version not found")
+	}
+	activations, prob := uc.repository.ListActivationsByVersionID(ctx, query.VersionID)
 	if prob != nil {
 		return contracts.GetConfigReply{}, prob
 	}
 
 	return contracts.GetConfigReply{
-		Config: recordFromDomain(config),
+		Config: detailRecordFromDomain(set, version, activations),
 	}, nil
 }

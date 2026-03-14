@@ -1,0 +1,84 @@
+### ----------------------------------------------------------------------------
+### Lifecycle e2e smoke test
+### ----------------------------------------------------------------------------
+### Boot locally with:
+###   make up-dataplane
+### Then run these requests in order.
+
+@baseUrl = http://127.0.0.1:8080
+@correlationId = test-http-lifecycle-001
+@configId = replace-with-config-id
+
+### 1. Create draft
+POST {{baseUrl}}/configctl/configs
+Content-Type: application/json
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+{
+  "name": "orders-prod",
+  "format": "json",
+  "content": "{\"metadata\":{\"name\":\"Orders Prod\",\"description\":\"minimal lifecycle smoke config\"},\"bindings\":[{\"name\":\"orders\",\"topic\":\"sales.order.created\"}],\"fields\":[{\"name\":\"order_id\",\"type\":\"string\",\"required\":true},{\"name\":\"status\",\"type\":\"string\",\"required\":true}],\"rules\":[{\"name\":\"order_id_required\",\"field\":\"order_id\",\"operator\":\"required\",\"severity\":\"error\"},{\"name\":\"status_not_empty\",\"field\":\"status\",\"operator\":\"not_empty\",\"severity\":\"error\"}]}"
+}
+
+###
+
+### 2. Validate draft
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/validate
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### 3. Compile
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/compile
+Content-Type: application/json
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+{}
+
+###
+
+### 4. Activate
+POST {{baseUrl}}/configctl/config-versions/{{configId}}/activate
+Content-Type: application/json
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+{
+  "scope_kind": "global",
+  "scope_key": "default"
+}
+
+###
+
+### 5. Confirm active config in configctl
+GET {{baseUrl}}/configctl/active-config?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### 6. Confirm validator runtime cache was updated
+GET {{baseUrl}}/runtime/validator/active?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### 7. Confirm ingestion runtime bindings projected by configctl
+###    The response should expose the active binding plus its field shape,
+###    which is what bootstraps consumer/emulator in block 3A.
+GET {{baseUrl}}/runtime/ingestion/bindings?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### 8. Confirm validation results produced from the data plane
+###    Wait a few seconds after activation if needed; the emulator publishes
+###    both a valid and an invalid sample for each active binding.
+GET {{baseUrl}}/runtime/validator/results?scope_kind=global&scope_key=default&limit=10
+Accept: application/json
+X-Correlation-ID: {{correlationId}}

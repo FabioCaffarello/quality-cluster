@@ -46,28 +46,33 @@ type ConsumerSpec struct {
 }
 
 type ConfigctlRegistry struct {
-	CreateDraft    ControlSpec
-	GetConfig      ControlSpec
-	GetActive      ControlSpec
-	ListConfigs    ControlSpec
-	ValidateDraft  ControlSpec
-	RuntimeUpdated EventSpec
-	ValidatorCache ConsumerSpec
+	CreateDraft                 ControlSpec
+	GetConfig                   ControlSpec
+	GetActive                   ControlSpec
+	ListActiveIngestionBindings ControlSpec
+	ListConfigs                 ControlSpec
+	ValidateDraft               ControlSpec
+	ValidateConfig              ControlSpec
+	CompileConfig               ControlSpec
+	ActivateConfig              ControlSpec
+	DraftCreated                EventSpec
+	Validated                   EventSpec
+	Compiled                    EventSpec
+	Activated                   EventSpec
+	Deactivated                 EventSpec
+	IngestionRuntimeChanged     EventSpec
+	Archived                    EventSpec
+	Rejected                    EventSpec
+	ValidatorRuntime            ConsumerSpec
 }
 
 func DefaultConfigctlRegistry() ConfigctlRegistry {
-	runtimeStream := StreamSpec{
-		Name:     "CONFIGCTL_RUNTIME",
-		Subjects: []string{"configctl.events.runtime.>"},
+	eventStream := StreamSpec{
+		Name:     "CONFIGCTL_EVENTS",
+		Subjects: []string{"configctl.events.config.>"},
 		Storage:  jetstream.FileStorage,
 		MaxAge:   24 * time.Hour,
 		MaxBytes: 256 * 1024 * 1024,
-	}
-
-	runtimeUpdated := EventSpec{
-		Subject: "configctl.events.runtime.updated",
-		Type:    "configctl.event.runtime.updated",
-		Stream:  runtimeStream,
 	}
 
 	return ConfigctlRegistry{
@@ -89,6 +94,12 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
 			ReplyType:   "configctl.reply.get_active",
 			QueueGroup:  "configctl.control",
 		},
+		ListActiveIngestionBindings: ControlSpec{
+			Subject:     "configctl.control.list_active_ingestion_bindings",
+			RequestType: "configctl.query.list_active_ingestion_bindings",
+			ReplyType:   "configctl.reply.list_active_ingestion_bindings",
+			QueueGroup:  "configctl.control",
+		},
 		ListConfigs: ControlSpec{
 			Subject:     "configctl.control.list_configs",
 			RequestType: "configctl.query.list_configs",
@@ -101,10 +112,71 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
 			ReplyType:   "configctl.reply.validate_draft",
 			QueueGroup:  "configctl.control",
 		},
-		RuntimeUpdated: runtimeUpdated,
-		ValidatorCache: ConsumerSpec{
-			Durable:    "validator-runtime-cache-v1",
-			Event:      runtimeUpdated,
+		ValidateConfig: ControlSpec{
+			Subject:     "configctl.control.validate_config",
+			RequestType: "configctl.command.validate_config",
+			ReplyType:   "configctl.reply.validate_config",
+			QueueGroup:  "configctl.control",
+		},
+		CompileConfig: ControlSpec{
+			Subject:     "configctl.control.compile_config",
+			RequestType: "configctl.command.compile_config",
+			ReplyType:   "configctl.reply.compile_config",
+			QueueGroup:  "configctl.control",
+		},
+		ActivateConfig: ControlSpec{
+			Subject:     "configctl.control.activate_config",
+			RequestType: "configctl.command.activate_config",
+			ReplyType:   "configctl.reply.activate_config",
+			QueueGroup:  "configctl.control",
+		},
+		DraftCreated: EventSpec{
+			Subject: "configctl.events.config.draft_created",
+			Type:    "configctl.event.config.draft_created",
+			Stream:  eventStream,
+		},
+		Validated: EventSpec{
+			Subject: "configctl.events.config.validated",
+			Type:    "configctl.event.config.validated",
+			Stream:  eventStream,
+		},
+		Compiled: EventSpec{
+			Subject: "configctl.events.config.compiled",
+			Type:    "configctl.event.config.compiled",
+			Stream:  eventStream,
+		},
+		Activated: EventSpec{
+			Subject: "configctl.events.config.activated",
+			Type:    "configctl.event.config.activated",
+			Stream:  eventStream,
+		},
+		Deactivated: EventSpec{
+			Subject: "configctl.events.config.deactivated",
+			Type:    "configctl.event.config.deactivated",
+			Stream:  eventStream,
+		},
+		IngestionRuntimeChanged: EventSpec{
+			Subject: "configctl.events.config.ingestion_runtime_changed",
+			Type:    "configctl.event.config.ingestion_runtime_changed",
+			Stream:  eventStream,
+		},
+		Archived: EventSpec{
+			Subject: "configctl.events.config.archived",
+			Type:    "configctl.event.config.archived",
+			Stream:  eventStream,
+		},
+		Rejected: EventSpec{
+			Subject: "configctl.events.config.rejected",
+			Type:    "configctl.event.config.rejected",
+			Stream:  eventStream,
+		},
+		ValidatorRuntime: ConsumerSpec{
+			Durable: "validator-runtime-cache-v1",
+			Event: EventSpec{
+				Subject: "configctl.events.config.activated",
+				Type:    "configctl.event.config.activated",
+				Stream:  eventStream,
+			},
 			AckWait:    30 * time.Second,
 			MaxDeliver: 10,
 		},

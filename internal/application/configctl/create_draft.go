@@ -7,19 +7,18 @@ import (
 	"time"
 
 	"internal/application/configctl/contracts"
-	"internal/domain/configuration"
+	configdomain "internal/domain/configctl"
 	"internal/shared/problem"
-	"internal/shared/requestctx"
 )
 
 type CreateDraftUseCase struct {
 	repository Repository
-	publisher  RuntimeEventPublisher
+	publisher  DomainEventPublisher
 	now        func() time.Time
 	nextID     func() string
 }
 
-func NewCreateDraftUseCase(repository Repository, publisher RuntimeEventPublisher) *CreateDraftUseCase {
+func NewCreateDraftUseCase(repository Repository, publisher DomainEventPublisher) *CreateDraftUseCase {
 	return &CreateDraftUseCase{
 		repository: repository,
 		publisher:  publisher,
@@ -41,39 +40,56 @@ func (uc *CreateDraftUseCase) Execute(ctx context.Context, command contracts.Cre
 	}
 
 	now := uc.now()
-	config, prob := configuration.NewDraft(
-		uc.nextID(),
-		command.Name,
-		configuration.Format(command.Format),
-		command.Content,
-		now,
-	)
+	source := configdomain.ConfigSource{
+		Format:  configdomain.SourceFormat(command.Format),
+		Content: command.Content,
+	}
+
+	set, existing, prob := uc.loadOrCreateSet(ctx, command.Name, source, now)
 	if prob != nil {
 		return contracts.CreateDraftReply{}, prob
 	}
 
-	if prob := uc.repository.SaveDraft(ctx, config); prob != nil {
+	if prob := uc.repository.SaveConfigSet(ctx, set); prob != nil {
 		return contracts.CreateDraftReply{}, prob
 	}
 
-	snapshot, prob := uc.repository.Snapshot(ctx)
-	if prob != nil {
-		_ = uc.repository.Delete(ctx, config.ID)
-		return contracts.CreateDraftReply{}, prob
-	}
-
-	if uc.publisher != nil {
-		runtimeEvent := contracts.NewRuntimeUpdatedEvent(snapshot)
-		runtimeEvent.Metadata = runtimeEvent.Metadata.WithCorrelationID(requestctx.CorrelationID(ctx))
-		if prob := uc.publisher.Publish(ctx, runtimeEvent); prob != nil {
-			_ = uc.repository.Delete(ctx, config.ID)
-			return contracts.CreateDraftReply{}, prob
+	if prob := publishEvents(ctx, uc.publisher, set.PullEvents()); prob != nil {
+		rollbackProb := uc.rollbackCreateDraft(ctx, set, existing)
+		if rollbackProb != nil {
+			return contracts.CreateDraftReply{}, rollbackProb
 		}
+		return contracts.CreateDraftReply{}, prob
 	}
 
+	version, _ := set.LatestVersion()
 	return contracts.CreateDraftReply{
-		Config: recordFromDomain(config),
+		Config: detailRecordFromDomain(set, version, nil),
 	}, nil
+}
+
+func (uc *CreateDraftUseCase) loadOrCreateSet(ctx context.Context, key string, source configdomain.ConfigSource, now time.Time) (configdomain.ConfigSet, *configdomain.ConfigSet, *problem.Problem) {
+	set, prob := uc.repository.GetConfigSetByKey(ctx, key)
+	if prob != nil {
+		if prob.Code != problem.NotFound {
+			return configdomain.ConfigSet{}, nil, prob
+		}
+		newSet, createProb := configdomain.NewConfigSet(uc.nextID(), key, uc.nextID(), source, now)
+		return newSet, nil, createProb
+	}
+
+	previous := snapshotConfigSet(set)
+	if prob := set.CreateDraftVersion(uc.nextID(), source, now); prob != nil {
+		return configdomain.ConfigSet{}, nil, prob
+	}
+	return set, &previous, nil
+}
+
+func (uc *CreateDraftUseCase) rollbackCreateDraft(ctx context.Context, set configdomain.ConfigSet, previous *configdomain.ConfigSet) *problem.Problem {
+	if previous == nil {
+		return uc.repository.DeleteConfigSet(ctx, set.ID)
+	}
+	return uc.repository.SaveConfigSet(ctx, *previous)
 }
 
 func newID() string {

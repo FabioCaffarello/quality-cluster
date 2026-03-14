@@ -6,8 +6,9 @@ import (
 	"log/slog"
 	"time"
 
+	memoryrepo "internal/adapters/repositories/memory/configctl"
 	configapp "internal/application/configctl"
-	"internal/application/configctl/contracts"
+	"internal/shared/events"
 	"internal/shared/problem"
 	"internal/shared/requestctx"
 
@@ -20,15 +21,19 @@ type ControlRouterConfig struct {
 }
 
 type ControlRouterActor struct {
-	cfg           ControlRouterConfig
-	logger        *slog.Logger
-	engine        *actor.Engine
-	repository    *runtimeStore
-	createDraft   *configapp.CreateDraftUseCase
-	getConfig     *configapp.GetConfigUseCase
-	getActive     *configapp.GetActiveConfigUseCase
-	listConfigs   *configapp.ListConfigsUseCase
-	validateDraft *configapp.ValidateDraftUseCase
+	cfg                   ControlRouterConfig
+	logger                *slog.Logger
+	engine                *actor.Engine
+	repository            configapp.Repository
+	createDraft           *configapp.CreateDraftUseCase
+	getConfig             *configapp.GetConfigUseCase
+	getActive             *configapp.GetActiveConfigUseCase
+	listIngestionBindings *configapp.ListActiveIngestionBindingsUseCase
+	listConfigs           *configapp.ListConfigsUseCase
+	validateDraft         *configapp.ValidateDraftUseCase
+	validateConfig        *configapp.ValidateConfigUseCase
+	compileConfig         *configapp.CompileConfigUseCase
+	activateConfig        *configapp.ActivateConfigUseCase
 }
 
 func NewControlRouterActor(cfg ControlRouterConfig) actor.Producer {
@@ -52,12 +57,24 @@ func (a *ControlRouterActor) Receive(c *actor.Context) {
 	case getActiveConfigMessage:
 		reply, prob := a.getActive.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
 		a.reply(c, getActiveConfigResult{Reply: reply, Prob: prob})
+	case listActiveIngestionBindingsMessage:
+		reply, prob := a.listIngestionBindings.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
+		a.reply(c, listActiveIngestionBindingsResult{Reply: reply, Prob: prob})
 	case listConfigsMessage:
 		reply, prob := a.listConfigs.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
 		a.reply(c, listConfigsResult{Reply: reply, Prob: prob})
 	case validateDraftMessage:
 		reply, prob := a.validateDraft.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Command)
 		a.reply(c, validateDraftResult{Reply: reply, Prob: prob})
+	case validateConfigMessage:
+		reply, prob := a.validateConfig.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Command)
+		a.reply(c, validateConfigResult{Reply: reply, Prob: prob})
+	case compileConfigMessage:
+		reply, prob := a.compileConfig.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Command)
+		a.reply(c, compileConfigResult{Reply: reply, Prob: prob})
+	case activateConfigMessage:
+		reply, prob := a.activateConfig.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Command)
+		a.reply(c, activateConfigResult{Reply: reply, Prob: prob})
 	default:
 		a.logger.Warn("configctl control router: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
@@ -71,14 +88,14 @@ func (a *ControlRouterActor) ensureDefaults(c *actor.Context) {
 		a.engine = c.Engine()
 	}
 	if a.repository == nil {
-		a.repository = newRuntimeStore()
+		a.repository = memoryrepo.NewRepository(nil)
+	}
+	publisher := &actorDomainEventPublisher{
+		engine:   a.engine,
+		eventPID: a.cfg.EventRouterPID,
+		timeout:  a.cfg.RequestTimeout,
 	}
 	if a.createDraft == nil {
-		publisher := &actorRuntimeEventPublisher{
-			engine:   a.engine,
-			eventPID: a.cfg.EventRouterPID,
-			timeout:  a.cfg.RequestTimeout,
-		}
 		a.createDraft = configapp.NewCreateDraftUseCase(a.repository, publisher)
 	}
 	if a.getConfig == nil {
@@ -90,8 +107,20 @@ func (a *ControlRouterActor) ensureDefaults(c *actor.Context) {
 	if a.listConfigs == nil {
 		a.listConfigs = configapp.NewListConfigsUseCase(a.repository)
 	}
+	if a.listIngestionBindings == nil {
+		a.listIngestionBindings = configapp.NewListActiveIngestionBindingsUseCase(a.repository)
+	}
 	if a.validateDraft == nil {
 		a.validateDraft = configapp.NewValidateDraftUseCase()
+	}
+	if a.validateConfig == nil {
+		a.validateConfig = configapp.NewValidateConfigUseCase(a.repository, publisher)
+	}
+	if a.compileConfig == nil {
+		a.compileConfig = configapp.NewCompileConfigUseCase(a.repository, publisher)
+	}
+	if a.activateConfig == nil {
+		a.activateConfig = configapp.NewActivateConfigUseCase(a.repository, publisher)
 	}
 }
 
@@ -101,13 +130,13 @@ func (a *ControlRouterActor) reply(c *actor.Context, msg any) {
 	}
 }
 
-type actorRuntimeEventPublisher struct {
+type actorDomainEventPublisher struct {
 	engine   *actor.Engine
 	eventPID *actor.PID
 	timeout  time.Duration
 }
 
-func (p *actorRuntimeEventPublisher) Publish(_ context.Context, event contracts.RuntimeEvent) *problem.Problem {
+func (p *actorDomainEventPublisher) Publish(_ context.Context, event events.Event) *problem.Problem {
 	if p == nil || p.engine == nil || p.eventPID == nil {
 		return problem.New(problem.Unavailable, "runtime event publisher is unavailable")
 	}
@@ -117,13 +146,13 @@ func (p *actorRuntimeEventPublisher) Publish(_ context.Context, event contracts.
 		timeout = 5 * time.Second
 	}
 
-	response := p.engine.Request(p.eventPID, publishRuntimeEventMessage{Event: event}, timeout)
+	response := p.engine.Request(p.eventPID, publishDomainEventMessage{Event: event}, timeout)
 	result, err := response.Result()
 	if err != nil {
 		return problem.Wrap(err, problem.Unavailable, "publish runtime event")
 	}
 
-	publishResult, ok := result.(publishRuntimeEventResult)
+	publishResult, ok := result.(publishDomainEventResult)
 	if !ok {
 		return problem.New(problem.Internal, "runtime event response is invalid")
 	}

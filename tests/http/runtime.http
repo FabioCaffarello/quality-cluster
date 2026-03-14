@@ -1,0 +1,28 @@
+### ----------------------------------------------------------------------------
+### Validator runtime smoke tests
+### ----------------------------------------------------------------------------
+
+@baseUrl = http://127.0.0.1:8080
+@correlationId = 1b8cf017c05479260df1c6ad2a21c707
+
+### Active validator runtime for the default scope
+GET {{baseUrl}}/runtime/validator/active?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### Active ingestion bindings bootstrap for consumer/emulator on the default scope
+### The response should include `binding`, `fields` and compact runtime metadata.
+GET {{baseUrl}}/runtime/ingestion/bindings?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### Latest validation results for the default scope
+### After `make up-dataplane` and one active config, the emulator should produce both
+### a valid and an invalid sample within a few seconds.
+GET {{baseUrl}}/runtime/validator/results?scope_kind=global&scope_key=default&limit=10
+Accept: application/json
+X-Correlation-ID: {{correlationId}}

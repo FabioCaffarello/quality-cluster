@@ -5,18 +5,26 @@ import (
 	"net/http"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	validatorresultscontracts "internal/application/validatorresults/contracts"
+	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/interfaces/http/handlers"
 	"internal/interfaces/http/webserver"
 	"internal/shared/problem"
 )
 
 type Dependencies struct {
-	Readiness     handlers.ReadinessChecker
-	CreateDraft   handlersCreateDraftUseCase
-	GetConfig     handlersGetConfigUseCase
-	GetActive     handlersGetActiveConfigUseCase
-	ListConfigs   handlersListConfigsUseCase
-	ValidateDraft handlersValidateDraftUseCase
+	Readiness                   handlers.ReadinessChecker
+	CreateDraft                 handlersCreateDraftUseCase
+	GetConfig                   handlersGetConfigUseCase
+	GetActive                   handlersGetActiveConfigUseCase
+	ListActiveIngestionBindings handlersListActiveIngestionBindingsUseCase
+	ListConfigs                 handlersListConfigsUseCase
+	ValidateDraft               handlersValidateDraftUseCase
+	ValidateConfig              handlersValidateConfigUseCase
+	CompileConfig               handlersCompileConfigUseCase
+	ActivateConfig              handlersActivateConfigUseCase
+	GetRuntime                  handlersGetValidatorRuntimeUseCase
+	ListValidationResults       handlersListValidationResultsUseCase
 }
 
 type handlersCreateDraftUseCase interface {
@@ -35,8 +43,32 @@ type handlersListConfigsUseCase interface {
 	Execute(context.Context, configctlcontracts.ListConfigsQuery) (configctlcontracts.ListConfigsReply, *problem.Problem)
 }
 
+type handlersListActiveIngestionBindingsUseCase interface {
+	Execute(context.Context, configctlcontracts.ListActiveIngestionBindingsQuery) (configctlcontracts.ListActiveIngestionBindingsReply, *problem.Problem)
+}
+
 type handlersValidateDraftUseCase interface {
 	Execute(context.Context, configctlcontracts.ValidateDraftCommand) (configctlcontracts.ValidateDraftReply, *problem.Problem)
+}
+
+type handlersValidateConfigUseCase interface {
+	Execute(context.Context, configctlcontracts.ValidateConfigCommand) (configctlcontracts.ValidateConfigReply, *problem.Problem)
+}
+
+type handlersCompileConfigUseCase interface {
+	Execute(context.Context, configctlcontracts.CompileConfigCommand) (configctlcontracts.CompileConfigReply, *problem.Problem)
+}
+
+type handlersActivateConfigUseCase interface {
+	Execute(context.Context, configctlcontracts.ActivateConfigCommand) (configctlcontracts.ActivateConfigReply, *problem.Problem)
+}
+
+type handlersGetValidatorRuntimeUseCase interface {
+	Execute(context.Context, runtimecontracts.GetActiveRuntimeQuery) (runtimecontracts.GetActiveRuntimeReply, *problem.Problem)
+}
+
+type handlersListValidationResultsUseCase interface {
+	Execute(context.Context, validatorresultscontracts.ListValidationResultsQuery) (validatorresultscontracts.ListValidationResultsReply, *problem.Problem)
 }
 
 func DefaultRoutes(deps Dependencies) []webserver.Route {
@@ -46,7 +78,17 @@ func DefaultRoutes(deps Dependencies) []webserver.Route {
 	}
 
 	routes := Core(readiness)
-	routes = append(routes, Configctl(deps.CreateDraft, deps.GetConfig, deps.GetActive, deps.ListConfigs, deps.ValidateDraft)...)
+	routes = append(routes, Configctl(
+		deps.CreateDraft,
+		deps.GetConfig,
+		deps.GetActive,
+		deps.ListConfigs,
+		deps.ValidateDraft,
+		deps.ValidateConfig,
+		deps.CompileConfig,
+		deps.ActivateConfig,
+	)...)
+	routes = append(routes, RuntimeWithValidationResults(deps.GetRuntime, deps.ListActiveIngestionBindings, deps.ListValidationResults)...)
 	return routes
 }
 

@@ -3,11 +3,13 @@ go 1.25.7
 use (
 	./cmd/configctl
 	./cmd/consumer
+	./cmd/emulator
 	./cmd/server
 	./cmd/validator
 	./internal/actors
 	./internal/adapters/kafka
 	./internal/adapters/nats
+	./internal/adapters/repositories
 	./internal/application
 	./internal/domain
 	./internal/interfaces/http

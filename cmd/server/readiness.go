@@ -11,7 +11,7 @@ import (
 func newConfigctlReadinessChecker(gateway ports.ConfigctlGateway) handlers.ReadinessChecker {
 	return handlers.ReadinessCheckerFunc(func(ctx context.Context) error {
 		if gateway == nil {
-			return unavailableProblem()
+			return unavailableConfigctlProblem()
 		}
 
 		_, prob := gateway.ListConfigs(ctx, configctlcontracts.ListConfigsQuery{})

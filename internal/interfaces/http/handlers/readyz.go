@@ -34,7 +34,6 @@ func NewReadyzWebHandler(checker ReadinessChecker) *ReadyzWebHandler {
 }
 
 func (h *ReadyzWebHandler) Readyz(w http.ResponseWriter, r *http.Request) {
-	// TODO: fan out to dependency-specific readiness checks when infrastructure is added.
 	if err := h.checker.Check(r.Context()); err != nil {
 		writeStatusResponse(w, http.StatusServiceUnavailable, "not_ready")
 		return

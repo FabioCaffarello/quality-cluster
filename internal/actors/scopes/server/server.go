@@ -28,10 +28,8 @@ func NewServer(config settings.HTTPConfig, routes []webserver.Route) actor.Produ
 func (s *Server) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
 	case actor.Started:
-		// TODO: SETUP METRICS
 		_ = msg
 		s.start(c)
-		// TODO: send active connection count metrics
 	case actor.Stopped:
 		if s.webServer != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

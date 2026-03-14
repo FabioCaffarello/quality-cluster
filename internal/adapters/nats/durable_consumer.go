@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"internal/application/configctl/contracts"
+	configdomain "internal/domain/configctl"
 	"internal/shared/problem"
 
 	"github.com/nats-io/nats.go"
@@ -14,31 +14,31 @@ import (
 
 const defaultSetupTimeout = 10 * time.Second
 
-type RuntimeUpdatedHandler interface {
-	HandleRuntimeUpdated(context.Context, contracts.RuntimeUpdatedEvent) *problem.Problem
+type ConfigActivatedHandler interface {
+	HandleConfigActivated(context.Context, configdomain.ConfigActivatedEvent) *problem.Problem
 }
 
-type RuntimeUpdatedConsumer struct {
+type ConfigActivatedConsumer struct {
 	url      string
 	spec     ConsumerSpec
-	handler  RuntimeUpdatedHandler
+	handler  ConfigActivatedHandler
 	nc       *nats.Conn
 	js       jetstream.JetStream
 	consumer jetstream.Consumer
 	cctx     jetstream.ConsumeContext
 }
 
-func NewRuntimeUpdatedConsumer(url string, spec ConsumerSpec, handler RuntimeUpdatedHandler) *RuntimeUpdatedConsumer {
-	return &RuntimeUpdatedConsumer{
+func NewConfigActivatedConsumer(url string, spec ConsumerSpec, handler ConfigActivatedHandler) *ConfigActivatedConsumer {
+	return &ConfigActivatedConsumer{
 		url:     url,
 		spec:    spec,
 		handler: handler,
 	}
 }
 
-func (c *RuntimeUpdatedConsumer) Start() error {
+func (c *ConfigActivatedConsumer) Start() error {
 	if c == nil || c.handler == nil {
-		return fmt.Errorf("runtime updated handler is required")
+		return fmt.Errorf("config activated handler is required")
 	}
 
 	nc, err := connect(c.url)
@@ -57,13 +57,13 @@ func (c *RuntimeUpdatedConsumer) Start() error {
 
 	if _, err := js.CreateOrUpdateStream(ctx, c.spec.Event.Stream.Config()); err != nil {
 		nc.Close()
-		return fmt.Errorf("ensure runtime stream: %w", err)
+		return fmt.Errorf("ensure config event stream: %w", err)
 	}
 
 	stream, err := js.Stream(ctx, c.spec.Event.Stream.Name)
 	if err != nil {
 		nc.Close()
-		return fmt.Errorf("get runtime stream: %w", err)
+		return fmt.Errorf("get config event stream: %w", err)
 	}
 
 	consumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
@@ -75,17 +75,17 @@ func (c *RuntimeUpdatedConsumer) Start() error {
 	})
 	if err != nil {
 		nc.Close()
-		return fmt.Errorf("create runtime consumer: %w", err)
+		return fmt.Errorf("create config event consumer: %w", err)
 	}
 
 	cctx, err := consumer.Consume(func(msg jetstream.Msg) {
-		env, prob := decodeRuntimeEvent[contracts.RuntimeUpdatedEvent](c.spec.Event, msg.Data())
+		env, prob := decodeEvent[configdomain.ConfigActivatedEvent](c.spec.Event, msg.Data())
 		if prob != nil {
 			_ = msg.Term()
 			return
 		}
 
-		if prob := c.handler.HandleRuntimeUpdated(context.Background(), env.Payload); prob != nil {
+		if prob := c.handler.HandleConfigActivated(context.Background(), env.Payload); prob != nil {
 			_ = msg.Nak()
 			return
 		}
@@ -94,7 +94,7 @@ func (c *RuntimeUpdatedConsumer) Start() error {
 	})
 	if err != nil {
 		nc.Close()
-		return fmt.Errorf("consume runtime updates: %w", err)
+		return fmt.Errorf("consume config activated events: %w", err)
 	}
 
 	c.nc = nc
@@ -104,7 +104,7 @@ func (c *RuntimeUpdatedConsumer) Start() error {
 	return nil
 }
 
-func (c *RuntimeUpdatedConsumer) Close() error {
+func (c *ConfigActivatedConsumer) Close() error {
 	if c == nil {
 		return nil
 	}

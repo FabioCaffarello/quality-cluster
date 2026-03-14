@@ -2,6 +2,7 @@ package configctl
 
 import (
 	"internal/application/configctl/contracts"
+	"internal/shared/events"
 	"internal/shared/problem"
 )
 
@@ -45,6 +46,16 @@ type listConfigsResult struct {
 	Prob  *problem.Problem
 }
 
+type listActiveIngestionBindingsMessage struct {
+	Query         contracts.ListActiveIngestionBindingsQuery
+	CorrelationID string
+}
+
+type listActiveIngestionBindingsResult struct {
+	Reply contracts.ListActiveIngestionBindingsReply
+	Prob  *problem.Problem
+}
+
 type validateDraftMessage struct {
 	Command       contracts.ValidateDraftCommand
 	CorrelationID string
@@ -55,10 +66,40 @@ type validateDraftResult struct {
 	Prob  *problem.Problem
 }
 
-type publishRuntimeEventMessage struct {
-	Event contracts.RuntimeEvent
+type validateConfigMessage struct {
+	Command       contracts.ValidateConfigCommand
+	CorrelationID string
 }
 
-type publishRuntimeEventResult struct {
+type validateConfigResult struct {
+	Reply contracts.ValidateConfigReply
+	Prob  *problem.Problem
+}
+
+type compileConfigMessage struct {
+	Command       contracts.CompileConfigCommand
+	CorrelationID string
+}
+
+type compileConfigResult struct {
+	Reply contracts.CompileConfigReply
+	Prob  *problem.Problem
+}
+
+type activateConfigMessage struct {
+	Command       contracts.ActivateConfigCommand
+	CorrelationID string
+}
+
+type activateConfigResult struct {
+	Reply contracts.ActivateConfigReply
+	Prob  *problem.Problem
+}
+
+type publishDomainEventMessage struct {
+	Event events.Event
+}
+
+type publishDomainEventResult struct {
 	Prob *problem.Problem
 }

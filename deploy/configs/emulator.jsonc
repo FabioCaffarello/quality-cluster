@@ -1,0 +1,22 @@
+{
+  // emulator bootstraps from the server runtime view and publishes one valid and one invalid synthetic JSON payload per active binding.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "kafka": {
+    "enabled": true,
+    "brokers": ["kafka:9092"],
+    "client_id": "quality-service-emulator",
+    "dial_timeout": "10s"
+  },
+  "bootstrap": {
+    "base_url": "http://server:8080",
+    "scope_kind": "global",
+    "scope_key": "default",
+    "timeout": "5s"
+  },
+  "emulator": {
+    "publish_interval": "5s"
+  }
+}

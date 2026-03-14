@@ -19,7 +19,7 @@ type RuntimeConsumerActor struct {
 	cfg      RuntimeConsumerConfig
 	logger   *slog.Logger
 	engine   *actor.Engine
-	consumer *adapternats.RuntimeUpdatedConsumer
+	consumer *adapternats.ConfigActivatedConsumer
 }
 
 func NewRuntimeConsumerActor(cfg RuntimeConsumerConfig) actor.Producer {
@@ -38,7 +38,7 @@ func (a *RuntimeConsumerActor) Receive(c *actor.Context) {
 
 	switch msg := c.Message().(type) {
 	case actor.Started:
-		consumer := adapternats.NewRuntimeUpdatedConsumer(a.cfg.URL, a.cfg.Registry.ValidatorCache, &cacheForwarder{
+		consumer := adapternats.NewConfigActivatedConsumer(a.cfg.URL, a.cfg.Registry.ValidatorRuntime, &cacheForwarder{
 			engine:   a.engine,
 			cachePID: a.cfg.CachePID,
 		})
