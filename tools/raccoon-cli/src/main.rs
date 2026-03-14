@@ -381,6 +381,142 @@ enum Commands {
         #[arg(long)]
         no_lsp: bool,
     },
+    /// Map where contracts are defined, constructed, propagated, consumed, and validated
+    #[command(
+        long_about = "Map real contract usage across the repository using AST structural analysis.\n\n\
+            For each contract type (envelopes, commands, queries, replies, events, records, bindings, etc.):\n  \
+              - Definition: where the type is declared\n  \
+              - Construction: factory functions, builder methods, struct literals\n  \
+              - Propagation: parameters, returns, embeddings, interface methods\n  \
+              - Consumption: handlers, decoders, field access\n  \
+              - Validation: Validate/Normalize methods\n\n\
+            Differentiates observed facts from heuristic inferences.\n\
+            With --lsp, enriches with gopls references for function body call sites.",
+        after_help = "Examples:\n  \
+            raccoon-cli contract-usage-map\n  \
+            raccoon-cli --json contract-usage-map\n  \
+            raccoon-cli -v contract-usage-map               # show per-contract details\n  \
+            raccoon-cli contract-usage-map --lsp             # enrich with gopls"
+    )]
+    ContractUsageMap {
+        /// Enrich with gopls references for deeper coverage
+        #[arg(long)]
+        lsp: bool,
+        /// Skip gopls even if --lsp is set
+        #[arg(long)]
+        no_lsp: bool,
+    },
+    /// Generate a concise, auditable briefing about an area, symbol, file, or change
+    #[command(
+        long_about = "Generate a short, dense briefing combining impact analysis, architecture checks,\n\
+            contract health, and TDD guidance for a given set of targets.\n\n\
+            Designed for pasting into agent context or reading during development.\n\
+            Every item is tagged: [fact], [inferred], or [recommendation].\n\n\
+            Targets can be:\n  \
+              - File paths: internal/domain/configctl/config.go\n  \
+              - Package dirs: internal/domain/configctl\n  \
+              - Symbol names: ConfigSet (PascalCase)\n  \
+              - Multiple targets: mix of the above\n\n\
+            If no targets are given, uses `git status` to detect changed files.",
+        after_help = "Examples:\n  \
+            raccoon-cli briefing internal/domain/configctl/config.go\n  \
+            raccoon-cli briefing ConfigSet\n  \
+            raccoon-cli briefing --lsp internal/adapters/nats/\n  \
+            raccoon-cli --json briefing internal/domain/configctl/\n  \
+            raccoon-cli briefing  # auto-detect from git status"
+    )]
+    Briefing {
+        /// Enrich with gopls references for deeper coverage
+        #[arg(long)]
+        lsp: bool,
+        /// Skip gopls even if --lsp is set
+        #[arg(long)]
+        no_lsp: bool,
+        /// Targets to analyze (files, packages, or symbols). If omitted, uses git status.
+        #[arg(trailing_var_arg = true)]
+        targets: Vec<String>,
+    },
+    /// Detect semantic drift between a baseline snapshot and the current repository state
+    #[command(
+        long_about = "Compare the current repository against a previously saved baseline snapshot\n\
+            to detect semantic drift — structural changes that may indicate divergence\n\
+            from expected architecture, contracts, or invariants.\n\n\
+            Drift classes detected:\n  \
+              1. Contract surface drift: removed/modified/added contracts\n  \
+              2. Interface breaking: removed interface methods\n  \
+              3. Interface expansion: added interface methods\n  \
+              4. Layer boundary drift: architecture layer changes\n  \
+              5. Type breaking: removed fields, type changes\n  \
+              6. API signature drift: exported function signature changes\n  \
+              7. Coupling increase: new cross-layer imports\n  \
+              8. Isolation loss: domain/application importing infrastructure\n  \
+              9. Contract proliferation: rapid growth without validation\n  \
+              10. Structural scale shift: large-scale code changes\n\n\
+            Every finding is tagged with its evidence basis:\n  \
+              - observed: directly from the snapshot diff\n  \
+              - inferred: derived from combining multiple facts\n  \
+              - heuristic: statistical or pattern-based",
+        after_help = "Examples:\n  \
+            raccoon-cli baseline-drift baseline.json\n  \
+            raccoon-cli --json baseline-drift baseline.json\n  \
+            raccoon-cli -v baseline-drift baseline.json\n  \
+            raccoon-cli --json snapshot -o baseline.json   # save baseline first"
+    )]
+    BaselineDrift {
+        /// Path to the baseline snapshot JSON file
+        baseline: std::path::PathBuf,
+    },
+    /// Generate a golden snapshot of the repository's code intelligence
+    #[command(
+        long_about = "Generate a deterministic, auditable snapshot of the repository's structural\n\
+            and semantic state as observed by the codeintel layer.\n\n\
+            The snapshot captures:\n  \
+              - Packages, imports, types, functions, constants, interfaces\n  \
+              - Architecture layer classification per package\n  \
+              - Detected contract types and families\n  \
+              - Aggregate statistics\n\n\
+            Every fact is tagged with its provenance: ast, lsp, inferred, or runtime.\n\
+            Output is sorted and deterministic — same source tree produces the same\n\
+            snapshot (modulo metadata.generated_at).\n\n\
+            Use for baseline comparison, drift detection, and debugging.",
+        after_help = "Examples:\n  \
+            raccoon-cli snapshot\n  \
+            raccoon-cli --json snapshot\n  \
+            raccoon-cli --json snapshot --output snapshot.json\n  \
+            raccoon-cli -v snapshot                              # show types, functions, imports\n  \
+            diff <(raccoon-cli --json snapshot) baseline.json    # detect drift"
+    )]
+    Snapshot {
+        /// Save JSON output to a file instead of stdout
+        #[arg(long, short)]
+        output: Option<std::path::PathBuf>,
+    },
+    /// Compare two snapshots and produce a semantic diff report
+    #[command(
+        long_about = "Compare two code intelligence snapshots and produce a structured diff.\n\n\
+            Highlights additions, removals, and modifications across all snapshot sections:\n\
+            packages, imports, types, functions, constants, interfaces, arch layers, and contracts.\n\n\
+            Changes are reported semantically (field added, signature changed, method removed)\n\
+            rather than as raw text diffs. The report separates observed facts from derived\n\
+            inferences about impact and risk.\n\n\
+            Both snapshots must have the same format version. Corrupted or incompatible\n\
+            snapshots are detected and reported clearly.",
+        after_help = "Examples:\n  \
+            raccoon-cli snapshot-diff before.json after.json\n  \
+            raccoon-cli --json snapshot-diff baseline.json current.json\n  \
+            raccoon-cli -v snapshot-diff old.json new.json\n  \
+            raccoon-cli snapshot-diff before.json --after-live     # compare file vs live project"
+    )]
+    SnapshotDiff {
+        /// Path to the 'before' snapshot JSON file
+        before: std::path::PathBuf,
+        /// Path to the 'after' snapshot JSON file (omit with --after-live to use current project)
+        #[arg(required_unless_present = "after_live")]
+        after: Option<std::path::PathBuf>,
+        /// Use a live snapshot of the current project as 'after' instead of a file
+        #[arg(long)]
+        after_live: bool,
+    },
     /// Collect diagnostic evidence from the running cluster into a trace pack
     #[command(
         long_about = "Collect diagnostic evidence from the running quality-service cluster.\n\n\
@@ -503,6 +639,123 @@ fn main() {
         return;
     }
 
+    // Baseline drift has its own report type
+    if let Commands::BaselineDrift { ref baseline } = cli.command {
+        match analyzers::baseline_drift::analyze(baseline, &cli.project_root) {
+            Ok(report) => {
+                if cli.json {
+                    match analyzers::baseline_drift::render_json(&report) {
+                        Ok(json) => print!("{json}"),
+                        Err(e) => {
+                            eprintln!("error: failed to render output: {e}");
+                            process::exit(2);
+                        }
+                    }
+                } else {
+                    print!(
+                        "{}",
+                        analyzers::baseline_drift::render_human(&report, cli.verbose)
+                    );
+                }
+                if report.verdict == analyzers::baseline_drift::Verdict::Drifted {
+                    process::exit(1);
+                }
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                process::exit(2);
+            }
+        }
+        return;
+    }
+
+    // Snapshot has its own report type
+    if let Commands::Snapshot { ref output } = cli.command {
+        let snap = analyzers::snapshot::generate(&cli.project_root);
+
+        if cli.json || output.is_some() {
+            match analyzers::snapshot::render_json(&snap) {
+                Ok(json) => {
+                    if let Some(ref path) = output {
+                        match std::fs::write(path, &json) {
+                            Ok(_) => {
+                                eprintln!("Snapshot written to {}", path.display());
+                            }
+                            Err(e) => {
+                                eprintln!("error: failed to write snapshot: {e}");
+                                process::exit(2);
+                            }
+                        }
+                    } else {
+                        print!("{json}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: failed to render snapshot: {e}");
+                    process::exit(2);
+                }
+            }
+        } else {
+            print!("{}", analyzers::snapshot::render_human(&snap, cli.verbose));
+        }
+        return;
+    }
+
+    // Snapshot diff has its own report type
+    if let Commands::SnapshotDiff {
+        ref before,
+        ref after,
+        after_live,
+    } = cli.command
+    {
+        let before_snap = match analyzers::snapshot_diff::load_snapshot(before) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("error: failed to load 'before' snapshot: {e}");
+                process::exit(2);
+            }
+        };
+
+        let after_snap = if after_live {
+            analyzers::snapshot::generate(&cli.project_root)
+        } else {
+            match after {
+                Some(ref path) => match analyzers::snapshot_diff::load_snapshot(path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("error: failed to load 'after' snapshot: {e}");
+                        process::exit(2);
+                    }
+                },
+                None => {
+                    eprintln!("error: 'after' snapshot path required (or use --after-live)");
+                    process::exit(2);
+                }
+            }
+        };
+
+        match analyzers::snapshot_diff::diff(&before_snap, &after_snap) {
+            Ok(d) => {
+                if cli.json {
+                    match analyzers::snapshot_diff::render_json(&d) {
+                        Ok(json) => print!("{json}"),
+                        Err(e) => {
+                            eprintln!("error: failed to render diff: {e}");
+                            process::exit(2);
+                        }
+                    }
+                } else {
+                    print!("{}", analyzers::snapshot_diff::render_human(&d, cli.verbose));
+                }
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                process::exit(2);
+            }
+        }
+        return;
+    }
+
     // Trace-pack has its own output (directory/tarball, not a Report)
     if let Commands::TracePack {
         ref base_url,
@@ -573,6 +826,34 @@ fn main() {
         return;
     }
 
+    // Contract usage map has its own report type
+    if let Commands::ContractUsageMap { lsp, no_lsp } = cli.command {
+        let report = if lsp && !no_lsp {
+            let mut bridge = lsp::GoplsBridge::new(&cli.project_root);
+            let r = analyzers::contract_usage_map::analyze_with_lsp(&cli.project_root, &mut bridge);
+            bridge.shutdown();
+            r
+        } else {
+            analyzers::contract_usage_map::analyze(&cli.project_root)
+        };
+
+        if cli.json {
+            match analyzers::contract_usage_map::render_json(&report) {
+                Ok(s) => print!("{s}"),
+                Err(e) => {
+                    eprintln!("error: failed to render output: {e}");
+                    process::exit(2);
+                }
+            }
+        } else {
+            print!(
+                "{}",
+                analyzers::contract_usage_map::render_human(&report, cli.verbose)
+            );
+        }
+        return;
+    }
+
     // Rename safety has its own report type
     if let Commands::RenameSafety {
         ref symbol,
@@ -634,6 +915,37 @@ fn main() {
             }
         } else {
             print!("{}", analyzers::symbol_trace::render_human(&report, cli.verbose));
+        }
+        return;
+    }
+
+    // Briefing has its own report type
+    if let Commands::Briefing { ref targets, lsp, no_lsp } = cli.command {
+        let changed = if targets.is_empty() {
+            detect_changed_files(&cli.project_root)
+        } else {
+            targets.clone()
+        };
+
+        let report = if lsp && !no_lsp {
+            let mut bridge = lsp::GoplsBridge::new(&cli.project_root);
+            let r = analyzers::briefing::analyze_with_lsp(&cli.project_root, &changed, &mut bridge);
+            bridge.shutdown();
+            r
+        } else {
+            analyzers::briefing::analyze(&cli.project_root, &changed)
+        };
+
+        if cli.json {
+            match analyzers::briefing::render_json(&report) {
+                Ok(s) => print!("{s}"),
+                Err(e) => {
+                    eprintln!("error: failed to render output: {e}");
+                    process::exit(2);
+                }
+            }
+        } else {
+            print!("{}", analyzers::briefing::render_human(&report, cli.verbose));
         }
         return;
     }
@@ -775,6 +1087,9 @@ fn main() {
         }
         Commands::ResultsInspect { .. } => unreachable!(),
         Commands::QualityGate { .. } => unreachable!(),
+        Commands::BaselineDrift { .. } => unreachable!(),
+        Commands::Snapshot { .. } => unreachable!(),
+        Commands::SnapshotDiff { .. } => unreachable!(),
         Commands::TracePack { .. } => unreachable!(),
         Commands::ScenarioSmoke { .. } => unreachable!(),
         Commands::ImpactMap { .. } => unreachable!(),
@@ -782,6 +1097,8 @@ fn main() {
         Commands::Tdd { .. } => unreachable!(),
         Commands::LspEnrich { .. } => unreachable!(),
         Commands::RenameSafety { .. } => unreachable!(),
+        Commands::ContractUsageMap { .. } => unreachable!(),
+        Commands::Briefing { .. } => unreachable!(),
     };
 
     match result {
@@ -1228,6 +1545,43 @@ mod tests {
         assert_eq!(gate::Profile::from(GateProfile::Deep), gate::Profile::Deep);
     }
 
+    // ── snapshot parsing ──────────────────────────────────────
+
+    #[test]
+    fn cli_parses_snapshot() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "snapshot"]).unwrap();
+        assert!(matches!(cli.command, Commands::Snapshot { output: None }));
+    }
+
+    #[test]
+    fn cli_parses_snapshot_json() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "--json", "snapshot"]).unwrap();
+        assert!(cli.json);
+        assert!(matches!(cli.command, Commands::Snapshot { .. }));
+    }
+
+    #[test]
+    fn cli_parses_snapshot_with_output() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "snapshot", "--output", "snap.json"]).unwrap();
+        match cli.command {
+            Commands::Snapshot { output } => {
+                assert_eq!(output, Some(std::path::PathBuf::from("snap.json")));
+            }
+            _ => panic!("expected Snapshot"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_snapshot_with_short_output() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "snapshot", "-o", "out.json"]).unwrap();
+        match cli.command {
+            Commands::Snapshot { output } => {
+                assert_eq!(output, Some(std::path::PathBuf::from("out.json")));
+            }
+            _ => panic!("expected Snapshot"),
+        }
+    }
+
     // ── results-inspect parsing ──────────────────────────────────
 
     // ── trace-pack parsing ──────────────────────────────────────
@@ -1521,6 +1875,40 @@ mod tests {
             Commands::ResultsInspect { failed_only, .. } => assert!(failed_only),
             _ => panic!("expected ResultsInspect"),
         }
+    }
+
+    // ── contract-usage-map parsing ──────────────────────────────────
+
+    #[test]
+    fn cli_parses_contract_usage_map() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "contract-usage-map"]).unwrap();
+        assert!(matches!(cli.command, Commands::ContractUsageMap { lsp: false, no_lsp: false }));
+    }
+
+    #[test]
+    fn cli_parses_contract_usage_map_with_lsp() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "contract-usage-map", "--lsp"]).unwrap();
+        match cli.command {
+            Commands::ContractUsageMap { lsp, no_lsp } => {
+                assert!(lsp);
+                assert!(!no_lsp);
+            }
+            _ => panic!("expected ContractUsageMap"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_contract_usage_map_json() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "--json", "contract-usage-map"]).unwrap();
+        assert!(cli.json);
+        assert!(matches!(cli.command, Commands::ContractUsageMap { .. }));
+    }
+
+    #[test]
+    fn cli_parses_contract_usage_map_verbose() {
+        let cli = Cli::try_parse_from(["raccoon-cli", "-v", "contract-usage-map"]).unwrap();
+        assert!(cli.verbose);
+        assert!(matches!(cli.command, Commands::ContractUsageMap { .. }));
     }
 
     // ── coverage-map parsing ──────────────────────────────────────

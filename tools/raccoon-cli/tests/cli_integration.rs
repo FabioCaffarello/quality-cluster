@@ -626,3 +626,845 @@ fn lsp_enrich_requires_symbol_arg() {
         .assert()
         .failure();
 }
+
+// ── Contract Usage Map ──────────────────────────────────────────────
+
+#[test]
+fn contract_usage_map_json_output_is_valid() {
+    let output = raccoon()
+        .args(["--json", "--project-root", "/nonexistent", "contract-usage-map"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed["contracts"].is_array());
+    assert!(parsed["families"].is_array());
+    assert!(parsed["statistics"]["total_contracts"].is_number());
+    assert!(parsed["scope_note"].is_string());
+}
+
+#[test]
+fn contract_usage_map_human_output_has_header() {
+    raccoon()
+        .args(["--project-root", "/nonexistent", "contract-usage-map"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Contract Usage Map"))
+        .stdout(predicate::str::contains("Families"));
+}
+
+#[test]
+fn contract_usage_map_verbose_shows_details() {
+    raccoon()
+        .args(["-v", "--project-root", "/nonexistent", "contract-usage-map"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Contract Usage Map"));
+}
+
+// ── Snapshot ──────────────────────────────────────────────────────────
+
+#[test]
+fn snapshot_help_shows_examples() {
+    raccoon()
+        .args(["snapshot", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Examples:"))
+        .stdout(predicate::str::contains("snapshot"));
+}
+
+#[test]
+fn snapshot_human_output_on_empty_project() {
+    let dir = TempDir::new().unwrap();
+
+    raccoon()
+        .args(["--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Golden Snapshot"))
+        .stdout(predicate::str::contains("Stats:"))
+        .stdout(predicate::str::contains("Packages (0)"));
+}
+
+#[test]
+fn snapshot_json_output_is_valid() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype ConfigSet struct { ID string }\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["version"], "1");
+    assert!(parsed["packages"].is_array());
+    assert!(parsed["types"].is_array());
+    assert!(parsed["functions"].is_array());
+    assert!(parsed["stats"]["total_files"].is_number());
+    assert!(parsed["metadata"]["generated_at"].is_string());
+    assert!(parsed["metadata"]["raccoon_version"].is_string());
+}
+
+#[test]
+fn snapshot_json_has_provenance_tags() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype ConfigGateway interface { Get() string }\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    // Packages should have provenance: ast
+    let pkg_prov = &parsed["packages"][0]["provenance"];
+    assert_eq!(pkg_prov, "ast");
+
+    // Metadata should have provenance: runtime
+    assert_eq!(parsed["metadata"]["provenance"], "runtime");
+}
+
+#[test]
+fn snapshot_output_flag_writes_file() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    let out_path = dir.path().join("snapshot.json");
+
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+            "--output",
+            out_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    assert!(out_path.exists(), "snapshot file should be created");
+    let content = std::fs::read_to_string(&out_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["version"], "1");
+}
+
+#[test]
+fn snapshot_verbose_shows_more() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Model struct { ID string }\n\nfunc NewModel() Model { return Model{} }\n",
+    )
+    .unwrap();
+
+    let terse = raccoon()
+        .args(["--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .output()
+        .unwrap();
+
+    let verbose = raccoon()
+        .args(["-v", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .output()
+        .unwrap();
+
+    assert!(
+        verbose.stdout.len() > terse.stdout.len(),
+        "verbose output should be longer"
+    );
+}
+
+#[test]
+fn snapshot_is_deterministic_across_runs() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n",
+    )
+    .unwrap();
+
+    let out1 = raccoon()
+        .args(["--json", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .output()
+        .unwrap();
+    let out2 = raccoon()
+        .args(["--json", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .output()
+        .unwrap();
+
+    let j1: serde_json::Value = serde_json::from_slice(&out1.stdout).unwrap();
+    let j2: serde_json::Value = serde_json::from_slice(&out2.stdout).unwrap();
+
+    // Structural sections must be identical
+    assert_eq!(j1["packages"], j2["packages"]);
+    assert_eq!(j1["types"], j2["types"]);
+    assert_eq!(j1["stats"], j2["stats"]);
+}
+
+// ── Snapshot Diff ─────────────────────────────────────────────────────
+
+#[test]
+fn snapshot_diff_help_shows_examples() {
+    raccoon()
+        .args(["snapshot-diff", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Examples:"))
+        .stdout(predicate::str::contains("structured diff"));
+}
+
+#[test]
+fn snapshot_diff_identical_files_no_changes() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    // Generate a snapshot
+    let snap_path = dir.path().join("snap.json");
+    raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+            "-o",
+            snap_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Diff the snapshot against itself
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot-diff",
+            snap_path.to_str().unwrap(),
+            snap_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No structural changes detected."));
+}
+
+#[test]
+fn snapshot_diff_json_output_is_valid() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    let snap_path = dir.path().join("snap.json");
+    raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+            "-o",
+            snap_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot-diff",
+            snap_path.to_str().unwrap(),
+            snap_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(parsed["has_changes"], false);
+    assert!(parsed["sections"].is_object());
+    assert!(parsed["stats_delta"].is_object());
+}
+
+#[test]
+fn snapshot_diff_missing_file_fails() {
+    raccoon()
+        .args(["snapshot-diff", "/nonexistent/before.json", "/nonexistent/after.json"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("failed to load"));
+}
+
+#[test]
+fn snapshot_diff_with_after_live() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    let snap_path = dir.path().join("snap.json");
+    raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+            "-o",
+            snap_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot-diff",
+            snap_path.to_str().unwrap(),
+            "--after-live",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No structural changes detected."));
+}
+
+// ── Briefing ──────────────────────────────────────────────────────────
+
+#[test]
+fn briefing_help_shows_examples() {
+    raccoon()
+        .args(["briefing", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Examples:"))
+        .stdout(predicate::str::contains("[fact]"));
+}
+
+#[test]
+fn briefing_no_targets_shows_usage() {
+    // With a nonexistent project root and no git, targets will be empty
+    raccoon()
+        .args(["--project-root", "/nonexistent", "briefing"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No targets provided"));
+}
+
+#[test]
+fn briefing_json_no_targets_is_valid() {
+    let output = raccoon()
+        .args(["--json", "--project-root", "/nonexistent", "briefing"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed["targets"].is_array());
+    assert!(parsed["facts"].is_array());
+    assert!(parsed["inferences"].is_array());
+    assert!(parsed["recommendations"].is_array());
+    assert!(parsed["scope_note"].is_string());
+}
+
+#[test]
+fn briefing_with_file_target() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    // Create a minimal Go file
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Model struct { ID string }\n",
+    )
+    .unwrap();
+
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "internal/domain/model.go",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Briefing"))
+        .stdout(predicate::str::contains("Targets:"));
+}
+
+#[test]
+fn briefing_json_with_file_target() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Model struct { ID string }\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "internal/domain/model.go",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["targets"][0], "internal/domain/model.go");
+    assert!(parsed["facts"].is_array());
+    assert!(parsed["scope_note"].is_string());
+}
+
+#[test]
+fn briefing_with_symbol_target() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype ConfigSet struct { ID string }\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "ConfigSet",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["targets"][0], "ConfigSet");
+    // Should have found the symbol definition
+    let has_def = parsed["facts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| {
+            f["category"] == "symbol-definition"
+                && f["message"].as_str().unwrap_or("").contains("ConfigSet")
+        });
+    assert!(has_def, "should find ConfigSet in facts");
+}
+
+#[test]
+fn briefing_multiple_targets_json() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Foo struct { X int }\ntype Bar struct { Y int }\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "internal/domain/model.go",
+            "Foo",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["targets"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn briefing_ambiguous_symbol_works() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::create_dir_all(dir.path().join("internal/adapters")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Handler struct { ID string }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/adapters/handler.go"),
+        "package adapters\n\ntype Handler struct { Name string }\n",
+    )
+    .unwrap();
+
+    // Should not panic, should include both definitions
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "Handler",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Briefing"));
+}
+
+#[test]
+fn briefing_verbose_shows_more() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Model struct { ID string }\n",
+    )
+    .unwrap();
+
+    let terse = raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "internal/domain/model.go",
+        ])
+        .output()
+        .unwrap();
+
+    let verbose = raccoon()
+        .args([
+            "-v",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "internal/domain/model.go",
+        ])
+        .output()
+        .unwrap();
+
+    // Verbose output should be >= terse
+    assert!(verbose.stdout.len() >= terse.stdout.len());
+}
+
+#[test]
+fn briefing_fallback_without_lsp() {
+    // briefing without --lsp should work fine
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("go.mod"),
+        "module github.com/example/svc\n\ngo 1.23\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n",
+    )
+    .unwrap();
+
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "briefing",
+            "Config",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Briefing"))
+        .stdout(predicate::str::contains("No LSP enrichment"));
+}
+
+// ── Baseline Drift ────────────────────────────────────────────────────
+
+#[test]
+fn baseline_drift_help_shows_examples() {
+    raccoon()
+        .args(["baseline-drift", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Examples:"))
+        .stdout(predicate::str::contains("baseline.json"));
+}
+
+#[test]
+fn baseline_drift_missing_file_exits_2() {
+    raccoon()
+        .args(["baseline-drift", "/nonexistent/baseline.json"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn baseline_drift_invalid_json_exits_2() {
+    let dir = TempDir::new().unwrap();
+    let bad_file = dir.path().join("bad.json");
+    std::fs::write(&bad_file, "not json").unwrap();
+
+    raccoon()
+        .args(["baseline-drift", bad_file.to_str().unwrap()])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("error:"));
+}
+
+#[test]
+fn baseline_drift_clean_on_identical_project() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n",
+    )
+    .unwrap();
+
+    // Generate baseline snapshot
+    let snap_output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+    assert!(snap_output.status.success());
+
+    let baseline_path = dir.path().join("baseline.json");
+    std::fs::write(&baseline_path, &snap_output.stdout).unwrap();
+
+    // Run baseline-drift against the same project
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "baseline-drift",
+            baseline_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("CLEAN"));
+}
+
+#[test]
+fn baseline_drift_json_output_is_valid() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n",
+    )
+    .unwrap();
+
+    // Generate baseline
+    let snap_output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+    let baseline_path = dir.path().join("baseline.json");
+    std::fs::write(&baseline_path, &snap_output.stdout).unwrap();
+
+    // Run baseline-drift with --json
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "baseline-drift",
+            baseline_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("should be valid JSON");
+    assert_eq!(parsed["verdict"], "clean");
+    assert!(parsed["findings"].is_array());
+    assert!(parsed["summary"].is_object());
+    assert!(parsed["baseline"].is_object());
+    assert!(parsed["current"].is_object());
+}
+
+#[test]
+fn baseline_drift_detects_drift_after_change() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n\nfunc NewConfig(name string) Config { return Config{Name: name} }\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("internal/application/ports")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/application/ports/port.go"),
+        "package ports\n\nimport \"context\"\n\ntype ConfigGateway interface {\n\tGet(ctx context.Context, id string) (string, error)\n}\n",
+    )
+    .unwrap();
+
+    // Generate baseline
+    let snap_output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+    let baseline_path = dir.path().join("baseline.json");
+    std::fs::write(&baseline_path, &snap_output.stdout).unwrap();
+
+    // Modify the project: change function signature, modify interface
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string\n\tLabel string }\n\nfunc NewConfig(name string, label string) Config { return Config{Name: name, Label: label} }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("internal/application/ports/port.go"),
+        "package ports\n\nimport \"context\"\n\ntype ConfigGateway interface {\n\tGet(ctx context.Context, id string) (string, error)\n\tDelete(ctx context.Context, id string) error\n}\n",
+    )
+    .unwrap();
+
+    // Run baseline-drift — should detect drift
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "baseline-drift",
+            baseline_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    // Exit code 1 for drift (or 0 for mild)
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("should be valid JSON");
+    let total = parsed["summary"]["total_findings"].as_u64().unwrap();
+    assert!(total > 0, "Should have findings after changes");
+    // Should detect api-signature-drift for NewConfig
+    let findings = parsed["findings"].as_array().unwrap();
+    let has_sig_drift = findings
+        .iter()
+        .any(|f| f["class"] == "api-signature-drift");
+    assert!(has_sig_drift, "Should detect NewConfig signature change");
+}
+
+#[test]
+fn baseline_drift_verbose_shows_evidence() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    std::fs::create_dir_all(dir.path().join("internal/domain")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\ntype Config struct { Name string }\n",
+    )
+    .unwrap();
+
+    // Generate baseline, then modify
+    let snap_output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
+        .output()
+        .unwrap();
+    let baseline_path = dir.path().join("baseline.json");
+    std::fs::write(&baseline_path, &snap_output.stdout).unwrap();
+
+    // Remove the type entirely
+    std::fs::write(
+        dir.path().join("internal/domain/model.go"),
+        "package domain\n\n// empty\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "-v",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "baseline-drift",
+            baseline_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("evidence:"), "Verbose output should show evidence");
+}

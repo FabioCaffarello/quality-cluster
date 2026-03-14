@@ -20,7 +20,7 @@ endef
 .PHONY: help tidy test build docker-build compose-config up-core up-runtime up-dataplane up-all down restart logs ps clean \
        raccoon-build raccoon-test quality-gate quality-gate-ci quality-gate-deep \
        check check-deep verify smoke scenario-smoke trace-pack results-inspect \
-       coverage-map tdd arch-guard drift-detect
+       coverage-map tdd arch-guard drift-detect snapshot
 
 help:
 	@echo "Targets:"
@@ -51,6 +51,7 @@ help:
 	@echo "  make tdd                  - TDD guide: what to validate for your changes"
 	@echo "  make arch-guard           - architecture layer boundary check"
 	@echo "  make drift-detect         - cross-layer drift detection"
+	@echo "  make snapshot             - golden snapshot of code intelligence (JSON)"
 	@echo ""
 	@echo "Quality (raccoon-cli):"
 	@echo "  make quality-gate         - fast static checks (local dev, pre-commit)"
@@ -195,11 +196,17 @@ coverage-map: $(RACCOON_BIN)
 tdd: $(RACCOON_BIN)
 	$(RACCOON_BIN) --project-root . tdd
 
+briefing: $(RACCOON_BIN)
+	$(RACCOON_BIN) --project-root . briefing $(TARGETS)
+
 arch-guard: $(RACCOON_BIN)
 	$(RACCOON_BIN) --project-root . arch-guard
 
 drift-detect: $(RACCOON_BIN)
 	$(RACCOON_BIN) --project-root . drift-detect
+
+snapshot: $(RACCOON_BIN)
+	$(RACCOON_BIN) --project-root . --json snapshot
 
 scenario-smoke: $(RACCOON_BIN)
 	@if [[ -n "$(SCENARIO)" ]]; then \

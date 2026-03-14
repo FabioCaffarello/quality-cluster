@@ -1,4 +1,7 @@
 pub mod arch_guard;
+pub mod baseline_drift;
+pub mod briefing;
+pub mod contract_usage_map;
 pub mod contracts;
 pub mod coverage_map;
 pub mod doctor;
@@ -6,6 +9,8 @@ pub mod drift_detect;
 pub mod impact_map;
 pub mod rename_safety;
 pub mod runtime_bindings;
+pub mod snapshot;
+pub mod snapshot_diff;
 pub mod symbol_trace;
 pub mod tdd;
 pub mod topology;

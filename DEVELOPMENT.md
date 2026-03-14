@@ -5,6 +5,7 @@ Canonical workflow for developing, validating, and troubleshooting the quality-s
 ## Quick Reference
 
 ```sh
+make briefing       # briefing: concise context about a target area or symbol
 make check          # guard rail before coding — are we in a known-good state?
 make verify         # after changes — Go tests + quality-gate
 make check-deep     # full proof — requires make up-dataplane
@@ -16,6 +17,7 @@ make coverage-map   # show quality coverage map and gaps
 make tdd            # TDD guide: what to validate for your changes
 make arch-guard     # check architecture layer boundaries
 make drift-detect   # cross-layer drift detection
+make snapshot       # golden snapshot of code intelligence (JSON)
 ```
 
 ## The Flow
@@ -194,6 +196,64 @@ This shows:
 
 Use this before adding a new feature to check if existing scenarios will catch regressions, or after refactoring to confirm coverage still holds.
 
+### 10. Golden snapshots — baseline and drift detection
+
+Generate a deterministic snapshot of the repository's code intelligence state:
+
+```sh
+raccoon-cli snapshot                     # human summary
+raccoon-cli --json snapshot              # full JSON snapshot
+raccoon-cli --json snapshot -o snap.json # save to file
+raccoon-cli -v snapshot                  # verbose: types, functions, imports
+```
+
+The snapshot captures packages, imports, types, functions, constants, interfaces, architecture layer classification, and detected contracts. Every fact is tagged with its provenance (`ast`, `lsp`, `inferred`, or `runtime`).
+
+**Comparing snapshots** — detect structural drift between runs:
+
+```sh
+# save a baseline
+raccoon-cli --json snapshot -o baseline.json
+
+# ... make changes ...
+
+# compare
+diff <(raccoon-cli --json snapshot) baseline.json
+```
+
+Since output is sorted and deterministic, a `diff` shows exactly what changed structurally.
+
+**Semantic baseline drift** — structured analysis with severity and recommendations:
+
+```sh
+# save a baseline
+raccoon-cli --json snapshot -o baseline.json
+
+# ... make changes ...
+
+# detect semantic drift against the baseline
+raccoon-cli baseline-drift baseline.json
+raccoon-cli --json baseline-drift baseline.json   # JSON output
+raccoon-cli -v baseline-drift baseline.json        # verbose with evidence
+```
+
+This detects 10 classes of semantic drift:
+
+| Class | Basis | What it catches |
+|-------|-------|-----------------|
+| contract-surface-drift | observed | Removed/modified/added contracts |
+| interface-breaking | observed | Removed interface methods |
+| interface-expansion | observed | Added interface methods |
+| layer-boundary-drift | observed | Architecture layer reclassification or removal |
+| type-breaking | observed | Removed fields, type changes |
+| api-signature-drift | observed | Exported function signature changes |
+| coupling-increase | inferred | New cross-layer imports |
+| isolation-loss | inferred | Domain/application importing infrastructure |
+| contract-proliferation | heuristic | Rapid contract growth without validation |
+| structural-scale-shift | heuristic | Large-scale type/line/package count changes |
+
+Each finding includes severity (critical/warning/info), evidence basis (observed/inferred/heuristic), concrete evidence, and a recommended next step.
+
 ## Quality Gate Pipeline
 
 The `quality-gate` command orchestrates all checks into a single verdict. Each profile includes progressively more checks:
@@ -269,6 +329,7 @@ Full command documentation: [`tools/raccoon-cli/README.md`](tools/raccoon-cli/RE
 | `scenario-smoke` | Named validation scenarios | Yes (varies) |
 | `results-inspect` | Validator result inspection | Yes (running cluster) |
 | `trace-pack` | Diagnostic evidence collection | Yes (running cluster) |
+| `contract-usage-map` | Map contract definition/construction/propagation/consumption | No |
 
 ## Principles
 
