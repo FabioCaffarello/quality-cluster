@@ -75,6 +75,11 @@ pub struct TddReport {
 }
 
 impl TddReport {
+    /// Create an empty report (no changed files detected).
+    pub fn empty_report() -> Self {
+        Self::empty()
+    }
+
     fn empty() -> Self {
         TddReport {
             changed_files: vec![],

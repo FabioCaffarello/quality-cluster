@@ -517,6 +517,35 @@ enum Commands {
         #[arg(long)]
         after_live: bool,
     },
+    /// Automatic smoke/TDD recommendations from diff, changed files, or baseline comparison
+    #[command(
+        long_about = "Generate prioritized, actionable recommendations for what to validate after a change.\n\n\
+            Composes signals from impact-map, tdd guidance, and optional baseline drift to produce:\n  \
+              - Relevant scenario-smoke tests to run\n  \
+              - Quality-gate profile (fast/ci/deep)\n  \
+              - Priority test areas with coverage status\n  \
+              - Architectural/contract risks to review\n\n\
+            Every item is tagged with its provenance:\n  \
+              - [fact]           — observed from AST, config, or source\n  \
+              - [inference]      — derived from structural patterns or heuristics\n  \
+              - [recommendation] — actionable suggestion\n\n\
+            If no targets are given, uses `git status` to detect changed files.\n\
+            With --baseline, incorporates drift signals from a snapshot comparison.",
+        after_help = "Examples:\n  \
+            raccoon-cli recommend\n  \
+            raccoon-cli recommend internal/adapters/nats/codec.go\n  \
+            raccoon-cli recommend --baseline snapshot.json\n  \
+            raccoon-cli recommend --baseline snapshot.json internal/domain/configctl/config.go\n  \
+            raccoon-cli --json recommend"
+    )]
+    Recommend {
+        /// Optional baseline snapshot for drift-aware recommendations
+        #[arg(long)]
+        baseline: Option<std::path::PathBuf>,
+        /// Files to analyze (if omitted, uses git status)
+        #[arg(trailing_var_arg = true)]
+        files: Vec<String>,
+    },
     /// Collect diagnostic evidence from the running cluster into a trace pack
     #[command(
         long_about = "Collect diagnostic evidence from the running quality-service cluster.\n\n\
@@ -752,6 +781,42 @@ fn main() {
                 eprintln!("error: {e}");
                 process::exit(2);
             }
+        }
+        return;
+    }
+
+    // Recommend has its own report type
+    if let Commands::Recommend {
+        ref baseline,
+        ref files,
+    } = cli.command
+    {
+        let changed = if files.is_empty() {
+            detect_changed_files(&cli.project_root)
+        } else {
+            files.clone()
+        };
+
+        let report = match baseline {
+            Some(ref baseline_path) => {
+                analyzers::recommend::analyze_with_baseline(&cli.project_root, &changed, baseline_path)
+            }
+            None => analyzers::recommend::analyze(&cli.project_root, &changed),
+        };
+
+        if cli.json {
+            match analyzers::recommend::render_json(&report) {
+                Ok(s) => print!("{s}"),
+                Err(e) => {
+                    eprintln!("error: failed to render output: {e}");
+                    process::exit(2);
+                }
+            }
+        } else {
+            print!(
+                "{}",
+                analyzers::recommend::render_human(&report, cli.verbose)
+            );
         }
         return;
     }
@@ -1099,6 +1164,7 @@ fn main() {
         Commands::RenameSafety { .. } => unreachable!(),
         Commands::ContractUsageMap { .. } => unreachable!(),
         Commands::Briefing { .. } => unreachable!(),
+        Commands::Recommend { .. } => unreachable!(),
     };
 
     match result {

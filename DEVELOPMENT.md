@@ -18,6 +18,9 @@ make tdd            # TDD guide: what to validate for your changes
 make arch-guard     # check architecture layer boundaries
 make drift-detect   # cross-layer drift detection
 make snapshot       # golden snapshot of code intelligence (JSON)
+make recommend      # smart recommendations: what to validate after changes
+make snapshot-diff SNAP1=before.json SNAP2=after.json  # compare snapshots
+make baseline-drift BASELINE=baseline.json             # detect semantic drift
 ```
 
 ## The Flow
@@ -196,7 +199,31 @@ This shows:
 
 Use this before adding a new feature to check if existing scenarios will catch regressions, or after refactoring to confirm coverage still holds.
 
-### 10. Golden snapshots — baseline and drift detection
+### 10. Recommend — what to validate after a change
+
+Before running checks manually, ask the CLI what matters:
+
+```sh
+make recommend                           # auto-detect changed files via git status
+raccoon-cli recommend internal/adapters/nats/codec.go   # specific files
+raccoon-cli recommend --baseline baseline.json           # drift-aware mode
+raccoon-cli --json recommend             # structured output for tooling
+raccoon-cli -v recommend                 # verbose: file list, risk details
+```
+
+The `recommend` command composes signals from **impact-map** (AST structural analysis), **tdd** (coverage gaps), and optional **baseline-drift** (snapshot comparison) to produce:
+
+- **Smoke scenarios** to run, with priority and rationale
+- **Quality-gate profile** (fast/ci/deep) — calibrated to the change scope
+- **Priority test areas** with coverage status (covered / uncovered / partial)
+- **Architectural and contract risks** to review
+- **BEFORE / AFTER command plan** — concrete commands, not guesswork
+
+Every item is tagged with provenance: `[fact]` (observed from AST), `[inference]` (derived from patterns), or `[recommendation]` (actionable suggestion).
+
+**When to use**: after staging changes and before running checks. The recommend output tells you *which* checks matter for *your* change, instead of running everything blindly.
+
+### 11. Golden snapshots — baseline, comparison, and drift detection
 
 Generate a deterministic snapshot of the repository's code intelligence state:
 
@@ -209,32 +236,26 @@ raccoon-cli -v snapshot                  # verbose: types, functions, imports
 
 The snapshot captures packages, imports, types, functions, constants, interfaces, architecture layer classification, and detected contracts. Every fact is tagged with its provenance (`ast`, `lsp`, `inferred`, or `runtime`).
 
-**Comparing snapshots** — detect structural drift between runs:
+**Comparing snapshots** — semantic diff between two points in time:
 
 ```sh
-# save a baseline
-raccoon-cli --json snapshot -o baseline.json
-
+raccoon-cli --json snapshot -o before.json
 # ... make changes ...
-
-# compare
-diff <(raccoon-cli --json snapshot) baseline.json
+raccoon-cli --json snapshot -o after.json
+make snapshot-diff SNAP1=before.json SNAP2=after.json
+raccoon-cli --json snapshot-diff before.json after.json   # JSON output
 ```
 
-Since output is sorted and deterministic, a `diff` shows exactly what changed structurally.
+This produces a semantic diff (not textual): added/removed/modified types, functions, imports, interfaces, contracts, and architecture layers.
 
-**Semantic baseline drift** — structured analysis with severity and recommendations:
+**Baseline drift** — structured analysis with severity and recommendations:
 
 ```sh
-# save a baseline
 raccoon-cli --json snapshot -o baseline.json
-
 # ... make changes ...
-
-# detect semantic drift against the baseline
-raccoon-cli baseline-drift baseline.json
+make baseline-drift BASELINE=baseline.json
+raccoon-cli -v baseline-drift baseline.json   # verbose with evidence
 raccoon-cli --json baseline-drift baseline.json   # JSON output
-raccoon-cli -v baseline-drift baseline.json        # verbose with evidence
 ```
 
 This detects 10 classes of semantic drift:
@@ -253,6 +274,14 @@ This detects 10 classes of semantic drift:
 | structural-scale-shift | heuristic | Large-scale type/line/package count changes |
 
 Each finding includes severity (critical/warning/info), evidence basis (observed/inferred/heuristic), concrete evidence, and a recommended next step.
+
+**Drift-aware recommendations** — combine baseline drift with recommend:
+
+```sh
+raccoon-cli recommend --baseline baseline.json
+```
+
+When a baseline is provided, `recommend` escalates scenarios and profile based on drift severity. Critical drift forces `deep` profile; contract drift adds `happy-path`; breaking changes add `invalid-payload`.
 
 ## Quality Gate Pipeline
 
@@ -330,6 +359,49 @@ Full command documentation: [`tools/raccoon-cli/README.md`](tools/raccoon-cli/RE
 | `results-inspect` | Validator result inspection | Yes (running cluster) |
 | `trace-pack` | Diagnostic evidence collection | Yes (running cluster) |
 | `contract-usage-map` | Map contract definition/construction/propagation/consumption | No |
+| `snapshot` | Golden snapshot of code intelligence state | No |
+| `snapshot-diff` | Semantic diff between two snapshots | No |
+| `baseline-drift` | Detect semantic drift against a saved baseline | No |
+| `recommend` | Smart recommendations: scenarios, profile, risks from diff/baseline | No |
+
+## The Semantic Evolution Cycle
+
+The CLI closes the loop between understanding, changing, and proving. Every evolution of the repository follows this cycle:
+
+```
+  baseline → understand → plan → implement → recommend → validate → new baseline
+     ↑                                                                    │
+     └────────────────────────────────────────────────────────────────────┘
+```
+
+In practice:
+
+```sh
+# 1. Capture baseline (once, or at each stable point)
+raccoon-cli --json snapshot -o baseline.json
+
+# 2. Understand what you're about to touch
+make briefing TARGETS="internal/adapters/nats"
+make check                              # guard rails: known-good state?
+
+# 3. Plan with structural awareness
+make tdd                                # what impacts, what to test, what's missing
+
+# 4. Implement (write tests first, then code)
+
+# 5. Get smart recommendations for YOUR change
+make recommend                          # or: raccoon-cli recommend --baseline baseline.json
+
+# 6. Validate exactly what matters
+make verify                             # Go tests + quality-gate
+make scenario-smoke SCENARIO=happy-path # if recommend says so
+
+# 7. Confirm no drift, update baseline
+make baseline-drift BASELINE=baseline.json
+raccoon-cli --json snapshot -o baseline.json   # new baseline
+```
+
+The cycle is self-reinforcing: each baseline captures the proven state, each recommend calibrates validation to the actual change, and each gate run produces structured evidence. No step is wasted.
 
 ## Principles
 
@@ -340,5 +412,7 @@ Full command documentation: [`tools/raccoon-cli/README.md`](tools/raccoon-cli/RE
 - **Single source of truth.** `quality-gate` is the canonical validation command — don't compose ad-hoc check sequences.
 - **No runtime contamination.** The CLI reads files and scans source — it never imports or executes Go code.
 - **Failures are actionable.** Every error includes what, why, and how to fix.
+- **Recommend before running.** `make recommend` tells you what checks matter for your change — don't guess.
 - **Coverage awareness.** `make coverage-map` shows which areas are protected and which are exposed.
+- **Baselines over memory.** Snapshots are deterministic proof of state — not "I think it was fine last week".
 - **Scenarios over manual testing.** Use `scenario-smoke` for repeatable runtime proof — not ad-hoc curl sequences.

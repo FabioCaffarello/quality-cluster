@@ -20,7 +20,7 @@ endef
 .PHONY: help tidy test build docker-build compose-config up-core up-runtime up-dataplane up-all down restart logs ps clean \
        raccoon-build raccoon-test quality-gate quality-gate-ci quality-gate-deep \
        check check-deep verify smoke scenario-smoke trace-pack results-inspect \
-       coverage-map tdd arch-guard drift-detect snapshot
+       coverage-map tdd arch-guard drift-detect snapshot recommend snapshot-diff baseline-drift
 
 help:
 	@echo "Targets:"
@@ -52,6 +52,9 @@ help:
 	@echo "  make arch-guard           - architecture layer boundary check"
 	@echo "  make drift-detect         - cross-layer drift detection"
 	@echo "  make snapshot             - golden snapshot of code intelligence (JSON)"
+	@echo "  make snapshot-diff        - compare two snapshots (SNAP1= SNAP2=)"
+	@echo "  make baseline-drift       - detect drift against baseline (BASELINE=)"
+	@echo "  make recommend            - smart recommendations from diff/baseline"
 	@echo ""
 	@echo "Quality (raccoon-cli):"
 	@echo "  make quality-gate         - fast static checks (local dev, pre-commit)"
@@ -207,6 +210,21 @@ drift-detect: $(RACCOON_BIN)
 
 snapshot: $(RACCOON_BIN)
 	$(RACCOON_BIN) --project-root . --json snapshot
+
+recommend: $(RACCOON_BIN)
+	$(RACCOON_BIN) --project-root . recommend $(TARGETS)
+
+snapshot-diff: $(RACCOON_BIN)
+	@if [[ -z "$(SNAP1)" || -z "$(SNAP2)" ]]; then \
+		echo "Usage: make snapshot-diff SNAP1=before.json SNAP2=after.json"; exit 1; \
+	fi
+	$(RACCOON_BIN) --project-root . snapshot-diff $(SNAP1) $(SNAP2)
+
+baseline-drift: $(RACCOON_BIN)
+	@if [[ -z "$(BASELINE)" ]]; then \
+		echo "Usage: make baseline-drift BASELINE=baseline.json"; exit 1; \
+	fi
+	$(RACCOON_BIN) --project-root . baseline-drift $(BASELINE)
 
 scenario-smoke: $(RACCOON_BIN)
 	@if [[ -n "$(SCENARIO)" ]]; then \

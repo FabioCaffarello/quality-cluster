@@ -159,6 +159,20 @@ pub struct ImpactReport {
     pub lsp_enrichment: Option<ImpactLspEnrichment>,
 }
 
+impl ImpactReport {
+    /// Create an empty report for when no targets are provided.
+    pub fn empty() -> Self {
+        ImpactReport {
+            targets: vec![],
+            impacts: vec![],
+            recommended_commands: vec![],
+            sensitive_areas_touched: vec![],
+            scope_note: "No targets provided.".into(),
+            lsp_enrichment: None,
+        }
+    }
+}
+
 /// Semantic enrichment from gopls for impact analysis.
 #[derive(Debug, Clone, Serialize)]
 pub struct ImpactLspEnrichment {

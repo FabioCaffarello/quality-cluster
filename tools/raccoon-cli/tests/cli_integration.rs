@@ -1468,3 +1468,117 @@ fn baseline_drift_verbose_shows_evidence() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("evidence:"), "Verbose output should show evidence");
 }
+
+// ── Recommend ────────────────────────────────────────────────────────
+
+#[test]
+fn recommend_help_shows_examples() {
+    raccoon()
+        .args(["recommend", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Examples:"));
+}
+
+#[test]
+fn recommend_no_files_succeeds() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+    raccoon()
+        .args(["--project-root", dir.path().to_str().unwrap(), "recommend"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn recommend_json_output_is_valid() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "recommend",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed["input"].is_object());
+    assert!(parsed["facts"].is_array());
+    assert!(parsed["inferences"].is_array());
+    assert!(parsed["recommendations"].is_array());
+    assert!(parsed["smoke_scenarios"].is_array());
+    assert!(parsed["gate_profile"].is_object());
+    assert!(parsed["priority_areas"].is_array());
+    assert!(parsed["risks"].is_array());
+    assert!(parsed["commands"].is_object());
+    assert!(parsed["scope_note"].is_string());
+}
+
+#[test]
+fn recommend_with_file_targets() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    // Create a Go file in domain layer
+    std::fs::create_dir_all(dir.path().join("internal/domain/configctl")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/configctl/config.go"),
+        "package configctl\n\ntype ConfigSet struct {\n\tSetID string\n}\n",
+    )
+    .unwrap();
+
+    raccoon()
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "recommend",
+            "internal/domain/configctl/config.go",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Recommend: Smoke/TDD Priorities"));
+}
+
+#[test]
+fn recommend_json_with_file_targets_has_facts() {
+    let dir = TempDir::new().unwrap();
+    make_project(&dir);
+
+    std::fs::create_dir_all(dir.path().join("internal/domain/configctl")).unwrap();
+    std::fs::write(
+        dir.path().join("internal/domain/configctl/config.go"),
+        "package configctl\n\ntype ConfigSet struct {\n\tSetID string\n}\n",
+    )
+    .unwrap();
+
+    let output = raccoon()
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "recommend",
+            "internal/domain/configctl/config.go",
+        ])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(
+        parsed["input"]["changed_files"]
+            .as_array()
+            .unwrap()
+            .len()
+            == 1,
+        "should have 1 changed file"
+    );
+    assert!(
+        !parsed["facts"].as_array().unwrap().is_empty(),
+        "should have facts for a real Go file"
+    );
+}

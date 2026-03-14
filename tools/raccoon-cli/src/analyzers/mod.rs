@@ -7,6 +7,7 @@ pub mod coverage_map;
 pub mod doctor;
 pub mod drift_detect;
 pub mod impact_map;
+pub mod recommend;
 pub mod rename_safety;
 pub mod runtime_bindings;
 pub mod snapshot;
