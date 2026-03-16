@@ -3,10 +3,12 @@ package consumer
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"testing"
 	"time"
 
 	actorcommon "internal/actors/common"
+	adapternats "internal/adapters/nats"
 	configctlcontracts "internal/application/configctl/contracts"
 	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
@@ -43,7 +45,6 @@ func TestSupervisorReplacesRuntimeGenerationOnBootstrapReload(t *testing.T) {
 
 	supervisorPID := engine.Spawn(newSupervisorProducer(supervisorConfig{
 		appConfig: settings.AppConfig{},
-		registry:  dataplaneapp.DefaultRegistry(),
 		loadBootstrap: func(ctx context.Context, _ *slog.Logger, _ settings.AppConfig, _ string) (runtimebootstrap.ActiveIngestionBootstrap, *problem.Problem) {
 			<-ctx.Done()
 			return runtimebootstrap.ActiveIngestionBootstrap{}, problem.Wrap(ctx.Err(), problem.Unavailable, "bootstrap stopped")
@@ -92,7 +93,6 @@ func TestSupervisorIgnoresStaleRuntimeReadyMessages(t *testing.T) {
 
 	supervisorPID := engine.Spawn(newSupervisorProducer(supervisorConfig{
 		appConfig: settings.AppConfig{},
-		registry:  dataplaneapp.DefaultRegistry(),
 		loadBootstrap: func(ctx context.Context, _ *slog.Logger, _ settings.AppConfig, _ string) (runtimebootstrap.ActiveIngestionBootstrap, *problem.Problem) {
 			<-ctx.Done()
 			return runtimebootstrap.ActiveIngestionBootstrap{}, problem.Wrap(ctx.Err(), problem.Unavailable, "bootstrap stopped")
@@ -133,6 +133,52 @@ func TestSupervisorIgnoresStaleRuntimeReadyMessages(t *testing.T) {
 	}
 	if state.BootstrapSignature != second.Signature() {
 		t.Fatalf("expected stale bootstrap signature to be ignored, got %+v", state)
+	}
+}
+
+func TestSupervisorPassesExplicitDataPlaneRegistryToRuntime(t *testing.T) {
+	t.Parallel()
+
+	engine, err := actorcommon.NewDefaultEngine()
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	customRegistry := adapternats.DataPlaneRegistry{
+		Ingested: adapternats.DataPlaneEventSpec{
+			SubjectPrefix:    "custom.ingestion",
+			SubjectPattern:   "custom.ingestion.*",
+			Type:             "custom.ingestion.received",
+			Stream:           adapternats.DefaultDataPlaneRegistry().Ingested.Stream,
+			ValidatorDurable: "validator-custom",
+		},
+		ValidatorIngested: adapternats.DefaultDataPlaneRegistry().ValidatorIngested,
+	}
+
+	runtimeConfigs := make(chan ConsumerRuntimeConfig, 1)
+	supervisorPID := engine.Spawn(newSupervisorProducer(supervisorConfig{
+		appConfig:         settings.AppConfig{},
+		dataPlaneRegistry: customRegistry,
+		loadBootstrap: func(ctx context.Context, _ *slog.Logger, _ settings.AppConfig, _ string) (runtimebootstrap.ActiveIngestionBootstrap, *problem.Problem) {
+			<-ctx.Done()
+			return runtimebootstrap.ActiveIngestionBootstrap{}, problem.Wrap(ctx.Err(), problem.Unavailable, "bootstrap stopped")
+		},
+		newRuntimeActor: func(cfg ConsumerRuntimeConfig) actor.Producer {
+			runtimeConfigs <- cfg
+			return func() actor.Receiver { return &readyRuntimeActor{cfg: cfg} }
+		},
+	}), "consumer-supervisor-registry-test")
+
+	first := mustBootstrap(t, "orders", "sales.order.created", "cfg-1", "global", "default")
+	engine.Send(supervisorPID, activeIngestionBootstrapLoadedMessage{Bootstrap: first})
+
+	select {
+	case cfg := <-runtimeConfigs:
+		if !reflect.DeepEqual(cfg.DataPlaneRegistry, customRegistry) {
+			t.Fatalf("expected explicit data plane registry to reach runtime actor, got %#v", cfg.DataPlaneRegistry)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runtime actor config was not captured")
 	}
 }
 

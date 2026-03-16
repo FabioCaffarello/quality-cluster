@@ -38,6 +38,12 @@ This directory contains plans for coordinating work across documentation and pla
 33. [Block 9 Refresh Health Classification Freeze](./block-9-refresh-health-classification-freeze.md)
 34. [Context Adherence Audit](./context-adherence-audit.md)
 35. [Context Bootstrap](./context-bootstrap.md)
+36. [Block 3-4 Real Dataplane And Runtime Hardening](./block-3-4-real-dataplane-runtime-hardening.md)
+37. [Block 3-4 Real Dataplane And Runtime Hardening Freeze](./block-3-4-real-dataplane-runtime-hardening-freeze.md)
+38. [Block 3-4 Phase 4 Validation](./block-3-4-phase-4-validation.md)
+39. [Block 5-6 Validation Results Incidents Runtime Resilience](./block-5-6-validation-results-incidents-runtime-resilience.md)
+40. [Block 7-8 Quality Language Platform Consolidation](./block-7-8-quality-language-platform-consolidation.md)
+41. [Block 7-8 Quality Language Platform Consolidation Freeze](./block-7-8-quality-language-platform-consolidation-freeze.md)
 
 ## How To Create Or Update Plans
 - Run "ai-context plan <name>" to scaffold a new plan template.

@@ -3,9 +3,11 @@ package validator
 import (
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 
 	actorcommon "internal/actors/common"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	"internal/shared/problem"
 
@@ -29,6 +31,16 @@ type listValidationResultsMessage struct {
 
 type listValidationResultsResult struct {
 	Reply validatorresultscontracts.ListValidationResultsReply
+	Prob  *problem.Problem
+}
+
+type listValidationIncidentsMessage struct {
+	Query         validatorincidentscontracts.ListValidationIncidentsQuery
+	CorrelationID string
+}
+
+type listValidationIncidentsResult struct {
+	Reply validatorincidentscontracts.ListValidationIncidentsReply
 	Prob  *problem.Problem
 }
 
@@ -60,6 +72,12 @@ func (a *ValidationResultsStoreActor) Receive(c *actor.Context) {
 				Results: a.list(msg.Query.Normalize()),
 			},
 		})
+	case listValidationIncidentsMessage:
+		a.reply(c, listValidationIncidentsResult{
+			Reply: validatorincidentscontracts.ListValidationIncidentsReply{
+				Incidents: a.listIncidents(msg.Query.Normalize()),
+			},
+		})
 	default:
 		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
 			return
@@ -77,9 +95,10 @@ func (a *ValidationResultsStoreActor) record(result validatorresultscontracts.Va
 		return prob
 	}
 
+	processingKey := strings.TrimSpace(result.NormalizedProcessingKey())
 	filtered := a.results[:0]
 	for _, existing := range a.results {
-		if strings.TrimSpace(existing.MessageID) == strings.TrimSpace(result.MessageID) {
+		if sameValidationResult(existing, result, processingKey) {
 			continue
 		}
 		filtered = append(filtered, existing)
@@ -110,6 +129,87 @@ func (a *ValidationResultsStoreActor) list(query validatorresultscontracts.ListV
 	return results
 }
 
+func (a *ValidationResultsStoreActor) listIncidents(query validatorincidentscontracts.ListValidationIncidentsQuery) []validatorincidentscontracts.ValidationIncidentRecord {
+	if a == nil || len(a.results) == 0 {
+		return nil
+	}
+
+	aggregated := make(map[string]validatorincidentscontracts.ValidationIncidentRecord)
+	order := make([]string, 0)
+	for _, result := range a.results {
+		if result.Status != validatorresultscontracts.ValidationStatusFailed || len(result.Violations) == 0 {
+			continue
+		}
+
+		incidentKey := strings.TrimSpace(validatorincidentscontracts.BuildIncidentKey(result))
+		if incidentKey == "" {
+			continue
+		}
+
+		record, exists := aggregated[incidentKey]
+		if !exists {
+			record = validatorincidentscontracts.ValidationIncidentRecord{
+				IncidentKey: incidentKey,
+				Kind:        validatorincidentscontracts.ValidationIncidentKindRuleViolation,
+				Status:      validatorincidentscontracts.ValidationIncidentStatusOpen,
+				Binding: validatorincidentscontracts.ValidationIncidentBindingRecord{
+					Name:  result.Binding.Name,
+					Topic: result.Binding.Topic,
+					Scope: result.Binding.Scope,
+				},
+				Config: validatorincidentscontracts.ValidationIncidentConfigRecord{
+					SetID:              result.Config.SetID,
+					Key:                result.Config.Key,
+					VersionID:          result.Config.VersionID,
+					Version:            result.Config.Version,
+					DefinitionChecksum: result.Config.DefinitionChecksum,
+				},
+				FirstSeenAt:         result.ProcessedAt,
+				LastSeenAt:          result.ProcessedAt,
+				LatestMessageID:     result.MessageID,
+				LatestCorrelationID: result.CorrelationID,
+				LatestProcessingKey: result.NormalizedProcessingKey(),
+				Violations:          append([]validatorresultscontracts.ViolationRecord(nil), result.Violations...),
+			}
+			order = append(order, incidentKey)
+		}
+
+		record.Count++
+		if record.FirstSeenAt.IsZero() || result.ProcessedAt.Before(record.FirstSeenAt) {
+			record.FirstSeenAt = result.ProcessedAt
+		}
+		if result.ProcessedAt.After(record.LastSeenAt) || record.LastSeenAt.IsZero() {
+			record.LastSeenAt = result.ProcessedAt
+			record.LatestMessageID = result.MessageID
+			record.LatestCorrelationID = result.CorrelationID
+			record.LatestProcessingKey = result.NormalizedProcessingKey()
+			record.Violations = append([]validatorresultscontracts.ViolationRecord(nil), result.Violations...)
+		}
+		aggregated[incidentKey] = record
+	}
+
+	if len(aggregated) == 0 {
+		return nil
+	}
+
+	incidents := make([]validatorincidentscontracts.ValidationIncidentRecord, 0, min(query.Limit, len(aggregated)))
+	for _, incidentKey := range order {
+		incident := aggregated[incidentKey]
+		if !matchesIncidentsQuery(incident, query) {
+			continue
+		}
+		incidents = append(incidents, incident)
+		if len(incidents) >= query.Limit {
+			break
+		}
+	}
+
+	sort.SliceStable(incidents, func(left, right int) bool {
+		return incidents[left].LastSeenAt.After(incidents[right].LastSeenAt)
+	})
+	return incidents
+}
+
 func matchesResultsQuery(result validatorresultscontracts.ValidationResultRecord, query validatorresultscontracts.ListValidationResultsQuery) bool {
 	if strings.TrimSpace(result.Binding.Scope.Kind) != query.ScopeKind {
 		return false
@@ -123,6 +223,9 @@ func matchesResultsQuery(result validatorresultscontracts.ValidationResultRecord
 	if query.Topic != "" && strings.TrimSpace(result.Binding.Topic) != query.Topic {
 		return false
 	}
+	if query.Status != "" && result.Status != query.Status {
+		return false
+	}
 	if query.MessageID != "" && strings.TrimSpace(result.MessageID) != query.MessageID {
 		return false
 	}
@@ -130,6 +233,36 @@ func matchesResultsQuery(result validatorresultscontracts.ValidationResultRecord
 		return false
 	}
 	return true
+}
+
+func matchesIncidentsQuery(incident validatorincidentscontracts.ValidationIncidentRecord, query validatorincidentscontracts.ListValidationIncidentsQuery) bool {
+	if strings.TrimSpace(incident.Binding.Scope.Kind) != query.ScopeKind {
+		return false
+	}
+	if strings.TrimSpace(incident.Binding.Scope.Key) != query.ScopeKey {
+		return false
+	}
+	if query.BindingName != "" && strings.TrimSpace(incident.Binding.Name) != query.BindingName {
+		return false
+	}
+	if query.Topic != "" && strings.TrimSpace(incident.Binding.Topic) != query.Topic {
+		return false
+	}
+	if query.Kind != "" && incident.Kind != query.Kind {
+		return false
+	}
+	if query.Status != "" && incident.Status != query.Status {
+		return false
+	}
+	return true
+}
+
+func sameValidationResult(existing validatorresultscontracts.ValidationResultRecord, incoming validatorresultscontracts.ValidationResultRecord, incomingKey string) bool {
+	existingKey := strings.TrimSpace(existing.NormalizedProcessingKey())
+	if incomingKey != "" && existingKey != "" {
+		return existingKey == incomingKey
+	}
+	return strings.TrimSpace(existing.MessageID) == strings.TrimSpace(incoming.MessageID)
 }
 
 func (a *ValidationResultsStoreActor) reply(c *actor.Context, msg any) {

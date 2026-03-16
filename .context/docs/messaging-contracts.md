@@ -88,6 +88,16 @@ The validator exposes separate request/reply contracts:
 
 These must remain separate from `configctl` subjects and from each other.
 
+The validator also exposes an incident query contract for compact operational aggregation:
+
+- incidents query:
+  - subject `validator.incidents.list`
+  - type `validator.incidents.query.list`
+  - reply `validator.incidents.reply.list`
+  - queue group `validator.incidents`
+
+This surface is intentionally additive to `validator.results.list`. Results remain the per-message technical truth; incidents are the small operational view derived from those results.
+
 ### 4. Dataplane ingestion contract
 
 The dataplane registry under [`internal/application/dataplane/registry.go`](/Volumes/OWC%20Express%201M2/Develop/quality-service/internal/application/dataplane/registry.go) defines the canonical ingestion route:
@@ -137,6 +147,7 @@ After Block 5, bootstrap has a stricter operational role:
 
 Validation results are returned as `ValidationResultRecord` values and carry:
 
+- `processing_key`
 - `message_id`
 - optional `correlation_id`
 - binding identity and scope
@@ -149,7 +160,33 @@ The contract is strict:
 
 - passed results must not contain violations
 - failed results must contain at least one violation
+- `processing_key` must stay stable for replay/redelivery of the same canonical dataplane message
 - scope, binding, config version, and message identity must be populated
+
+## Validation incident payloads
+
+Validation incidents are returned as `ValidationIncidentRecord` values and carry:
+
+- `incident_key`
+- `kind`
+- `status`
+- binding identity and scope
+- active config version metadata
+- aggregate counters and timestamps:
+  - `count`
+  - `first_seen_at`
+  - `last_seen_at`
+- latest evidence pointers:
+  - `latest_message_id`
+  - optional `latest_correlation_id`
+  - optional `latest_processing_key`
+- representative `violations`
+
+The contract is strict:
+
+- incidents stay operational and compact; they are not notification workflow records
+- incidents are derived from validation output and do not replace `ValidationResultRecord`
+- the incident query surface must stay additive to the results query surface
 
 ## HTTP Contract Surface
 
@@ -174,6 +211,8 @@ These endpoints should be read as stable runtime views over application contract
   - thin HTTP facade for `validator.runtime.get_active`
 - `/runtime/validator/results`
   - thin HTTP facade for `validator.results.list`
+- `/runtime/validator/incidents`
+  - thin HTTP facade for `validator.incidents.list`
 
 ## Contract Invariants
 

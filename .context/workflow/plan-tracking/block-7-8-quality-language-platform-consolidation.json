@@ -1,0 +1,68 @@
+{
+  "decisions": [
+    {
+      "title": "Configctl remains the sole owner of DSL lifecycle and compilation",
+      "description": "Language expansion stays anchored in configctl draft, validate, compile, and activate flows. Validator, consumer, emulator, server, and raccoon-cli remain downstream of compiled runtime truth rather than becoming alternate authors of language semantics.",
+      "phase": "P",
+      "alternatives": [
+        "Let validator infer unsupported language capabilities directly from config payloads",
+        "Move capability gating into raccoon-cli or server-facing contracts"
+      ],
+      "status": "accepted",
+      "id": "dec-1773703598001",
+      "decidedAt": "2026-03-16T22:26:38Z"
+    },
+    {
+      "title": "DSL expansion remains declarative, per-record, and fail-closed",
+      "description": "The next language step is limited to deterministic per-payload semantics that can be validated, compiled, projected, executed, and diagnosed explicitly. Stateful correlation, temporal windows, aggregates, external lookups, and arbitrary expression power are deferred.",
+      "phase": "P",
+      "alternatives": [
+        "Open the DSL to generalized expression evaluation early",
+        "Compensate for missing semantics with ad hoc runtime logic in validator"
+      ],
+      "status": "accepted",
+      "id": "dec-1773703598002",
+      "decidedAt": "2026-03-16T22:26:38Z"
+    },
+    {
+      "title": "Projection, result, incident, and query contracts evolve additively with explainability",
+      "description": "Any richer rule support must ship with additive projection metadata, runtime-facing contracts, and operational explainability. The repository will not accept silent contract mutation or payload inflation that hides compatibility risk from server, validator, or raccoon-cli surfaces.",
+      "phase": "P",
+      "alternatives": [
+        "Mutate projection and result shapes implicitly as operators are added",
+        "Keep explainability in logs only and leave contracts unchanged"
+      ],
+      "status": "accepted",
+      "id": "dec-1773703598003",
+      "decidedAt": "2026-03-16T22:26:38Z"
+    },
+    {
+      "title": "Platform consolidation is centered on canonical workflow and external guard rails",
+      "description": "Block 8 is not a new architecture layer. It strengthens raccoon-cli analyzers, smoke, trace-pack, results-inspect, baselines, and docs so the engineering loop around the runtime becomes more predictable, auditable, and drift-resistant.",
+      "phase": "P",
+      "alternatives": [
+        "Treat platform consolidation as mostly documentation work",
+        "Add new runtime governance endpoints instead of hardening the existing workflow"
+      ],
+      "status": "accepted",
+      "id": "dec-1773703598004",
+      "decidedAt": "2026-03-16T22:26:38Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T22:26:38Z"
+    },
+    "phase-2": {
+      "status": "pending"
+    },
+    "phase-3": {
+      "status": "pending"
+    },
+    "phase-4": {
+      "status": "pending"
+    }
+  },
+  "progress": 25
+}

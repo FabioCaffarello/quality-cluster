@@ -51,10 +51,12 @@ The project is useful to engineers who need to evolve runtime behavior without l
   - `/runtime/validator/active`
   - `/runtime/ingestion/bindings`
   - `/runtime/validator/results`
+  - `/runtime/validator/incidents`
 - NATS control surfaces:
   - `configctl.control.*`
   - `validator.runtime.get_active`
   - `validator.results.list`
+  - `validator.incidents.list`
 - Event and dataplane surfaces:
   - `CONFIGCTL_EVENTS`
   - `DATA_PLANE_INGESTION`

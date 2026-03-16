@@ -10,6 +10,7 @@ import (
 
 	configctlcontracts "internal/application/configctl/contracts"
 	sharedruntime "internal/application/runtimecontracts"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/shared/problem"
@@ -59,6 +60,17 @@ func (s *listValidationResultsUseCaseSpy) Execute(_ context.Context, query valid
 	return s.reply, s.prob
 }
 
+type listValidationIncidentsUseCaseSpy struct {
+	query validatorincidentscontracts.ListValidationIncidentsQuery
+	reply validatorincidentscontracts.ListValidationIncidentsReply
+	prob  *problem.Problem
+}
+
+func (s *listValidationIncidentsUseCaseSpy) Execute(_ context.Context, query validatorincidentscontracts.ListValidationIncidentsQuery) (validatorincidentscontracts.ListValidationIncidentsReply, *problem.Problem) {
+	s.query = query
+	return s.reply, s.prob
+}
+
 func TestGetActiveValidatorRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -79,7 +91,7 @@ func TestGetActiveValidatorRuntime(t *testing.T) {
 			},
 		},
 	}
-	handler := NewRuntimeWebHandler(spy, nil, nil, nil)
+	handler := NewRuntimeWebHandler(spy, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/active?scope_kind=tenant&scope_key=br", nil)
 	rec := httptest.NewRecorder()
@@ -112,7 +124,7 @@ func TestGetActiveValidatorRuntimeMapsProblems(t *testing.T) {
 
 	handler := NewRuntimeWebHandler(&getValidatorRuntimeUseCaseSpy{
 		prob: problem.New(problem.NotFound, "validator runtime is not loaded"),
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/active", nil)
 	rec := httptest.NewRecorder()
@@ -161,7 +173,7 @@ func TestListActiveRuntimeProjections(t *testing.T) {
 			}},
 		},
 	}
-	handler := NewRuntimeWebHandler(nil, spy, nil, nil)
+	handler := NewRuntimeWebHandler(nil, spy, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/configctl/projections?scope_kind=tenant&scope_key=br", nil)
 	rec := httptest.NewRecorder()
@@ -194,7 +206,7 @@ func TestListActiveRuntimeProjectionsMapsProblems(t *testing.T) {
 
 	handler := NewRuntimeWebHandler(nil, &listActiveRuntimeProjectionsUseCaseSpy{
 		prob: problem.New(problem.InvalidArgument, "active runtime projections query is invalid"),
-	}, nil, nil)
+	}, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/configctl/projections?scope_kind=tenant", nil)
 	rec := httptest.NewRecorder()
@@ -255,7 +267,7 @@ func TestListActiveIngestionBindings(t *testing.T) {
 			}},
 		},
 	}
-	handler := NewRuntimeWebHandler(nil, nil, spy, nil)
+	handler := NewRuntimeWebHandler(nil, nil, spy, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/ingestion/bindings?scope_kind=tenant&scope_key=br", nil)
 	rec := httptest.NewRecorder()
@@ -301,7 +313,7 @@ func TestListActiveIngestionBindingsMapsProblems(t *testing.T) {
 
 	handler := NewRuntimeWebHandler(nil, nil, &listActiveIngestionBindingsUseCaseSpy{
 		prob: problem.New(problem.InvalidArgument, "ingestion bindings query is invalid"),
-	}, nil)
+	}, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/ingestion/bindings?scope_kind=tenant", nil)
 	rec := httptest.NewRecorder()
@@ -338,9 +350,9 @@ func TestListValidationResults(t *testing.T) {
 			}},
 		},
 	}
-	handler := NewRuntimeWebHandler(nil, nil, nil, spy)
+	handler := NewRuntimeWebHandler(nil, nil, nil, spy, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?binding_name=orders&limit=5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?binding_name=orders&status=failed&limit=5", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ListValidationResults(rec, req)
@@ -348,7 +360,7 @@ func TestListValidationResults(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if spy.query.BindingName != "orders" || spy.query.Limit != 5 {
+	if spy.query.BindingName != "orders" || spy.query.Status != validatorresultscontracts.ValidationStatusFailed || spy.query.Limit != 5 {
 		t.Fatalf("unexpected validation results query %+v", spy.query)
 	}
 
@@ -365,11 +377,106 @@ func TestListValidationResults(t *testing.T) {
 func TestListValidationResultsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
-	handler := NewRuntimeWebHandler(nil, nil, nil, &listValidationResultsUseCaseSpy{})
+	handler := NewRuntimeWebHandler(nil, nil, nil, &listValidationResultsUseCaseSpy{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?limit=abc", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ListValidationResults(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestListValidationResultsRejectsInvalidStatus(t *testing.T) {
+	t.Parallel()
+
+	handler := NewRuntimeWebHandler(nil, nil, nil, &listValidationResultsUseCaseSpy{
+		prob: problem.New(problem.InvalidArgument, "validation results query is invalid"),
+	}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?status=broken", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListValidationResults(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestListValidationIncidents(t *testing.T) {
+	t.Parallel()
+
+	spy := &listValidationIncidentsUseCaseSpy{
+		reply: validatorincidentscontracts.ListValidationIncidentsReply{
+			Incidents: []validatorincidentscontracts.ValidationIncidentRecord{{
+				IncidentKey:     "incident-1",
+				Kind:            validatorincidentscontracts.ValidationIncidentKindRuleViolation,
+				Status:          validatorincidentscontracts.ValidationIncidentStatusOpen,
+				Binding:         validatorincidentscontracts.ValidationIncidentBindingRecord{Name: "orders", Topic: "sales.order.created", Scope: sharedruntime.ScopeRecord{Kind: "global", Key: "default"}},
+				Config:          validatorincidentscontracts.ValidationIncidentConfigRecord{VersionID: "ver-1"},
+				Count:           2,
+				FirstSeenAt:     time.Unix(10, 0).UTC(),
+				LastSeenAt:      time.Unix(20, 0).UTC(),
+				LatestMessageID: "msg-2",
+				Violations: []validatorresultscontracts.ViolationRecord{{
+					Rule:     "order_id_required",
+					Field:    "order_id",
+					Operator: "required",
+					Severity: "error",
+					Message:  "field is required",
+				}},
+			}},
+		},
+	}
+	handler := NewRuntimeWebHandler(nil, nil, nil, nil, spy)
+
+	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/incidents?binding_name=orders&status=open&limit=5", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListValidationIncidents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if spy.query.BindingName != "orders" || spy.query.Status != validatorincidentscontracts.ValidationIncidentStatusOpen || spy.query.Limit != 5 {
+		t.Fatalf("unexpected validation incidents query %+v", spy.query)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	incidents := body["incidents"].([]any)
+	if len(incidents) != 1 {
+		t.Fatalf("expected one incident, got %v", incidents)
+	}
+}
+
+func TestListValidationIncidentsRejectsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	handler := NewRuntimeWebHandler(nil, nil, nil, nil, &listValidationIncidentsUseCaseSpy{})
+	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/incidents?limit=abc", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListValidationIncidents(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestListValidationIncidentsRejectsInvalidStatus(t *testing.T) {
+	t.Parallel()
+
+	handler := NewRuntimeWebHandler(nil, nil, nil, nil, &listValidationIncidentsUseCaseSpy{
+		prob: problem.New(problem.InvalidArgument, "validation incidents query is invalid"),
+	})
+	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/incidents?status=broken", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListValidationIncidents(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)

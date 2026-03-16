@@ -83,6 +83,7 @@ impl Collector {
         evidences.push(self.collect_ingestion_bindings());
         evidences.push(self.collect_validator_runtime());
         evidences.push(self.collect_validation_results());
+        evidences.push(self.collect_validation_incidents());
         evidences.extend(self.collect_deploy_configs());
         evidences.extend(self.collect_service_logs());
 
@@ -210,6 +211,14 @@ impl Collector {
             self.results_limit
         );
         self.collect_endpoint("Validation results", "validation-results.json", &path)
+    }
+
+    fn collect_validation_incidents(&self) -> Evidence {
+        let path = format!(
+            "/runtime/validator/incidents?scope_kind=global&scope_key=default&limit={}",
+            self.results_limit
+        );
+        self.collect_endpoint("Validation incidents", "validation-incidents.json", &path)
     }
 
     fn collect_endpoint(&self, name: &str, file: &str, path: &str) -> Evidence {
@@ -508,8 +517,8 @@ mod tests {
         );
 
         let evidences = collector.collect_all();
-        // 1 compose + 2 NATS monitor + 2 health/readyz + 5 runtime endpoints + configs + logs
-        let expected = 1 + 2 + 2 + 5 + CONFIG_FILES.len() + SERVICES.len();
+        // 1 compose + 2 NATS monitor + 2 health/readyz + 6 runtime endpoints + configs + logs
+        let expected = 1 + 2 + 2 + 6 + CONFIG_FILES.len() + SERVICES.len();
         assert_eq!(
             evidences.len(),
             expected,

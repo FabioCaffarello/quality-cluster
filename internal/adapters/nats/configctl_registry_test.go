@@ -75,6 +75,18 @@ func TestValidatorResultsRegistryUsesDedicatedControlSubject(t *testing.T) {
 	}
 }
 
+func TestValidatorIncidentsRegistryUsesDedicatedControlSubject(t *testing.T) {
+	t.Parallel()
+
+	registry := DefaultValidatorIncidentsRegistry()
+	if registry.List.Subject == "" {
+		t.Fatal("expected validator incidents subject")
+	}
+	if registry.List.Subject == DefaultValidatorResultsRegistry().List.Subject {
+		t.Fatal("expected validator incidents control subject to stay separate from validator results")
+	}
+}
+
 func TestDataPlaneRegistryUsesDedicatedStreamAndDurable(t *testing.T) {
 	t.Parallel()
 

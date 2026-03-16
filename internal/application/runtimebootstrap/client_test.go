@@ -9,6 +9,7 @@ import (
 	"time"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	dataplaneapp "internal/application/dataplane"
 	sharedruntime "internal/application/runtimecontracts"
 	"internal/shared/problem"
 	"internal/shared/requestctx"
@@ -114,6 +115,38 @@ func TestClientWaitForActiveIngestionBootstrapSetBuildsAggregateIndex(t *testing
 	}
 	if len(bootstrapState.Runtimes) != 2 {
 		t.Fatalf("expected aggregate runtime summaries, got %+v", bootstrapState.Runtimes)
+	}
+}
+
+func TestClientWaitForActiveIngestionBootstrapUsesExplicitRegistry(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-1","definition_checksum":"sum-1"},"artifact":{"id":"artifact-1","checksum":"artifact-sum-1","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-1","definition_checksum":"sum-1"},"artifact":{"id":"artifact-1","checksum":"artifact-sum-1","runtime_loader":"validator:v1"}}]}`))
+	}))
+	defer server.Close()
+
+	registry := dataplaneapp.DefaultRegistry()
+	registry.JetStream.Ingested.SubjectPrefix = "custom.ingestion.received"
+	registry.JetStream.Ingested.SubjectPattern = registry.JetStream.Ingested.SubjectPrefix + ".>"
+
+	client := NewClientWithRegistry(server.URL, time.Second, registry)
+	bootstrapState, prob := client.WaitForActiveIngestionBootstrap(context.Background(), slog.Default(), WaitOptions{
+		ScopeKind:    "tenant",
+		ScopeKey:     "br",
+		PollInterval: 10 * time.Millisecond,
+	})
+	if prob != nil {
+		t.Fatalf("wait for active ingestion bootstrap: %v", prob)
+	}
+
+	routed := bootstrapState.Topology.BindingsForTopic("sales.order.created")
+	if len(routed) != 1 {
+		t.Fatalf("expected one routed binding, got %+v", routed)
+	}
+	if routed[0].Route.JetStreamSubject != "custom.ingestion.received.tenant.br.orders" {
+		t.Fatalf("expected explicit registry subject, got %q", routed[0].Route.JetStreamSubject)
 	}
 }
 

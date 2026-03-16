@@ -11,6 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const BOOTSTRAP_LOG_TAIL_LINES: u32 = 200;
+const BOOTSTRAP_ALIGNMENT_TIMEOUT_SECS: u64 = 10;
 
 /// Synthetic config content for the smoke test.
 pub fn smoke_config_content(config: &SmokeConfig) -> serde_json::Value {
@@ -411,34 +412,61 @@ pub fn validate(config: &SmokeConfig) -> CheckResult {
 
 /// Stage 7: Bootstrap alignment — verify consumer and emulator converged on the same loaded bootstrap.
 pub fn bootstrap_alignment(config: &SmokeConfig) -> CheckResult {
-    let consumer_logs =
-        match compose::service_logs(&config.compose_file, "consumer", BOOTSTRAP_LOG_TAIL_LINES) {
+    bootstrap_alignment_with_fetcher(
+        Duration::from_secs(BOOTSTRAP_ALIGNMENT_TIMEOUT_SECS),
+        Duration::from_millis(config.poll_interval_ms),
+        || {
+            let consumer_logs =
+                compose::service_logs(&config.compose_file, "consumer", BOOTSTRAP_LOG_TAIL_LINES)
+                    .map_err(|err| format!("failed to read consumer logs: {err}"))?;
+            let emulator_logs =
+                compose::service_logs(&config.compose_file, "emulator", BOOTSTRAP_LOG_TAIL_LINES)
+                    .map_err(|err| format!("failed to read emulator logs: {err}"))?;
+            Ok((consumer_logs, emulator_logs))
+        },
+    )
+}
+
+fn bootstrap_alignment_with_fetcher<F>(
+    timeout: Duration,
+    interval: Duration,
+    mut fetcher: F,
+) -> CheckResult
+where
+    F: FnMut() -> Result<(String, String), String>,
+{
+    let deadline = Instant::now() + timeout;
+
+    let mut result = loop {
+        let (consumer_logs, emulator_logs) = match fetcher() {
             Ok(logs) => logs,
             Err(err) => {
                 return CheckResult::from_findings(
                     "bootstrap-alignment",
-                    vec![Finding::error(
-                        "bootstrap-alignment",
-                        format!("failed to read consumer logs: {err}"),
-                    )],
-                );
-            }
-        };
-    let emulator_logs =
-        match compose::service_logs(&config.compose_file, "emulator", BOOTSTRAP_LOG_TAIL_LINES) {
-            Ok(logs) => logs,
-            Err(err) => {
-                return CheckResult::from_findings(
-                    "bootstrap-alignment",
-                    vec![Finding::error(
-                        "bootstrap-alignment",
-                        format!("failed to read emulator logs: {err}"),
-                    )],
+                    vec![Finding::error("bootstrap-alignment", err)],
                 );
             }
         };
 
-    bootstrap_alignment_from_logs(&consumer_logs, &emulator_logs)
+        let result = bootstrap_alignment_from_logs(&consumer_logs, &emulator_logs);
+        if result.status == crate::models::CheckStatus::Pass {
+            return result;
+        }
+
+        if Instant::now() >= deadline {
+            break result;
+        }
+
+        thread::sleep(interval);
+    };
+    result.findings.push(Finding::info(
+        "bootstrap-alignment",
+        format!(
+            "timed out after {}s waiting for consumer and emulator to converge on the same bootstrap generation",
+            timeout.as_secs()
+        ),
+    ));
+    result
 }
 
 fn bootstrap_alignment_from_logs(consumer_logs: &str, emulator_logs: &str) -> CheckResult {
@@ -791,5 +819,39 @@ mod tests {
         assert!(result.findings.iter().any(|finding| finding
             .message
             .contains("did not expose a loaded bootstrap diagnostic")));
+    }
+
+    #[test]
+    fn bootstrap_alignment_waits_until_runtime_converges() {
+        let mut snapshots = vec![
+            (
+                r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" bootstrap_signature="consumer-v2" runtime_refs="[tenant:br:ver-2:artifact-2]""#
+                    .to_string(),
+                r#"time=2026-03-16T18:00:00Z level=INFO msg="emulator bootstrap refreshed" bootstrap_signature="emulator-v1" runtime_refs="[tenant:br:ver-1:artifact-1]""#
+                    .to_string(),
+            ),
+            (
+                r#"time=2026-03-16T18:00:01Z level=INFO msg="consumer runtime ready" bootstrap_signature="shared" runtime_refs="[tenant:br:ver-3:artifact-3]""#
+                    .to_string(),
+                r#"time=2026-03-16T18:00:02Z level=INFO msg="emulator bootstrap refreshed" bootstrap_signature="shared" runtime_refs="[tenant:br:ver-3:artifact-3]""#
+                    .to_string(),
+            ),
+        ]
+        .into_iter();
+
+        let result = bootstrap_alignment_with_fetcher(
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            || {
+                snapshots
+                    .next()
+                    .ok_or_else(|| "no more snapshots".to_string())
+            },
+        );
+
+        assert_eq!(result.status, CheckStatus::Pass);
+        assert!(result.findings.iter().any(|finding| finding
+            .message
+            .contains("same aggregate bootstrap generation")));
     }
 }

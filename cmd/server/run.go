@@ -4,6 +4,7 @@ import (
 	actorcommon "internal/actors/common"
 	actorserver "internal/actors/scopes/server"
 	configctlclient "internal/application/configctlclient"
+	validatorincidentsclient "internal/application/validatorincidentsclient"
 	validatorresultsclient "internal/application/validatorresultsclient"
 	validatorruntimeclient "internal/application/validatorruntimeclient"
 	"internal/interfaces/http/routes"
@@ -76,6 +77,20 @@ func Run(config settings.AppConfig) {
 	}
 	listValidationResultsUseCase := validatorresultsclient.NewListValidationResultsUseCase(resultsGateway)
 
+	incidentsGateway, incidentsCloseFn, incidentsProb := newValidatorIncidentsGateway(config)
+	if incidentsProb != nil {
+		logger.Error("create validator incidents gateway", "error", incidentsProb)
+		os.Exit(1)
+	}
+	if incidentsCloseFn != nil {
+		defer func() {
+			if err := incidentsCloseFn(); err != nil {
+				logger.Error("close validator incidents gateway", "error", err)
+			}
+		}()
+	}
+	listValidationIncidentsUseCase := validatorincidentsclient.NewListValidationIncidentsUseCase(incidentsGateway)
+
 	serverRoutes := routes.DefaultRoutes(routes.Dependencies{
 		Readiness:                    newServerReadinessChecker(config, gateway, runtimeGateway, resultsGateway),
 		CreateDraft:                  createDraftUseCase,
@@ -90,6 +105,7 @@ func Run(config settings.AppConfig) {
 		ActivateConfig:               activateConfigUseCase,
 		GetRuntime:                   getValidatorRuntimeUseCase,
 		ListValidationResults:        listValidationResultsUseCase,
+		ListValidationIncidents:      listValidationIncidentsUseCase,
 	})
 
 	pid := engine.Spawn(actorserver.NewServer(config.HTTP, serverRoutes), "server")

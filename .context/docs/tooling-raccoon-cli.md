@@ -99,6 +99,7 @@ Operational rule:
 - `trace-pack` now also classifies that observability as `healthy` or `degraded`, and must emit diagnosis-oriented guidance instead of leaving the operator to interpret raw counters alone
 - `trace-pack` now also emits `refresh mode` for degraded refresh, so the first troubleshooting step depends on the actual failure shape rather than on a generic lag warning
 - `trace-pack` now also summarizes the latest loaded bootstrap generation seen by `consumer` and `emulator`, including `bootstrap_signature`, compact `runtime_refs`, and whether both services are aligned on the same aggregate runtime
+- `trace-pack` should also collect `/runtime/validator/incidents` whenever that contract exists, so result-level and incident-level evidence do not require separate ad hoc scraping
 
 ## Operational Position In The Workflow
 

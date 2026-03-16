@@ -19,11 +19,30 @@ func TestListValidationResultsQueryNormalizesDefaults(t *testing.T) {
 	}
 }
 
+func TestListValidationResultsQueryNormalizesStatus(t *testing.T) {
+	t.Parallel()
+
+	query := (ListValidationResultsQuery{Status: " FAILED "}).Normalize()
+	if query.Status != ValidationStatusFailed {
+		t.Fatalf("expected normalized failed status, got %+v", query)
+	}
+}
+
+func TestListValidationResultsQueryValidateRejectsInvalidStatus(t *testing.T) {
+	t.Parallel()
+
+	prob := (ListValidationResultsQuery{Status: "broken"}).Validate()
+	if prob == nil {
+		t.Fatal("expected invalid status to fail validation")
+	}
+}
+
 func TestValidationResultRecordValidate(t *testing.T) {
 	t.Parallel()
 
 	prob := (ValidationResultRecord{
-		MessageID: "msg-1",
+		ProcessingKey: "msg-1|global|default|orders|sales.order.created|ver-1|",
+		MessageID:     "msg-1",
 		Binding: ValidationBindingRecord{
 			Name:  "orders",
 			Topic: "sales.order.created",
@@ -42,5 +61,27 @@ func TestValidationResultRecordValidate(t *testing.T) {
 	}).Validate()
 	if prob != nil {
 		t.Fatalf("expected valid result, got %v", prob)
+	}
+}
+
+func TestValidationResultRecordBuildsFallbackProcessingKey(t *testing.T) {
+	t.Parallel()
+
+	record := ValidationResultRecord{
+		MessageID: "msg-1",
+		Binding: ValidationBindingRecord{
+			Name:  "orders",
+			Topic: "sales.order.created",
+			Scope: sharedruntime.ScopeRecord{Kind: "global", Key: "default"},
+		},
+		Config: ValidationConfigRecord{
+			VersionID:          "ver-1",
+			DefinitionChecksum: "sum-1",
+		},
+	}
+
+	expected := "msg-1|global|default|orders|sales.order.created|ver-1|sum-1"
+	if got := record.NormalizedProcessingKey(); got != expected {
+		t.Fatalf("expected processing key %q, got %q", expected, got)
 	}
 }

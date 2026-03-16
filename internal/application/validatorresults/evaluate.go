@@ -35,6 +35,24 @@ func Evaluate(runtime configdomain.RuntimeProjection, message dataplaneapp.Messa
 	}
 
 	result := validatorcontracts.ValidationResultRecord{
+		ProcessingKey: validatorcontracts.BuildValidationProcessingKey(
+			message.Metadata.MessageID,
+			validatorcontracts.ValidationBindingRecord{
+				Name:  message.Binding.Name,
+				Topic: message.Binding.Topic,
+				Scope: sharedruntime.ScopeRecord{
+					Kind: message.Binding.Scope.Kind,
+					Key:  message.Binding.Scope.Key,
+				},
+			},
+			validatorcontracts.ValidationConfigRecord{
+				SetID:              runtime.ConfigSetID,
+				Key:                runtime.ConfigKey,
+				VersionID:          runtime.VersionID,
+				Version:            runtime.Version,
+				DefinitionChecksum: runtime.DefinitionChecksum,
+			},
+		),
 		MessageID:     message.Metadata.MessageID,
 		CorrelationID: message.Metadata.CorrelationID,
 		Binding: validatorcontracts.ValidationBindingRecord{

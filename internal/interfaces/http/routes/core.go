@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/interfaces/http/handlers"
@@ -26,6 +27,7 @@ type Dependencies struct {
 	ActivateConfig               handlersActivateConfigUseCase
 	GetRuntime                   handlersGetValidatorRuntimeUseCase
 	ListValidationResults        handlersListValidationResultsUseCase
+	ListValidationIncidents      handlersListValidationIncidentsUseCase
 }
 
 type handlersCreateDraftUseCase interface {
@@ -76,6 +78,10 @@ type handlersListValidationResultsUseCase interface {
 	Execute(context.Context, validatorresultscontracts.ListValidationResultsQuery) (validatorresultscontracts.ListValidationResultsReply, *problem.Problem)
 }
 
+type handlersListValidationIncidentsUseCase interface {
+	Execute(context.Context, validatorincidentscontracts.ListValidationIncidentsQuery) (validatorincidentscontracts.ListValidationIncidentsReply, *problem.Problem)
+}
+
 func DefaultRoutes(deps Dependencies) []webserver.Route {
 	readiness := deps.Readiness
 	if readiness == nil {
@@ -93,7 +99,7 @@ func DefaultRoutes(deps Dependencies) []webserver.Route {
 		deps.CompileConfig,
 		deps.ActivateConfig,
 	)...)
-	routes = append(routes, RuntimeWithValidationResults(deps.GetRuntime, deps.ListActiveRuntimeProjections, deps.ListActiveIngestionBindings, deps.ListValidationResults)...)
+	routes = append(routes, RuntimeWithValidationResults(deps.GetRuntime, deps.ListActiveRuntimeProjections, deps.ListActiveIngestionBindings, deps.ListValidationResults, deps.ListValidationIncidents)...)
 	return routes
 }
 

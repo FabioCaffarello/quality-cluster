@@ -629,6 +629,7 @@ raccoon-cli --json trace-pack                       # JSON manifest output
 | `ingestion-bindings.json` | `/runtime/ingestion/bindings` — active data routing |
 | `validator-runtime.json` | `/runtime/validator/active` — validator runtime state |
 | `validation-results.json` | `/runtime/validator/results` — recent pass/fail outcomes |
+| `validation-incidents.json` | `/runtime/validator/incidents` — aggregated open incidents |
 | `configs/*.jsonc` | Deploy config files (server, consumer, validator, emulator, configctl) |
 | `logs/*.log` | Recent container logs per service (default: last 200 lines) |
 | `SUMMARY.md` | Human-readable manifest: what was collected, what failed, and how to use it |
@@ -646,6 +647,7 @@ trace-pack-20260314-153042/
 ├── ingestion-bindings.json
 ├── validator-runtime.json
 ├── validation-results.json
+├── validation-incidents.json
 ├── configs/
 │   ├── server.jsonc
 │   ├── consumer.jsonc

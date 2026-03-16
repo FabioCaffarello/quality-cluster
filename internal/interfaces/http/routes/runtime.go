@@ -8,11 +8,11 @@ import (
 )
 
 func Runtime(getActive handlersGetValidatorRuntimeUseCase, listActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase) []webserver.Route {
-	return RuntimeWithValidationResults(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, nil)
+	return RuntimeWithValidationResults(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, nil, nil)
 }
 
-func RuntimeWithValidationResults(getActive handlersGetValidatorRuntimeUseCase, listActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase, listValidationResults handlersListValidationResultsUseCase) []webserver.Route {
-	handler := handlers.NewRuntimeWebHandler(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, listValidationResults)
+func RuntimeWithValidationResults(getActive handlersGetValidatorRuntimeUseCase, listActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase, listValidationResults handlersListValidationResultsUseCase, listValidationIncidents handlersListValidationIncidentsUseCase) []webserver.Route {
+	handler := handlers.NewRuntimeWebHandler(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, listValidationResults, listValidationIncidents)
 
 	return []webserver.Route{
 		{
@@ -34,6 +34,11 @@ func RuntimeWithValidationResults(getActive handlersGetValidatorRuntimeUseCase, 
 			Method:  http.MethodGet,
 			Path:    "/runtime/validator/results",
 			Handler: handler.ListValidationResults,
+		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/runtime/validator/incidents",
+			Handler: handler.ListValidationIncidents,
 		},
 	}
 }

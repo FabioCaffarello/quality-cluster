@@ -271,8 +271,9 @@ fn build_summary(
     s.push_str("5. Inspect `configctl-runtime-projections.json` for the canonical configctl runtime projection\n");
     s.push_str("6. Check `ingestion-bindings.json` and `validator-runtime.json` for operational routing and loaded-state views\n");
     s.push_str("7. Review `validation-results.json` for recent pass/fail outcomes\n");
-    s.push_str("8. Examine `logs/` for per-service console output\n");
-    s.push_str("9. Compare `configs/` with active runtime to spot drift\n");
+    s.push_str("8. Review `validation-incidents.json` for aggregated operational incidents\n");
+    s.push_str("9. Examine `logs/` for per-service console output\n");
+    s.push_str("10. Compare `configs/` with active runtime to spot drift\n");
 
     s
 }

@@ -12,7 +12,8 @@ func TestValidatorResultsGatewayListValidationResults(t *testing.T) {
 
 	registry := DefaultValidatorResultsRegistry()
 	request := mustDecodeRequest[validatorresultscontracts.ListValidationResultsQuery](t, registry.List, mustEncodeRequest(t, registry.List, validatorresultscontracts.ListValidationResultsQuery{
-		Limit: 5,
+		Limit:  5,
+		Status: validatorresultscontracts.ValidationStatusFailed,
 	}))
 	replyBytes, err := encodeControlReply(
 		registry.List,
@@ -29,7 +30,8 @@ func TestValidatorResultsGatewayListValidationResults(t *testing.T) {
 
 	client := &requestReplyClientSpy{reply: replyBytes}
 	reply, prob := NewValidatorResultsGateway(client, "server.http").ListValidationResults(context.Background(), validatorresultscontracts.ListValidationResultsQuery{
-		Limit: 5,
+		Limit:  5,
+		Status: validatorresultscontracts.ValidationStatusFailed,
 	})
 	if prob != nil {
 		t.Fatalf("list validation results: %v", prob)

@@ -70,9 +70,14 @@ func (a *TopicRouterActor) routeMessage(c *actor.Context, msg routeKafkaMessageM
 		timeout = 5 * time.Second
 	}
 
+	var firstMapProb *problem.Problem
+	var published int
 	for _, binding := range a.cfg.Topic.Bindings {
 		routed, mapProb := dataplaneapp.MapKafkaRecordToBinding(binding, record, msg.IngestedAt)
 		if mapProb != nil {
+			if firstMapProb == nil {
+				firstMapProb = mapProb
+			}
 			a.logger.Warn("dropping kafka message during mapping", "topic", msg.Message.Topic, "offset", msg.Message.Offset, "error", mapProb)
 			continue
 		}
@@ -89,6 +94,14 @@ func (a *TopicRouterActor) routeMessage(c *actor.Context, msg routeKafkaMessageM
 		if reply.Prob != nil {
 			return reply.Prob
 		}
+		published++
+	}
+
+	if published == 0 {
+		if firstMapProb != nil {
+			return firstMapProb
+		}
+		return problem.New(problem.InvalidArgument, "topic has no mappable bindings")
 	}
 
 	return nil

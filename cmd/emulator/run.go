@@ -22,6 +22,11 @@ import (
 
 var ensureTopicsForBootstrap = adapterkafka.EnsureTopics
 
+type emulatorRuntimeDependencies struct {
+	dataPlaneRegistry dataplaneapp.Registry
+	configctlRegistry adapternats.ConfigctlRegistry
+}
+
 func Run(config settings.AppConfig) {
 	logger := bootstrap.BuildLogger(config.Log)
 	slog.SetDefault(logger)
@@ -34,14 +39,15 @@ func Run(config settings.AppConfig) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet(ctx, logger, config, "emulator")
+	deps := defaultEmulatorRuntimeDependencies()
+	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSetWithRegistry(ctx, logger, config, "emulator", deps.dataPlaneRegistry)
 	if prob != nil {
 		logger.Error("bootstrap active ingestion bindings", "error", prob)
 		os.Exit(1)
 	}
 	bootstrapSignature := bootstrapState.Signature()
 	refreshSignals := make(chan struct{}, 1)
-	runtimeChangedConsumer := adapternats.NewIngestionRuntimeChangedConsumer(config.NATS.URL, adapternats.DefaultConfigctlRegistry().EmulatorRuntimeChanged, &emulatorRefreshNotifier{signals: refreshSignals})
+	runtimeChangedConsumer := adapternats.NewIngestionRuntimeChangedConsumer(config.NATS.URL, deps.configctlRegistry.EmulatorRuntimeChanged, &emulatorRefreshNotifier{signals: refreshSignals})
 	if err := runtimeChangedConsumer.Start(); err != nil {
 		logger.Error("start emulator runtime refresh consumer", "error", err)
 		os.Exit(1)
@@ -51,8 +57,6 @@ func Run(config settings.AppConfig) {
 			logger.Error("close emulator runtime refresh consumer", "error", err)
 		}
 	}()
-
-	registry := dataplaneapp.DefaultRegistry()
 	if err := ensureTopicsForBootstrap(ctx, config.Kafka.Brokers, bootstrapState.Index.Topics(), config.Kafka.DialTimeoutDuration()); err != nil {
 		logger.Error("ensure kafka topics", "error", err)
 		os.Exit(1)
@@ -91,7 +95,7 @@ func Run(config settings.AppConfig) {
 	}
 
 	var sequence int64
-	if err := publishSyntheticBatch(ctx, logger, producer, registry, bootstrapState.Index, &sequence); err != nil {
+	if err := publishSyntheticBatch(ctx, logger, producer, deps.dataPlaneRegistry, bootstrapState.Index, &sequence); err != nil {
 		logger.Error("publish synthetic batch", "error", err)
 		os.Exit(1)
 	}
@@ -102,11 +106,11 @@ func Run(config settings.AppConfig) {
 			logger.Info("emulator stopped")
 			return
 		case <-refreshSignals:
-			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, bootstrapState, bootstrapSignature)
+			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, deps.dataPlaneRegistry, bootstrapState, bootstrapSignature)
 		case <-reconcileTick:
-			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, bootstrapState, bootstrapSignature)
+			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, deps.dataPlaneRegistry, bootstrapState, bootstrapSignature)
 		case <-ticker.C:
-			if err := publishSyntheticBatch(ctx, logger, producer, registry, bootstrapState.Index, &sequence); err != nil {
+			if err := publishSyntheticBatch(ctx, logger, producer, deps.dataPlaneRegistry, bootstrapState.Index, &sequence); err != nil {
 				logger.Error("publish synthetic batch", "error", err)
 				os.Exit(1)
 			}
@@ -114,8 +118,15 @@ func Run(config settings.AppConfig) {
 	}
 }
 
-func reconcileBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, current runtimebootstrap.ActiveIngestionBootstrap, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, string) {
-	refreshed, changed, refreshErr := refreshBootstrapState(ctx, logger, config, currentSignature)
+func defaultEmulatorRuntimeDependencies() emulatorRuntimeDependencies {
+	return emulatorRuntimeDependencies{
+		dataPlaneRegistry: dataplaneapp.DefaultRegistry(),
+		configctlRegistry: adapternats.DefaultConfigctlRegistry(),
+	}
+}
+
+func reconcileBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, registry dataplaneapp.Registry, current runtimebootstrap.ActiveIngestionBootstrap, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, string) {
+	refreshed, changed, refreshErr := refreshBootstrapState(ctx, logger, config, registry, currentSignature)
 	if refreshErr != nil {
 		logger.Warn("refresh emulator bootstrap", "error", refreshErr)
 		return current, currentSignature
@@ -132,8 +143,8 @@ func reconcileBootstrapState(ctx context.Context, logger *slog.Logger, config se
 	return refreshed, refreshed.Signature()
 }
 
-func refreshBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, bool, *problem.Problem) {
-	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet(ctx, logger, config, "emulator")
+func refreshBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, registry dataplaneapp.Registry, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, bool, *problem.Problem) {
+	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSetWithRegistry(ctx, logger, config, "emulator", registry)
 	if prob != nil {
 		return runtimebootstrap.ActiveIngestionBootstrap{}, false, prob
 	}

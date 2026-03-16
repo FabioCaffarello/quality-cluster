@@ -21,7 +21,7 @@ type runtimeProducerFactory func(ConsumerRuntimeConfig) actor.Producer
 
 type supervisorConfig struct {
 	appConfig         settings.AppConfig
-	registry          dataplaneapp.Registry
+	dataPlaneRegistry adapternats.DataPlaneRegistry
 	configctlRegistry adapternats.ConfigctlRegistry
 	loadBootstrap     bootstrapLoaderFunc
 	newRuntimeActor   runtimeProducerFactory
@@ -37,10 +37,12 @@ type Supervisor struct {
 func NewSupervisor(appConfig settings.AppConfig) actor.Producer {
 	return newSupervisorProducer(supervisorConfig{
 		appConfig:         appConfig,
-		registry:          dataplaneapp.DefaultRegistry(),
+		dataPlaneRegistry: adapternats.DefaultDataPlaneRegistry(),
 		configctlRegistry: adapternats.DefaultConfigctlRegistry(),
-		loadBootstrap:     runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet,
-		newRuntimeActor:   NewConsumerRuntimeActor,
+		loadBootstrap: func(ctx context.Context, logger *slog.Logger, config settings.AppConfig, source string) (runtimebootstrap.ActiveIngestionBootstrap, *problem.Problem) {
+			return runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSetWithRegistry(ctx, logger, config, source, dataplaneapp.DefaultRegistry())
+		},
+		newRuntimeActor: NewConsumerRuntimeActor,
 	})
 }
 
@@ -131,10 +133,10 @@ func (s *Supervisor) startRuntime(c *actor.Context, bootstrap runtimebootstrap.A
 	s.state.Generation++
 	generation := s.state.Generation
 	s.runtimePID = c.SpawnChild(s.cfg.newRuntimeActor(ConsumerRuntimeConfig{
-		AppConfig:  s.cfg.appConfig,
-		Generation: generation,
-		Bootstrap:  bootstrap,
-		Registry:   s.cfg.registry,
-		Source:     "consumer.dataplane",
+		AppConfig:         s.cfg.appConfig,
+		Generation:        generation,
+		Bootstrap:         bootstrap,
+		DataPlaneRegistry: s.cfg.dataPlaneRegistry,
+		Source:            "consumer.dataplane",
 	}), fmt.Sprintf("runtime-%d", generation))
 }

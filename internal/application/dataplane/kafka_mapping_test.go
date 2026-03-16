@@ -66,3 +66,118 @@ func TestNewKafkaRecordRejectsInvalidMetadata(t *testing.T) {
 		t.Fatal("expected invalid kafka record to fail")
 	}
 }
+
+func TestMapKafkaRecordNormalizesHeaderKeys(t *testing.T) {
+	t.Parallel()
+
+	record, prob := NewKafkaRecord(
+		"sales.order.created",
+		[]byte("order-1"),
+		[]byte(`{"order_id":"1"}`),
+		map[string]string{
+			" Content-Type ":     "application/json",
+			" X-Correlation-ID ": "corr-1",
+		},
+		2,
+		30,
+		time.Unix(10, 0).UTC(),
+	)
+	if prob != nil {
+		t.Fatalf("new kafka record: %v", prob)
+	}
+
+	mapped, prob := MapKafkaRecord(configctlcontracts.ActiveIngestionBindingRecord{
+		Binding: configctlcontracts.BindingRecord{Name: "orders", Topic: "sales.order.created"},
+		Runtime: sharedruntime.RuntimeRecord{
+			Scope: sharedruntime.ScopeRecord{Kind: "global", Key: "default"},
+			Config: sharedruntime.ConfigRecord{
+				VersionID:          "ver-1",
+				DefinitionChecksum: "definition-1",
+			},
+		},
+	}, DefaultRegistry(), record, time.Unix(20, 0).UTC())
+	if prob != nil {
+		t.Fatalf("map kafka record: %v", prob)
+	}
+
+	if mapped.CorrelationID != "corr-1" {
+		t.Fatalf("expected normalized correlation id, got %q", mapped.CorrelationID)
+	}
+	if mapped.Message.Metadata.ContentType != ContentTypeJSON {
+		t.Fatalf("expected normalized content type, got %q", mapped.Message.Metadata.ContentType)
+	}
+}
+
+func TestMapKafkaRecordRejectsBindingTopicMismatch(t *testing.T) {
+	t.Parallel()
+
+	record, prob := NewKafkaRecord(
+		"sales.order.created",
+		[]byte("order-1"),
+		[]byte(`{"order_id":"1"}`),
+		nil,
+		2,
+		30,
+		time.Unix(10, 0).UTC(),
+	)
+	if prob != nil {
+		t.Fatalf("new kafka record: %v", prob)
+	}
+
+	_, prob = MapKafkaRecordToBinding(RoutedBinding{
+		Binding: configctlcontracts.ActiveIngestionBindingRecord{
+			Binding: configctlcontracts.BindingRecord{Name: "orders", Topic: "sales.order.cancelled"},
+			Runtime: sharedruntime.RuntimeRecord{
+				Scope: sharedruntime.ScopeRecord{Kind: "global", Key: "default"},
+				Config: sharedruntime.ConfigRecord{
+					VersionID:          "ver-1",
+					DefinitionChecksum: "definition-1",
+				},
+			},
+		},
+		Route: BindingRoute{
+			KafkaTopic:       "sales.order.created",
+			JetStreamSubject: "dataplane.ingestion.received.global.default.orders",
+		},
+	}, record, time.Unix(20, 0).UTC())
+	if prob == nil {
+		t.Fatal("expected binding topic mismatch to fail")
+	}
+}
+
+func TestMapKafkaRecordRejectsRouteTopicMismatch(t *testing.T) {
+	t.Parallel()
+
+	record, prob := NewKafkaRecord(
+		"sales.order.created",
+		[]byte("order-1"),
+		[]byte(`{"order_id":"1"}`),
+		nil,
+		2,
+		30,
+		time.Unix(10, 0).UTC(),
+	)
+	if prob != nil {
+		t.Fatalf("new kafka record: %v", prob)
+	}
+
+	_, prob = MapKafkaRecordToBinding(RoutedBinding{
+		Binding: configctlcontracts.ActiveIngestionBindingRecord{
+			Binding: configctlcontracts.BindingRecord{Name: "orders", Topic: "sales.order.created"},
+			Runtime: sharedruntime.RuntimeRecord{
+				Scope: sharedruntime.ScopeRecord{Kind: "global", Key: "default"},
+				Config: sharedruntime.ConfigRecord{
+					VersionID:          "ver-1",
+					DefinitionChecksum: "definition-1",
+				},
+			},
+		},
+		Route: BindingRoute{
+			KafkaTopic:       "sales.order.cancelled",
+			JetStreamSubject: "dataplane.ingestion.received.global.default.orders",
+		},
+	}, record, time.Unix(20, 0).UTC())
+	if prob == nil {
+		t.Fatal("expected route topic mismatch to fail")
+	}
+}

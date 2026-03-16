@@ -6,6 +6,7 @@ import (
 	adapternats "internal/adapters/nats"
 	configctlcontracts "internal/application/configctl/contracts"
 	"internal/application/ports"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/shared/problem"
@@ -51,6 +52,20 @@ func newValidatorResultsGateway(config settings.AppConfig) (ports.ValidatorResul
 	}
 
 	gateway := adapternats.NewValidatorResultsGateway(requestClient, "server.http")
+	return gateway, requestClient.Close, nil
+}
+
+func newValidatorIncidentsGateway(config settings.AppConfig) (ports.ValidatorIncidentsGateway, func() error, *problem.Problem) {
+	if !config.NATS.Enabled {
+		return unavailableValidatorIncidentsGateway{}, nil, nil
+	}
+
+	requestClient, err := adapternats.NewNATSRequestClientWithURL(config.NATS.URL, config.NATS.RequestTimeoutDuration())
+	if err != nil {
+		return nil, nil, problem.Wrap(err, problem.Unavailable, "failed to initialize validator incidents request client")
+	}
+
+	gateway := adapternats.NewValidatorIncidentsGateway(requestClient, "server.http")
 	return gateway, requestClient.Close, nil
 }
 
@@ -108,6 +123,12 @@ func (unavailableValidatorResultsGateway) ListValidationResults(context.Context,
 	return validatorresultscontracts.ListValidationResultsReply{}, unavailableValidatorResultsProblem()
 }
 
+type unavailableValidatorIncidentsGateway struct{}
+
+func (unavailableValidatorIncidentsGateway) ListValidationIncidents(context.Context, validatorincidentscontracts.ListValidationIncidentsQuery) (validatorincidentscontracts.ListValidationIncidentsReply, *problem.Problem) {
+	return validatorincidentscontracts.ListValidationIncidentsReply{}, unavailableValidatorIncidentsProblem()
+}
+
 func unavailableConfigctlProblem() *problem.Problem {
 	return problem.New(problem.Unavailable, "configctl gateway is unavailable because nats is disabled")
 }
@@ -118,4 +139,8 @@ func unavailableValidatorRuntimeProblem() *problem.Problem {
 
 func unavailableValidatorResultsProblem() *problem.Problem {
 	return problem.New(problem.Unavailable, "validator results gateway is unavailable because nats is disabled")
+}
+
+func unavailableValidatorIncidentsProblem() *problem.Problem {
+	return problem.New(problem.Unavailable, "validator incidents gateway is unavailable because nats is disabled")
 }

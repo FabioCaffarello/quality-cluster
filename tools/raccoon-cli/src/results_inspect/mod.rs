@@ -279,6 +279,9 @@ fn fetch_results(config: &InspectConfig) -> Result<Value> {
     if let Some(ref topic) = config.topic {
         url.push_str(&format!("&topic={topic}"));
     }
+    if config.failed_only {
+        url.push_str("&status=failed");
+    }
 
     let correlation_id = format!("raccoon-inspect-{}", std::process::id());
 

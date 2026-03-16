@@ -72,6 +72,16 @@ func MapKafkaRecord(binding configctlcontracts.ActiveIngestionBindingRecord, reg
 }
 
 func MapKafkaRecordToBinding(binding RoutedBinding, record KafkaRecord, ingestedAt time.Time) (RoutedMessage, *problem.Problem) {
+	recordTopic := strings.TrimSpace(record.Topic)
+	bindingTopic := strings.TrimSpace(binding.Binding.Binding.Topic)
+	routeTopic := strings.TrimSpace(binding.Route.KafkaTopic)
+
+	if bindingTopic != "" && recordTopic != bindingTopic {
+		return RoutedMessage{}, problem.New(problem.Conflict, "kafka record topic does not match binding topic")
+	}
+	if routeTopic != "" && recordTopic != routeTopic {
+		return RoutedMessage{}, problem.New(problem.Conflict, "kafka record topic does not match route topic")
+	}
 	if strings.TrimSpace(binding.Route.JetStreamSubject) == "" {
 		return RoutedMessage{}, problem.New(problem.InvalidArgument, "binding route jetstream subject is required")
 	}
@@ -111,7 +121,7 @@ func normalizedHeaders(headers map[string]string) map[string]string {
 
 	result := make(map[string]string, len(headers))
 	for key, value := range headers {
-		key = strings.TrimSpace(key)
+		key = strings.ToLower(strings.TrimSpace(key))
 		if key == "" {
 			continue
 		}

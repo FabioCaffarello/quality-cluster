@@ -32,6 +32,9 @@ func TestEvaluateReturnsPassedWhenRulesMatch(t *testing.T) {
 	if result.Status != validatorcontracts.ValidationStatusPassed {
 		t.Fatalf("expected passed status, got %+v", result)
 	}
+	if result.ProcessingKey == "" {
+		t.Fatalf("expected processing key to be populated, got %+v", result)
+	}
 }
 
 func TestEvaluateReturnsViolationsForMissingRequiredField(t *testing.T) {

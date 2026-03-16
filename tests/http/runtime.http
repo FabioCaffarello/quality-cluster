@@ -26,3 +26,10 @@ X-Correlation-ID: {{correlationId}}
 GET {{baseUrl}}/runtime/validator/results?scope_kind=global&scope_key=default&limit=10
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
+
+###
+
+### Aggregated validation incidents for the default scope
+GET {{baseUrl}}/runtime/validator/incidents?scope_kind=global&scope_key=default&limit=10
+Accept: application/json
+X-Correlation-ID: {{correlationId}}

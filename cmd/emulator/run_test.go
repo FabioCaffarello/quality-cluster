@@ -10,6 +10,7 @@ import (
 	"time"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
 	sharedruntime "internal/application/runtimecontracts"
 	"internal/shared/settings"
@@ -31,7 +32,7 @@ func TestRefreshBootstrapStateDetectsChange(t *testing.T) {
 		},
 	}
 
-	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
+	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, dataplaneapp.DefaultRegistry(), mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
 	if prob != nil {
 		t.Fatalf("refresh bootstrap state: %v", prob)
 	}
@@ -59,7 +60,7 @@ func TestRefreshBootstrapStateDetectsNoChange(t *testing.T) {
 		},
 	}
 
-	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
+	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, dataplaneapp.DefaultRegistry(), mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
 	if prob != nil {
 		t.Fatalf("refresh bootstrap state: %v", prob)
 	}
@@ -89,7 +90,7 @@ func TestReconcileBootstrapStateKeepsCurrentStateWhenRefreshFails(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	next, signature := reconcileBootstrapState(ctx, logger, config, current, "current-signature")
+	next, signature := reconcileBootstrapState(ctx, logger, config, dataplaneapp.DefaultRegistry(), current, "current-signature")
 	if signature != "current-signature" {
 		t.Fatalf("expected signature to stay unchanged, got %q", signature)
 	}
@@ -123,12 +124,24 @@ func TestReconcileBootstrapStateAdoptsChangedBootstrap(t *testing.T) {
 	ensureTopicsForBootstrap = func(context.Context, []string, []string, time.Duration) error { return nil }
 	defer func() { ensureTopicsForBootstrap = originalEnsureTopics }()
 
-	next, signature := reconcileBootstrapState(context.Background(), logger, config, current, "current-signature")
+	next, signature := reconcileBootstrapState(context.Background(), logger, config, dataplaneapp.DefaultRegistry(), current, "current-signature")
 	if signature == "current-signature" {
 		t.Fatal("expected signature to change")
 	}
 	if len(next.Index.All()) != 1 {
 		t.Fatalf("expected adopted bootstrap binding, got %+v", next.Index.All())
+	}
+}
+
+func TestDefaultEmulatorRuntimeDependenciesStayAligned(t *testing.T) {
+	t.Parallel()
+
+	deps := defaultEmulatorRuntimeDependencies()
+	if deps.dataPlaneRegistry.JetStream.Ingested.SubjectPrefix == "" {
+		t.Fatal("expected dataplane registry to expose ingested subject prefix")
+	}
+	if deps.configctlRegistry.EmulatorRuntimeChanged.Durable == "" {
+		t.Fatal("expected configctl registry to expose emulator runtime refresh durable")
 	}
 }
 

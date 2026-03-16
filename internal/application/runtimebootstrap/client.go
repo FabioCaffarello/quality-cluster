@@ -24,6 +24,7 @@ const DefaultPollInterval = 5 * time.Second
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	registry   dataplaneapp.Registry
 }
 
 type WaitOptions struct {
@@ -108,11 +109,16 @@ func (b ActiveIngestionBootstrap) RuntimeRefs() []string {
 }
 
 func NewClient(baseURL string, timeout time.Duration) *Client {
+	return NewClientWithRegistry(baseURL, timeout, dataplaneapp.DefaultRegistry())
+}
+
+func NewClientWithRegistry(baseURL string, timeout time.Duration, registry dataplaneapp.Registry) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		registry: registry,
 	}
 }
 
@@ -185,7 +191,7 @@ func (c *Client) waitForActiveIngestionBootstrap(ctx context.Context, logger *sl
 	for {
 		reply, prob := c.ListActiveIngestionBindings(requestctx.WithCorrelationID(ctx, correlationID), query)
 		if prob == nil && len(reply.Bindings) > 0 {
-			return buildActiveIngestionBootstrap(reply)
+			return buildActiveIngestionBootstrap(reply, c.registry)
 		}
 
 		switch {
@@ -207,7 +213,7 @@ func (c *Client) waitForActiveIngestionBootstrap(ctx context.Context, logger *sl
 	}
 }
 
-func buildActiveIngestionBootstrap(reply configctlcontracts.ListActiveIngestionBindingsReply) (ActiveIngestionBootstrap, *problem.Problem) {
+func buildActiveIngestionBootstrap(reply configctlcontracts.ListActiveIngestionBindingsReply, registry dataplaneapp.Registry) (ActiveIngestionBootstrap, *problem.Problem) {
 	runtimes, prob := validateBootstrapRuntimes(reply.Bindings, reply.Runtimes)
 	if prob != nil {
 		return ActiveIngestionBootstrap{}, prob
@@ -217,7 +223,7 @@ func buildActiveIngestionBootstrap(reply configctlcontracts.ListActiveIngestionB
 	if indexProb != nil {
 		return ActiveIngestionBootstrap{}, indexProb
 	}
-	topology, topologyProb := dataplaneapp.NewRuntimeTopology(index, dataplaneapp.DefaultRegistry())
+	topology, topologyProb := dataplaneapp.NewRuntimeTopology(index, registry)
 	if topologyProb != nil {
 		return ActiveIngestionBootstrap{}, topologyProb
 	}

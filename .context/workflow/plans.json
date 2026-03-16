@@ -95,6 +95,22 @@
       "summary": "Consolidar o runtime contract da ingestão com configctl como fonte de verdade, explicitando bindings ativos, tópicos governados, artefatos associados, queries canônicas e superfícies HTTP operacionais estáveis para preparar consumer futuro sem transferir domínio para os serviços de ingestão.",
       "linkedAt": "2026-03-16T16:35:17.288Z",
       "status": "active"
+    },
+    {
+      "slug": "block-3-4-real-dataplane-runtime-hardening",
+      "path": "plans/block-3-4-real-dataplane-runtime-hardening.md",
+      "title": "Block 3-4 Real Dataplane And Runtime Hardening",
+      "summary": "Construir o primeiro data plane real do motor de qualidade e, em seguida, endurecer consumer e validator com ownership claro, registry forte, startup supervisionado e prova e2e local confiável.",
+      "linkedAt": "2026-03-16T20:15:16Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-7-8-quality-language-platform-consolidation",
+      "path": "plans/block-7-8-quality-language-platform-consolidation.md",
+      "title": "Block 7-8 Quality Language Platform Consolidation",
+      "summary": "Expandir a linguagem de qualidade e consolidar a plataforma de engenharia sem mover ownership para fora de configctl, preservando runtime compiled-only no validator e o raccoon-cli como control plane de qualidade.",
+      "linkedAt": "2026-03-16T22:26:38Z",
+      "status": "active"
     }
   ],
   "completed": [],

@@ -1,0 +1,179 @@
+{
+  "decisions": [
+    {
+      "title": "Block 3 must land a real end-to-end dataplane before Block 4 refactoring",
+      "description": "The first priority is a functional and observable flow from emulator to Kafka, consumer to JetStream, validator to ValidationResult, and server-backed operational reads. Runtime hardening must not be used to hide missing functional seams in the dataplane itself.",
+      "phase": "P",
+      "alternatives": [
+        "Start with actor refactoring before the dataplane path is fully proven",
+        "Expand configctl or the DSL to compensate for missing dataplane seams"
+      ],
+      "status": "accepted",
+      "id": "dec-1773692116001",
+      "decidedAt": "2026-03-16T20:15:16Z"
+    },
+    {
+      "title": "Runtime bootstrap bindings remain the canonical dataplane bootstrap seam",
+      "description": "The plan keeps /runtime/ingestion/bindings as the single bootstrap source for emulator and consumer. Configctl remains the owner of active runtime truth, and server remains only the thin operational facade over that seam.",
+      "phase": "P",
+      "alternatives": [
+        "Introduce a new server endpoint only for this block",
+        "Let consumer or validator infer bootstrap truth locally"
+      ],
+      "status": "accepted",
+      "id": "dec-1773692116002",
+      "decidedAt": "2026-03-16T20:15:16Z"
+    },
+    {
+      "title": "The internal dataplane message stays the boundary between Kafka adaptation and validation",
+      "description": "Kafka transport concerns stop at the canonical dataplane.Message boundary. Validation and result production operate on that contract, keeping the adapter Kafka layer separate from validator logic and making the path easier to test and reason about.",
+      "phase": "P",
+      "alternatives": [
+        "Let validator reason directly over Kafka records",
+        "Push richer validation semantics into the consumer adapter"
+      ],
+      "status": "accepted",
+      "id": "dec-1773692116003",
+      "decidedAt": "2026-03-16T20:15:16Z"
+    },
+    {
+      "title": "Block 4 targets ownership, registry, and supervision hardening rather than new feature breadth",
+      "description": "Consumer and validator already have actor decomposition seeds in place. The block should make ownership explicit across consume, route, work, store, and query; strengthen registry-driven wiring; and keep run.go thin, rather than introducing new product behavior prematurely.",
+      "phase": "P",
+      "alternatives": [
+        "Keep growing runtime behavior inside supervisors and run.go",
+        "Use Block 4 to expand rule features instead of hardening runtime structure"
+      ],
+      "status": "accepted",
+      "id": "dec-1773692116004",
+      "decidedAt": "2026-03-16T20:15:16Z"
+    },
+    {
+      "title": "Kafka header normalization and fail-closed topic routing are part of the canonical dataplane boundary",
+      "description": "The first Block 3 execution slice tightens the Kafka-to-canonical-message boundary by normalizing Kafka header keys to the canonical lowercase form and by failing the topic router when no binding can be mapped successfully. This removes a silent-drop path exactly at the dataplane contract seam.",
+      "phase": "E",
+      "alternatives": [
+        "Keep warning-only logging when all mappings fail",
+        "Assume producer headers always arrive in canonical lowercase form"
+      ],
+      "status": "accepted",
+      "id": "dec-1773694000001",
+      "decidedAt": "2026-03-16T20:46:40Z"
+    },
+    {
+      "title": "Synthetic emulator identity now reflects the active binding scope",
+      "description": "The second Block 3 execution slice makes the synthetic record key derive from scope kind, scope key, binding name, sequence, and scenario. This keeps publication controlled by the active binding identity instead of a bare binding name plus counter, improving traceability of emulator-produced traffic.",
+      "phase": "E",
+      "alternatives": [
+        "Keep synthetic keys based only on binding name and sequence",
+        "Add a broader synthetic identity model before the real dataplane is fully closed"
+      ],
+      "status": "accepted",
+      "id": "dec-1773695200002",
+      "decidedAt": "2026-03-16T21:06:40Z"
+    },
+    {
+      "title": "The Kafka-to-canonical bridge now rejects topic drift between record, binding, and route",
+      "description": "The next Block 3 bridge hardening adds explicit topic matching in MapKafkaRecordToBinding. A Kafka record must match both the binding topic and the route Kafka topic before it can become a canonical dataplane message. This keeps the Kafka -> JetStream bridge fail-closed if topology or binding drift appears.",
+      "phase": "E",
+      "alternatives": [
+        "Trust runtime topology to guarantee topic consistency without checking in the mapper",
+        "Allow the router to continue publishing as long as the JetStream subject is present"
+      ],
+      "status": "accepted",
+      "id": "dec-1773696200003",
+      "decidedAt": "2026-03-16T21:23:20Z"
+    },
+    {
+      "title": "Validation results now support an optional server-side status filter",
+      "description": "The runtime results surface now accepts an optional status filter (`passed` or `failed`) through the contracts, validator results store, HTTP handler, and results-inspect client. This keeps operational reads smaller and better aligned with failure-focused troubleshooting without expanding the validator domain model.",
+      "phase": "E",
+      "alternatives": [
+        "Keep failed-only filtering entirely client-side in raccoon-cli",
+        "Add a separate failed-results endpoint instead of extending the existing query contract"
+      ],
+      "status": "accepted",
+      "id": "dec-1773697600004",
+      "decidedAt": "2026-03-16T21:46:40Z"
+    },
+    {
+      "title": "Bootstrap alignment proof must wait for dataplane convergence instead of sampling a single instant",
+      "description": "Live logs showed consumer and emulator converging on the same bootstrap generation with a short refresh gap between them. The happy-path proof now polls bootstrap diagnostics until convergence or timeout, and runtime evidence remains sequential across named smoke scenarios because shared smoke config identity still makes parallel execution unreliable.",
+      "phase": "V",
+      "alternatives": [
+        "Treat transient refresh lag as a runtime regression and keep bootstrap-alignment as a single snapshot",
+        "Drop the bootstrap alignment stage and rely only on logs or trace-pack after the fact"
+      ],
+      "status": "accepted",
+      "id": "dec-1773700200005",
+      "decidedAt": "2026-03-16T21:30:00Z"
+    },
+    {
+      "title": "Consumer runtime now consumes prepared bootstrap topology and explicit dataplane registry",
+      "description": "The first Block 4 hardening slice removes topology rebuild and hidden DefaultDataPlaneRegistry wiring from the consumer runtime actor. Bootstrap remains the owner of prepared runtime topology, while the supervisor explicitly injects the dataplane registry into each runtime generation. This tightens ownership between bootstrap, runtime generation, routing and publication without reintroducing logic into run.go.",
+      "phase": "E",
+      "alternatives": [
+        "Keep letting the runtime actor rebuild topology from the bootstrap index",
+        "Keep the publisher registry hidden behind DefaultDataPlaneRegistry inside the runtime actor"
+      ],
+      "status": "accepted",
+      "id": "dec-1773701400006",
+      "decidedAt": "2026-03-16T21:50:00Z"
+    },
+    {
+      "title": "Validator supervisor now receives runtime bootstrap and registries through explicit seams",
+      "description": "The validator supervisor no longer creates a request client, gateway and multiple Default...Registry instances inline during startup. Runtime projection bootstrap is delegated through an injected loader seam, and runtime, dataplane and query registries are now explicit supervisor dependencies. This removes incidental wiring from the actor and keeps consume, route, work, store and query actors focused on their own ownership.",
+      "phase": "E",
+      "alternatives": [
+        "Keep validator startup wiring procedural inside the supervisor actor",
+        "Move bootstrap logic into run.go instead of introducing explicit seams in the actor layer"
+      ],
+      "status": "accepted",
+      "id": "dec-1773702600007",
+      "decidedAt": "2026-03-16T22:10:00Z"
+    },
+    {
+      "title": "Active ingestion bootstrap now builds topology from an explicit registry seam",
+      "description": "Runtime bootstrap no longer hardcodes dataplane.DefaultRegistry inside the bootstrap client when constructing runtime topology. The bootstrap client and configured helpers now accept an explicit dataplane registry, and emulator bootstrap/refresh reuse the same registry instance for both topology loading and Kafka publication. This keeps registry truth closer to entrypoints and supervisors instead of hiding it inside bootstrap internals.",
+      "phase": "E",
+      "alternatives": [
+        "Keep the bootstrap client coupled to dataplane.DefaultRegistry internally",
+        "Let emulator bootstrap and publish paths derive routes from different registry instances"
+      ],
+      "status": "accepted",
+      "id": "dec-1773703200008",
+      "decidedAt": "2026-03-16T22:20:00Z"
+    },
+    {
+      "title": "Emulator runtime refresh now uses explicit runtime dependencies instead of hidden registry defaults",
+      "description": "The emulator entrypoint now resolves its dataplane and configctl registries through explicit runtime dependencies and uses the same dataplane registry across bootstrap, refresh and synthetic publication. This removes the last hidden DefaultConfigctlRegistry call from the startup path and keeps the runtime refresh seam aligned with the registry-driven bootstrap truth.",
+      "phase": "E",
+      "alternatives": [
+        "Keep the emulator refresh consumer coupled to DefaultConfigctlRegistry inline",
+        "Use separate implicit registries for bootstrap loading and runtime refresh wiring"
+      ],
+      "status": "accepted",
+      "id": "dec-1773704100009",
+      "decidedAt": "2026-03-16T22:35:00Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T20:15:16Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T21:50:00Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T22:35:00Z"
+    },
+    "phase-4": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T22:35:00Z"
+    }
+  },
+  "progress": 100
+}

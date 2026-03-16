@@ -101,6 +101,7 @@ Escalate from `verify` to `check-deep` or `scenario-smoke` when the change affec
 - runtime-change consumers, JetStream durables, or event-driven dataplane refresh
 - `bootstrap.reconcile_interval` or other dataplane self-healing cadence
 - validator runtime cache or result storage/query behavior
+- validator incident storage/query behavior
 
 Operational rule for Compose changes:
 
@@ -119,6 +120,7 @@ The runtime scenarios are not redundant with static checks.
   - control plane only
 - `invalid-payload`
   - validator must produce failure results
+  - validation incidents should also reflect the repeated failed pattern through the incident query surface
 - `missing-binding`
   - absent scope/binding handling
 - `readiness-probe`
@@ -159,7 +161,8 @@ When the cluster or quality-gate fails:
 2. inspect Compose status with `make ps`
 3. inspect service logs with `make logs` or `make logs SERVICE=<name>`
 4. inspect validator outputs with `make results-inspect`
-5. collect a bundle with `make trace-pack`
+5. inspect `/runtime/validator/incidents` when failure patterns need aggregation
+6. collect a bundle with `make trace-pack`
 
 For dataplane refresh issues specifically:
 

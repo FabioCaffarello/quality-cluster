@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/shared/problem"
@@ -38,11 +39,17 @@ func (validationResultsUseCaseStub) Execute(context.Context, validatorresultscon
 	return validatorresultscontracts.ListValidationResultsReply{}, nil
 }
 
+type validationIncidentsUseCaseStub struct{}
+
+func (validationIncidentsUseCaseStub) Execute(context.Context, validatorincidentscontracts.ListValidationIncidentsQuery) (validatorincidentscontracts.ListValidationIncidentsReply, *problem.Problem) {
+	return validatorincidentscontracts.ListValidationIncidentsReply{}, nil
+}
+
 func TestRuntimeRoutesRegisterHandlers(t *testing.T) {
 	t.Parallel()
 
 	router := httprouter.New()
-	for _, route := range RuntimeWithValidationResults(runtimeUseCaseStub{}, runtimeProjectionsUseCaseStub{}, ingestionBindingsUseCaseStub{}, validationResultsUseCaseStub{}) {
+	for _, route := range RuntimeWithValidationResults(runtimeUseCaseStub{}, runtimeProjectionsUseCaseStub{}, ingestionBindingsUseCaseStub{}, validationResultsUseCaseStub{}, validationIncidentsUseCaseStub{}) {
 		router.HandlerFunc(route.Method, route.Path, route.Handler)
 	}
 
@@ -74,6 +81,15 @@ func TestRuntimeRoutesRegisterHandlers(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/runtime/validator/results", nil)
+	rec = httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/runtime/validator/incidents", nil)
 	rec = httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	configctlcontracts "internal/application/configctl/contracts"
+	validatorincidentscontracts "internal/application/validatorincidents/contracts"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	"internal/shared/problem"
@@ -20,6 +21,7 @@ type RuntimeWebHandler struct {
 	listActiveRuntimeProjections listActiveRuntimeProjectionsUseCase
 	listActiveIngestionBindings  listActiveIngestionBindingsUseCase
 	listValidationResults        listValidationResultsUseCase
+	listValidationIncidents      listValidationIncidentsUseCase
 }
 
 type listActiveRuntimeProjectionsUseCase interface {
@@ -34,12 +36,17 @@ type listValidationResultsUseCase interface {
 	Execute(context.Context, validatorresultscontracts.ListValidationResultsQuery) (validatorresultscontracts.ListValidationResultsReply, *problem.Problem)
 }
 
-func NewRuntimeWebHandler(getActiveRuntime getValidatorRuntimeUseCase, listActiveRuntimeProjections listActiveRuntimeProjectionsUseCase, listActiveIngestionBindings listActiveIngestionBindingsUseCase, listValidationResults listValidationResultsUseCase) *RuntimeWebHandler {
+type listValidationIncidentsUseCase interface {
+	Execute(context.Context, validatorincidentscontracts.ListValidationIncidentsQuery) (validatorincidentscontracts.ListValidationIncidentsReply, *problem.Problem)
+}
+
+func NewRuntimeWebHandler(getActiveRuntime getValidatorRuntimeUseCase, listActiveRuntimeProjections listActiveRuntimeProjectionsUseCase, listActiveIngestionBindings listActiveIngestionBindingsUseCase, listValidationResults listValidationResultsUseCase, listValidationIncidents listValidationIncidentsUseCase) *RuntimeWebHandler {
 	return &RuntimeWebHandler{
 		getActiveRuntime:             getActiveRuntime,
 		listActiveRuntimeProjections: listActiveRuntimeProjections,
 		listActiveIngestionBindings:  listActiveIngestionBindings,
 		listValidationResults:        listValidationResults,
+		listValidationIncidents:      listValidationIncidents,
 	}
 }
 
@@ -114,9 +121,39 @@ func (h *RuntimeWebHandler) ListValidationResults(w http.ResponseWriter, r *http
 		ScopeKey:      r.URL.Query().Get("scope_key"),
 		BindingName:   r.URL.Query().Get("binding_name"),
 		Topic:         r.URL.Query().Get("topic"),
+		Status:        validatorresultscontracts.ValidationStatus(r.URL.Query().Get("status")),
 		MessageID:     r.URL.Query().Get("message_id"),
 		CorrelationID: r.URL.Query().Get("correlation_id"),
 		Limit:         limit,
+	})
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, reply)
+}
+
+func (h *RuntimeWebHandler) ListValidationIncidents(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.listValidationIncidents == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "validation incidents lookup is unavailable"))
+		return
+	}
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if r.URL.Query().Get("limit") != "" && err != nil {
+		writeProblemResponse(w, problem.New(problem.InvalidArgument, "limit must be a valid integer"))
+		return
+	}
+
+	reply, prob := h.listValidationIncidents.Execute(withCorrelationID(r), validatorincidentscontracts.ListValidationIncidentsQuery{
+		ScopeKind:   r.URL.Query().Get("scope_kind"),
+		ScopeKey:    r.URL.Query().Get("scope_key"),
+		BindingName: r.URL.Query().Get("binding_name"),
+		Topic:       r.URL.Query().Get("topic"),
+		Kind:        validatorincidentscontracts.ValidationIncidentKind(r.URL.Query().Get("kind")),
+		Status:      validatorincidentscontracts.ValidationIncidentStatus(r.URL.Query().Get("status")),
+		Limit:       limit,
 	})
 	if prob != nil {
 		writeProblemResponse(w, prob)

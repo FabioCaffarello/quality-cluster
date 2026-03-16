@@ -75,7 +75,7 @@ func BuildSyntheticRecord(binding configctlcontracts.ActiveIngestionBindingRecor
 	}
 
 	return SyntheticRecord{
-		Key:      syntheticKey(binding.Binding.Name, input.Sequence, input.Scenario),
+		Key:      syntheticKey(binding, input.Sequence, input.Scenario),
 		Payload:  json.RawMessage(data),
 		Scenario: input.Scenario,
 	}, nil
@@ -96,6 +96,34 @@ func syntheticValue(bindingName string, field configctlcontracts.FieldRecord, no
 	}
 }
 
-func syntheticKey(bindingName string, sequence int64, scenario SyntheticScenario) string {
-	return fmt.Sprintf("%s-%d-%s", strings.TrimSpace(bindingName), sequence, strings.TrimSpace(string(scenario)))
+func syntheticKey(binding configctlcontracts.ActiveIngestionBindingRecord, sequence int64, scenario SyntheticScenario) string {
+	scopeKind := syntheticKeyToken(binding.Runtime.Scope.Kind, "global")
+	scopeKey := syntheticKeyToken(binding.Runtime.Scope.Key, "default")
+	bindingName := syntheticKeyToken(binding.Binding.Name, "binding")
+	return fmt.Sprintf("%s-%s-%s-%d-%s", scopeKind, scopeKey, bindingName, sequence, strings.TrimSpace(string(scenario)))
+}
+
+func syntheticKeyToken(value, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return fallback
+	}
+
+	var builder strings.Builder
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		default:
+			builder.WriteByte('-')
+		}
+	}
+
+	token := strings.Trim(builder.String(), "-")
+	if token == "" {
+		return fallback
+	}
+	return token
 }

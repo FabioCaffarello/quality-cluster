@@ -115,3 +115,65 @@ func TestTopicRouterActorRoutesAllBindingsForTopic(t *testing.T) {
 		t.Fatalf("unexpected second subject: %+v", published.Messages[1].Route)
 	}
 }
+
+func TestTopicRouterActorFailsWhenNoBindingCanBeMapped(t *testing.T) {
+	t.Parallel()
+
+	engine, err := actorcommon.NewDefaultEngine()
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	publisherPID := engine.Spawn(func() actor.Receiver { return &publisherProbeActor{} }, "publisher-probe-fail")
+	routerPID := engine.Spawn(NewTopicRouterActor(TopicRouterConfig{
+		Topic: dataplaneapp.TopicTopology{
+			Topic: "sales.order.created",
+			Bindings: []dataplaneapp.RoutedBinding{
+				{
+					Binding: configctlcontracts.ActiveIngestionBindingRecord{
+						Binding: configctlcontracts.BindingRecord{Name: "orders", Topic: "sales.order.created"},
+						Runtime: sharedruntime.RuntimeRecord{
+							Scope:  sharedruntime.ScopeRecord{Kind: "global", Key: "default"},
+							Config: sharedruntime.ConfigRecord{VersionID: "cfg-1", DefinitionChecksum: "sum-1"},
+						},
+					},
+					Route: dataplaneapp.BindingRoute{
+						KafkaTopic: "sales.order.created",
+					},
+				},
+			},
+		},
+		PublisherPID:   publisherPID,
+		RequestTimeout: time.Second,
+	}), "topic-router-fail")
+
+	result, err := engine.Request(routerPID, routeKafkaMessageMessage{
+		Message: adapterkafka.Message{
+			Topic:     "sales.order.created",
+			Key:       []byte("order-1"),
+			Value:     []byte(`{"order_id":"1"}`),
+			Partition: 1,
+			Offset:    10,
+			Timestamp: time.Unix(10, 0).UTC(),
+		},
+		IngestedAt: time.Unix(20, 0).UTC(),
+	}, time.Second).Result()
+	if err != nil {
+		t.Fatalf("route kafka message: %v", err)
+	}
+
+	reply := result.(routeKafkaMessageResult)
+	if reply.Prob == nil {
+		t.Fatal("expected mapping failure when no binding is publishable")
+	}
+
+	publishedRaw, err := engine.Request(publisherPID, capturePublishedMessagesQuery{}, time.Second).Result()
+	if err != nil {
+		t.Fatalf("query published messages: %v", err)
+	}
+
+	published := publishedRaw.(capturePublishedMessagesResult)
+	if len(published.Messages) != 0 {
+		t.Fatalf("expected no published messages, got %+v", published.Messages)
+	}
+}

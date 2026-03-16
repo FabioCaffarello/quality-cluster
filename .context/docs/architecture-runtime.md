@@ -87,6 +87,7 @@ Relevant code paths:
 2. Runtime queries traverse NATS gateways into configctl or validator responders according to ownership.
 3. `configctl` serves the active runtime truth and the active ingestion binding set.
 4. The validator serves runtime state from its runtime cache and validation results from its results store.
+5. Validation incidents are an operational view derived from validator-owned result state; they are not an alerting engine and they do not move runtime ownership out of the validator.
 
 This means the HTTP layer is intentionally thin. It is a transport facade over NATS-backed application contracts, not the owner of runtime state. The separation is deliberate:
 
@@ -100,6 +101,9 @@ This means the HTTP layer is intentionally thin. It is a transport facade over N
   - validator loaded-state only, not source of truth
 - `/runtime/validator/results`
   - validation output, not runtime ownership
+- `/runtime/validator/incidents`
+  - compact operational incident view derived from validation output
+  - remains a validator surface, while future alerting stays out of scope and out of runtime ownership
 
 ### Dataplane validation path
 

@@ -89,3 +89,10 @@ X-Correlation-ID: {{correlationId}}
 GET {{baseUrl}}/runtime/validator/results?scope_kind=global&scope_key=default&limit=10
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
+
+###
+
+### 10. Confirm aggregated validation incidents for the active scope
+GET {{baseUrl}}/runtime/validator/incidents?scope_kind=global&scope_key=default&limit=10
+Accept: application/json
+X-Correlation-ID: {{correlationId}}

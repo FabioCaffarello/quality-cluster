@@ -29,7 +29,8 @@ func TestListValidationResultsUseCaseCallsGateway(t *testing.T) {
 	}
 
 	reply, prob := NewListValidationResultsUseCase(gateway).Execute(context.Background(), validatorresultscontracts.ListValidationResultsQuery{
-		Limit: 5,
+		Limit:  5,
+		Status: validatorresultscontracts.ValidationStatusFailed,
 	})
 	if prob != nil {
 		t.Fatalf("list validation results: %v", prob)
@@ -37,7 +38,7 @@ func TestListValidationResultsUseCaseCallsGateway(t *testing.T) {
 	if len(reply.Results) != 1 || reply.Results[0].MessageID != "msg-1" {
 		t.Fatalf("unexpected results reply %+v", reply.Results)
 	}
-	if gateway.query.ScopeKind != "global" || gateway.query.ScopeKey != "default" || gateway.query.Limit != 5 {
+	if gateway.query.ScopeKind != "global" || gateway.query.ScopeKey != "default" || gateway.query.Status != validatorresultscontracts.ValidationStatusFailed || gateway.query.Limit != 5 {
 		t.Fatalf("unexpected normalized query %+v", gateway.query)
 	}
 }

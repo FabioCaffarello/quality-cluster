@@ -1,6 +1,8 @@
 package contracts
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,13 +23,14 @@ const (
 )
 
 type ListValidationResultsQuery struct {
-	ScopeKind     string `json:"scope_kind,omitempty"`
-	ScopeKey      string `json:"scope_key,omitempty"`
-	BindingName   string `json:"binding_name,omitempty"`
-	Topic         string `json:"topic,omitempty"`
-	MessageID     string `json:"message_id,omitempty"`
-	CorrelationID string `json:"correlation_id,omitempty"`
-	Limit         int    `json:"limit,omitempty"`
+	ScopeKind     string           `json:"scope_kind,omitempty"`
+	ScopeKey      string           `json:"scope_key,omitempty"`
+	BindingName   string           `json:"binding_name,omitempty"`
+	Topic         string           `json:"topic,omitempty"`
+	Status        ValidationStatus `json:"status,omitempty"`
+	MessageID     string           `json:"message_id,omitempty"`
+	CorrelationID string           `json:"correlation_id,omitempty"`
+	Limit         int              `json:"limit,omitempty"`
 }
 
 func (q ListValidationResultsQuery) Normalize() ListValidationResultsQuery {
@@ -35,6 +38,7 @@ func (q ListValidationResultsQuery) Normalize() ListValidationResultsQuery {
 	q.ScopeKey = strings.TrimSpace(q.ScopeKey)
 	q.BindingName = strings.TrimSpace(q.BindingName)
 	q.Topic = strings.TrimSpace(q.Topic)
+	q.Status = ValidationStatus(strings.ToLower(strings.TrimSpace(string(q.Status))))
 	q.MessageID = strings.TrimSpace(q.MessageID)
 	q.CorrelationID = strings.TrimSpace(q.CorrelationID)
 	if q.ScopeKind == "" {
@@ -42,6 +46,9 @@ func (q ListValidationResultsQuery) Normalize() ListValidationResultsQuery {
 	}
 	if q.ScopeKey == "" {
 		q.ScopeKey = "default"
+	}
+	if q.Status != "" && q.Status != ValidationStatusPassed && q.Status != ValidationStatusFailed {
+		q.Status = ValidationStatus(strings.TrimSpace(string(q.Status)))
 	}
 	switch {
 	case q.Limit <= 0:
@@ -61,6 +68,9 @@ func (q ListValidationResultsQuery) Validate() *problem.Problem {
 	}
 	if q.ScopeKey == "" {
 		issues = append(issues, problem.ValidationIssue{Field: "scope_key", Message: "must not be empty"})
+	}
+	if q.Status != "" && q.Status != ValidationStatusPassed && q.Status != ValidationStatusFailed {
+		issues = append(issues, problem.ValidationIssue{Field: "status", Message: "must be one of passed or failed", Value: q.Status})
 	}
 	if q.Limit <= 0 {
 		issues = append(issues, problem.ValidationIssue{Field: "limit", Message: "must be greater than zero"})
@@ -98,6 +108,7 @@ type ViolationRecord struct {
 }
 
 type ValidationResultRecord struct {
+	ProcessingKey string                  `json:"processing_key,omitempty"`
 	MessageID     string                  `json:"message_id"`
 	CorrelationID string                  `json:"correlation_id,omitempty"`
 	Binding       ValidationBindingRecord `json:"binding"`
@@ -109,6 +120,9 @@ type ValidationResultRecord struct {
 
 func (r ValidationResultRecord) Validate() *problem.Problem {
 	var issues []problem.ValidationIssue
+	if strings.TrimSpace(r.NormalizedProcessingKey()) == "" {
+		issues = append(issues, problem.ValidationIssue{Field: "processing_key", Message: "must not be empty"})
+	}
 	if strings.TrimSpace(r.MessageID) == "" {
 		issues = append(issues, problem.ValidationIssue{Field: "message_id", Message: "must not be empty"})
 	}
@@ -146,4 +160,56 @@ func (r ValidationResultRecord) Validate() *problem.Problem {
 		return nil
 	}
 	return problem.Validation(problem.InvalidArgument, "validation result is invalid", issues...)
+}
+
+func (r ValidationResultRecord) NormalizedProcessingKey() string {
+	if key := strings.TrimSpace(r.ProcessingKey); key != "" {
+		return key
+	}
+	return BuildValidationProcessingKey(r.MessageID, r.Binding, r.Config)
+}
+
+func BuildValidationProcessingKey(messageID string, binding ValidationBindingRecord, config ValidationConfigRecord) string {
+	messageID = strings.TrimSpace(messageID)
+	scopeKind := strings.TrimSpace(binding.Scope.Kind)
+	scopeKey := strings.TrimSpace(binding.Scope.Key)
+	bindingName := strings.TrimSpace(binding.Name)
+	bindingTopic := strings.TrimSpace(binding.Topic)
+	configVersionID := strings.TrimSpace(config.VersionID)
+	configChecksum := strings.TrimSpace(config.DefinitionChecksum)
+
+	parts := []string{
+		messageID,
+		scopeKind,
+		scopeKey,
+		bindingName,
+		bindingTopic,
+		configVersionID,
+		configChecksum,
+	}
+	for _, part := range parts {
+		if part != "" {
+			return strings.Join(parts, "|")
+		}
+	}
+	return ""
+}
+
+func BuildViolationFingerprint(violations []ViolationRecord) string {
+	if len(violations) == 0 {
+		return ""
+	}
+
+	fingerprints := make([]string, 0, len(violations))
+	for _, violation := range violations {
+		fingerprints = append(fingerprints, fmt.Sprintf(
+			"%s:%s:%s:%s",
+			strings.TrimSpace(violation.Rule),
+			strings.TrimSpace(violation.Field),
+			strings.TrimSpace(violation.Operator),
+			strings.TrimSpace(violation.Severity),
+		))
+	}
+	sort.Strings(fingerprints)
+	return strings.Join(fingerprints, ",")
 }

@@ -8,7 +8,6 @@ import (
 	actorcommon "internal/actors/common"
 	adapterkafka "internal/adapters/kafka"
 	adapternats "internal/adapters/nats"
-	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
 	"internal/shared/settings"
 
@@ -16,17 +15,16 @@ import (
 )
 
 type ConsumerRuntimeConfig struct {
-	AppConfig  settings.AppConfig
-	Generation int
-	Bootstrap  runtimebootstrap.ActiveIngestionBootstrap
-	Registry   dataplaneapp.Registry
-	Source     string
+	AppConfig         settings.AppConfig
+	Generation        int
+	Bootstrap         runtimebootstrap.ActiveIngestionBootstrap
+	DataPlaneRegistry adapternats.DataPlaneRegistry
+	Source            string
 }
 
 type ConsumerRuntimeActor struct {
 	cfg          ConsumerRuntimeConfig
 	logger       *slog.Logger
-	topology     dataplaneapp.RuntimeTopology
 	publisherPID *actor.PID
 	routerPIDs   map[string]*actor.PID
 }
@@ -44,23 +42,18 @@ func NewConsumerRuntimeActor(cfg ConsumerRuntimeConfig) actor.Producer {
 func (a *ConsumerRuntimeActor) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
 	case actor.Started:
-		a.topology = a.cfg.Bootstrap.Topology
-		if len(a.topology.Topics()) == 0 {
-			rebuilt, prob := dataplaneapp.NewRuntimeTopology(a.cfg.Bootstrap.Index, a.cfg.Registry)
-			if prob != nil {
-				a.fail(c, prob)
-				return
-			}
-			a.topology = rebuilt
+		if a.cfg.Bootstrap.Topology.BindingCount() == 0 {
+			a.fail(c, fmt.Errorf("bootstrap topology is unavailable"))
+			return
 		}
 
 		a.publisherPID = c.SpawnChild(NewDataPlanePublisherActor(DataPlanePublisherConfig{
 			URL:      a.cfg.AppConfig.NATS.URL,
 			Source:   a.cfg.Source,
-			Registry: adapternats.DefaultDataPlaneRegistry(),
+			Registry: a.cfg.DataPlaneRegistry,
 		}), "publisher")
 
-		for _, topic := range a.topology.Topics() {
+		for _, topic := range a.cfg.Bootstrap.Topology.Topics() {
 			a.routerPIDs[topic.Topic] = c.SpawnChild(NewTopicRouterActor(TopicRouterConfig{
 				Topic:          topic,
 				PublisherPID:   a.publisherPID,
@@ -83,11 +76,12 @@ func (a *ConsumerRuntimeActor) Receive(c *actor.Context) {
 }
 
 func (a *ConsumerRuntimeActor) startTopicConsumers(c *actor.Context) {
-	if len(a.topology.Topics()) == 0 {
+	topology := a.cfg.Bootstrap.Topology
+	if len(topology.Topics()) == 0 {
 		return
 	}
 
-	if err := adapterkafka.EnsureTopics(c.Context(), a.cfg.AppConfig.Kafka.Brokers, a.topology.TopicNames(), a.cfg.AppConfig.Kafka.DialTimeoutDuration()); err != nil {
+	if err := adapterkafka.EnsureTopics(c.Context(), a.cfg.AppConfig.Kafka.Brokers, topology.TopicNames(), a.cfg.AppConfig.Kafka.DialTimeoutDuration()); err != nil {
 		a.fail(c, err)
 		return
 	}
@@ -97,7 +91,7 @@ func (a *ConsumerRuntimeActor) startTopicConsumers(c *actor.Context) {
 		return
 	}
 
-	for _, topic := range a.topology.Topics() {
+	for _, topic := range topology.Topics() {
 		routerPID := a.routerPIDs[topic.Topic]
 		if routerPID == nil {
 			a.fail(c, fmt.Errorf("router for topic %s is unavailable", topic.Topic))
@@ -114,7 +108,7 @@ func (a *ConsumerRuntimeActor) startTopicConsumers(c *actor.Context) {
 
 	c.Send(c.Parent(), consumerRuntimeReadyMessage{
 		Generation:         a.cfg.Generation,
-		Topology:           a.topology,
+		Topology:           topology,
 		BootstrapSignature: a.cfg.Bootstrap.Signature(),
 		RuntimeRefs:        a.cfg.Bootstrap.RuntimeRefs(),
 	})
