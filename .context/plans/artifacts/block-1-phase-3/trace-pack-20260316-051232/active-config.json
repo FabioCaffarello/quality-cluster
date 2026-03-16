@@ -1,0 +1,71 @@
+{
+  "config": {
+    "active_scopes": [
+      {
+        "key": "default",
+        "kind": "global"
+      }
+    ],
+    "artifact": {
+      "checksum": "1d4f36d482fe473e1ea56477482ebb612badc7952e1511e25f1dd3669947c5ac",
+      "compiler_version": "configctl-sync/v1",
+      "created_at": "2026-03-16T05:11:38Z",
+      "id": "11d9b44a4da78758068133859569fdce",
+      "runtime_loader": "validator:v1",
+      "schema_version": "runtime/v1",
+      "storage_ref": "memory://configctl/artifacts/db7a2aa07f51f34631483000940d322f/bd78baa33b4840a3a11af7d68bd82ab6"
+    },
+    "bindings": [
+      {
+        "name": "smoke_events",
+        "topic": "smoke.events.created"
+      }
+    ],
+    "config_key": "scenario-lifecycle",
+    "config_set_id": "db7a2aa07f51f34631483000940d322f",
+    "created_at": "2026-03-16T05:11:38Z",
+    "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+    "fields": [
+      {
+        "name": "event_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "name": "status",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "name": "amount",
+        "type": "number"
+      }
+    ],
+    "format": "json",
+    "id": "bd78baa33b4840a3a11af7d68bd82ab6",
+    "lifecycle": "active",
+    "metadata": {
+      "description": "raccoon-cli runtime smoke test config",
+      "name": "Smoke Test"
+    },
+    "rules": [
+      {
+        "field": "event_id",
+        "name": "event_id_required",
+        "operator": "required",
+        "severity": "error"
+      },
+      {
+        "field": "status",
+        "name": "status_not_empty",
+        "operator": "not_empty",
+        "severity": "error"
+      }
+    ],
+    "source": "{\"bindings\":[{\"name\":\"smoke_events\",\"topic\":\"smoke.events.created\"}],\"fields\":[{\"name\":\"event_id\",\"required\":true,\"type\":\"string\"},{\"name\":\"status\",\"required\":true,\"type\":\"string\"},{\"name\":\"amount\",\"required\":false,\"type\":\"number\"}],\"metadata\":{\"description\":\"raccoon-cli runtime smoke test config\",\"name\":\"Smoke Test\"},\"rules\":[{\"field\":\"event_id\",\"name\":\"event_id_required\",\"operator\":\"required\",\"severity\":\"error\"},{\"field\":\"status\",\"name\":\"status_not_empty\",\"operator\":\"not_empty\",\"severity\":\"error\"}]}",
+    "source_checksum": "e978c0d2701557d97470091ac53a32556d26c7a05de41e55bc44fdf962b84230",
+    "updated_at": "2026-03-16T05:11:38Z",
+    "validated_at": "2026-03-16T05:11:38Z",
+    "version": 1
+  }
+}

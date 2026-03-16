@@ -141,9 +141,7 @@ fn extract_control_specs(source: &str, file: &str, out: &mut Vec<ControlSpec>) {
                 let reply_type = extract_string_field(block, "ReplyType");
                 let queue_group = extract_string_field(block, "QueueGroup");
 
-                if let (Some(subj), Some(req), Some(rep)) =
-                    (subject, request_type, reply_type)
-                {
+                if let (Some(subj), Some(req), Some(rep)) = (subject, request_type, reply_type) {
                     out.push(ControlSpec {
                         name: name.unwrap_or_else(|| "unknown".into()),
                         subject: subj,
@@ -302,8 +300,8 @@ fn extract_dataplane_registry(source: &str, file: &str, index: &mut RegistryInde
             let _validator_durable = extract_string_field(block, "ValidatorDurable");
 
             // SubjectPrefix and SubjectPattern may reference the const, not be string literals
-            let subject_prefix = extract_string_field(block, "SubjectPrefix")
-                .or_else(|| const_prefix.clone());
+            let subject_prefix =
+                extract_string_field(block, "SubjectPrefix").or_else(|| const_prefix.clone());
 
             // SubjectPattern is often `subjectPrefix + ".>"` — resolve it
             let subject_pattern = extract_string_field(block, "SubjectPattern")
@@ -565,8 +563,12 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
         let mut specs = Vec::new();
         extract_event_specs(SAMPLE_REGISTRY, "test.go", &mut specs);
         // Should find DraftCreated and the nested one in ConsumerSpec
-        assert!(specs.iter().any(|s| s.subject == "configctl.events.config.draft_created"));
-        assert!(specs.iter().any(|s| s.event_type == "configctl.event.config.draft_created"));
+        assert!(specs
+            .iter()
+            .any(|s| s.subject == "configctl.events.config.draft_created"));
+        assert!(specs
+            .iter()
+            .any(|s| s.event_type == "configctl.event.config.draft_created"));
     }
 
     #[test]
@@ -584,7 +586,9 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
         extract_consumer_specs(SAMPLE_REGISTRY, "test.go", &mut specs);
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].durable, "validator-runtime-cache-v1");
-        assert!(specs[0].filter_subjects.contains(&"configctl.events.config.activated".to_string()));
+        assert!(specs[0]
+            .filter_subjects
+            .contains(&"configctl.events.config.activated".to_string()));
     }
 
     #[test]
@@ -593,15 +597,27 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
             Subject:     "foo.bar.baz",
             RequestType: "foo.command.baz",
         "#;
-        assert_eq!(extract_string_field(block, "Subject"), Some("foo.bar.baz".into()));
-        assert_eq!(extract_string_field(block, "RequestType"), Some("foo.command.baz".into()));
+        assert_eq!(
+            extract_string_field(block, "Subject"),
+            Some("foo.bar.baz".into())
+        );
+        assert_eq!(
+            extract_string_field(block, "RequestType"),
+            Some("foo.command.baz".into())
+        );
         assert_eq!(extract_string_field(block, "Missing"), None);
     }
 
     #[test]
     fn extract_field_name_works() {
-        assert_eq!(extract_field_name("        CreateDraft: "), Some("CreateDraft".into()));
-        assert_eq!(extract_field_name("    GetConfig: "), Some("GetConfig".into()));
+        assert_eq!(
+            extract_field_name("        CreateDraft: "),
+            Some("CreateDraft".into())
+        );
+        assert_eq!(
+            extract_field_name("    GetConfig: "),
+            Some("GetConfig".into())
+        );
     }
 
     #[test]

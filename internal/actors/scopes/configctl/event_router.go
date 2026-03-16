@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	adapternats "internal/adapters/nats"
 
 	"github.com/anthdm/hollywood/actor"
@@ -58,6 +59,9 @@ func (a *EventRouterActor) Receive(c *actor.Context) {
 			c.Send(sender, reply)
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("configctl event router: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

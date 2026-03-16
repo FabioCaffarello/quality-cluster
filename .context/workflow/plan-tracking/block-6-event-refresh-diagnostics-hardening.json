@@ -1,0 +1,55 @@
+{
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:30:43.141Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:30:43.366Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:42:31.471Z"
+    }
+  },
+  "progress": 100,
+  "decisions": [
+    {
+      "title": "Static proof parity for event-driven refresh is part of Block 6 baseline",
+      "description": "After Block 5, the next highest-value gap was not new runtime wiring but stale quality-engine assumptions. Topology-doctor, runtime-bindings, and drift-detect now treat emulator NATS dependency and consumer/emulator refresh durables as first-class invariants before the block moves on to deeper live diagnostics.",
+      "phase": "E",
+      "alternatives": [
+        "Leave the new durables visible only to runtime smoke",
+        "Skip analyzer updates and rely only on contract-audit plus scenario-smoke"
+      ],
+      "status": "accepted",
+      "id": "dec-1773675043371",
+      "decidedAt": "2026-03-16T15:30:43.371Z"
+    },
+    {
+      "title": "Trace-pack must expose NATS monitor state for event-driven refresh diagnostics",
+      "description": "Block 6 phase 3 established that trace-pack should collect NATS monitor health and JetStream state alongside app endpoints. Event-driven refresh failures are no longer diagnosable only through service logs; missing NATS monitor, missing jsz data, or missing validator runtime now show up as explicit evidence items.",
+      "phase": "V",
+      "alternatives": [
+        "Keep trace-pack limited to compose status, app endpoints, configs, and logs",
+        "Rely only on scenario-smoke output for event-driven refresh failures"
+      ],
+      "status": "accepted",
+      "id": "dec-1773675580253",
+      "decidedAt": "2026-03-16T15:39:40.253Z"
+    },
+    {
+      "title": "Block 6 closes only with dual-path proof through raccoon-cli",
+      "description": "Phase 3 closed after proving both operational edges through the same quality engine. With the cluster absent, scenario-smoke and trace-pack now fail fast and expose missing services plus NATS monitor evidence. With the cluster healthy, happy-path and check-deep pass end-to-end, so refresh-oriented diagnostics are no longer only more verbose; they are validated in the canonical raccoon-cli workflow.",
+      "phase": "V",
+      "alternatives": [
+        "Stop after readiness-probe and trace-pack improvements without rerunning live cluster proof",
+        "Rely on service logs and ad hoc smoke instead of closing through happy-path plus quality-gate deep"
+      ],
+      "status": "accepted",
+      "id": "dec-1773675751476",
+      "decidedAt": "2026-03-16T15:42:31.476Z"
+    }
+  ]
+}

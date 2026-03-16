@@ -105,9 +105,10 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
                 report.add(check_fixture_bindings(&fixture_bindings));
                 // Merge fixture bindings with existing ones (if not already present)
                 for fb in fixture_bindings {
-                    let already = index.config_bindings.iter().any(|b| {
-                        b.name == fb.name && b.topic == fb.topic
-                    });
+                    let already = index
+                        .config_bindings
+                        .iter()
+                        .any(|b| b.name == fb.name && b.topic == fb.topic);
                     if !already {
                         index.config_bindings.push(fb);
                     }
@@ -156,16 +157,19 @@ fn resolve_bindings(index: &BindingsIndex) -> Vec<ResolvedBinding> {
 
         // Check if the derived subject falls under a known stream
         if let Some(ref subj) = subject {
-            let covered = source.stream_subjects.iter().any(|(_, patterns)| {
-                patterns.iter().any(|p| subject_matches_pattern(subj, p))
-            });
+            let covered = source
+                .stream_subjects
+                .iter()
+                .any(|(_, patterns)| patterns.iter().any(|p| subject_matches_pattern(subj, p)));
             if !covered {
                 issues.push(format!(
                     "derived subject '{subj}' does not match any stream subscription pattern"
                 ));
             }
         } else {
-            issues.push("could not derive JetStream subject (missing subject prefix in source)".into());
+            issues.push(
+                "could not derive JetStream subject (missing subject prefix in source)".into(),
+            );
         }
 
         // Check if kafka topic appears in consumer config context
@@ -306,7 +310,10 @@ fn check_routing_constants(src: &RuntimeBindingSource) -> CheckResult {
     }
 
     // Check for runtime cache durable
-    if !src.durable_consumers.contains_key("validator-runtime-cache-v1") {
+    if !src
+        .durable_consumers
+        .contains_key("validator-runtime-cache-v1")
+    {
         findings.push(
             Finding::warning(
                 "runtime-cache-durable",
@@ -316,6 +323,28 @@ fn check_routing_constants(src: &RuntimeBindingSource) -> CheckResult {
         );
     }
 
+    for (durable, purpose) in [
+        (
+            "consumer-runtime-refresh-v1",
+            "consumer refreshes aggregate bootstrap when ingestion runtime changes",
+        ),
+        (
+            "emulator-runtime-refresh-v1",
+            "emulator refreshes aggregate bootstrap when ingestion runtime changes",
+        ),
+    ] {
+        if !src.durable_consumers.contains_key(durable) {
+            findings.push(
+                Finding::error(
+                    "runtime-refresh-durable",
+                    format!("{durable} durable consumer not found in source"),
+                )
+                .with_why(purpose)
+                .with_help("check internal/adapters/nats/configctl_registry.go"),
+            );
+        }
+    }
+
     CheckResult::from_findings("routing-constants", findings)
 }
 
@@ -323,9 +352,18 @@ fn check_lifecycle_events(src: &RuntimeBindingSource) -> CheckResult {
     let mut findings = Vec::new();
 
     let expected_events = [
-        ("config.activated", "triggers RuntimeProjection cache update in validator"),
-        ("config.deactivated", "clears cached projection when config is deactivated"),
-        ("config.ingestion_runtime_changed", "notifies consumer to re-bootstrap bindings"),
+        (
+            "config.activated",
+            "triggers RuntimeProjection cache update in validator",
+        ),
+        (
+            "config.deactivated",
+            "clears cached projection when config is deactivated",
+        ),
+        (
+            "config.ingestion_runtime_changed",
+            "notifies consumer and emulator to re-bootstrap bindings",
+        ),
     ];
 
     for (event, purpose) in &expected_events {
@@ -369,7 +407,9 @@ fn check_config_bindings(bindings: &[BindingDefinition]) -> CheckResult {
                     "duplicate-binding",
                     format!("binding '{name}' appears in multiple configs: {configs_str}"),
                 )
-                .with_why("duplicate binding names across configs may cause routing conflicts at runtime"),
+                .with_why(
+                    "duplicate binding names across configs may cause routing conflicts at runtime",
+                ),
             );
         }
     }
@@ -460,13 +500,12 @@ fn check_resolved_bindings(resolved: &[ResolvedBinding]) -> CheckResult {
                 findings.push(
                     Finding::warning(
                         "binding-resolution",
-                        format!("binding '{}' ({}): {}", rb.binding_name, rb.kafka_topic, issue),
+                        format!(
+                            "binding '{}' ({}): {}",
+                            rb.binding_name, rb.kafka_topic, issue
+                        ),
                     )
-                    .with_location(
-                        rb.source_file
-                            .as_deref()
-                            .unwrap_or("config"),
-                    ),
+                    .with_location(rb.source_file.as_deref().unwrap_or("config")),
                 );
             }
             error_count += 1;
@@ -637,7 +676,8 @@ fn check_drift(index: &BindingsIndex) -> CheckResult {
     let mut findings = Vec::new();
 
     // Check: subject prefix in source matches expected convention
-    if !source.subject_prefix.is_empty() && source.subject_prefix != "dataplane.ingestion.received" {
+    if !source.subject_prefix.is_empty() && source.subject_prefix != "dataplane.ingestion.received"
+    {
         findings.push(
             Finding::error(
                 "prefix-drift",
@@ -646,7 +686,9 @@ fn check_drift(index: &BindingsIndex) -> CheckResult {
                     source.subject_prefix
                 ),
             )
-            .with_why("prefix drift means consumer and validator will not agree on JetStream subjects")
+            .with_why(
+                "prefix drift means consumer and validator will not agree on JetStream subjects",
+            )
             .with_help("align the prefix in internal/application/dataplane/registry.go"),
         );
     }
@@ -688,6 +730,22 @@ fn check_drift(index: &BindingsIndex) -> CheckResult {
                 )
                 .with_why("runtime cache durable bound to wrong stream will miss activation events"),
             );
+        }
+    }
+
+    for durable in ["consumer-runtime-refresh-v1", "emulator-runtime-refresh-v1"] {
+        if let Some(stream) = source.durable_consumers.get(durable) {
+            if stream != "CONFIGCTL_EVENTS" {
+                findings.push(
+                    Finding::error(
+                        "runtime-refresh-durable-drift",
+                        format!(
+                            "refresh durable '{durable}' targets stream '{stream}' instead of 'CONFIGCTL_EVENTS'"
+                        ),
+                    )
+                    .with_why("event-driven dataplane refresh depends on CONFIGCTL_EVENTS; wrong stream means runtime changes will be missed"),
+                );
+            }
         }
     }
 
@@ -737,8 +795,22 @@ mod tests {
         );
 
         let mut durable_consumers = HashMap::new();
-        durable_consumers.insert("validator-dataplane-v1".into(), "DATA_PLANE_INGESTION".into());
-        durable_consumers.insert("validator-runtime-cache-v1".into(), "CONFIGCTL_EVENTS".into());
+        durable_consumers.insert(
+            "validator-dataplane-v1".into(),
+            "DATA_PLANE_INGESTION".into(),
+        );
+        durable_consumers.insert(
+            "validator-runtime-cache-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
+        durable_consumers.insert(
+            "consumer-runtime-refresh-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
+        durable_consumers.insert(
+            "emulator-runtime-refresh-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
 
         let mut lifecycle_events = HashSet::new();
         lifecycle_events.insert("config.activated".into());
@@ -1003,9 +1075,10 @@ mod tests {
             issues: vec!["could not derive subject".into()],
         }];
         let result = check_resolved_bindings(&resolved);
-        assert!(result.findings.iter().any(|f| {
-            f.severity == crate::models::Severity::Warning
-        }));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| { f.severity == crate::models::Severity::Warning }));
     }
 
     // ── check_drift ─────────────────────────────────────────────────

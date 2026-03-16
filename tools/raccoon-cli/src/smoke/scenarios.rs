@@ -1,7 +1,7 @@
-use crate::models::{CheckResult, Finding, Report};
 use super::api::ApiClient;
 use super::stages;
 use super::SmokeConfig;
+use crate::models::{CheckResult, Finding, Report};
 use serde::Serialize;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -34,7 +34,7 @@ impl Scenario {
                 "Full E2E: config lifecycle + data plane + validation results (passed + failed)"
             }
             Scenario::ConfigLifecycle => {
-                "Control plane only: draft -> validate -> compile -> activate -> verify active config"
+                "Control plane only: draft -> validate -> compile -> activate -> verify active config/runtime"
             }
             Scenario::InvalidPayload => {
                 "Activate config and verify validator catches invalid payloads (failed results)"
@@ -63,13 +63,10 @@ impl Scenario {
                 "All 7 compose services running (make up-dataplane)",
                 "Emulator producing invalid samples",
             ],
-            Scenario::MissingBinding => &[
-                "Server responding on base-url",
-            ],
-            Scenario::ReadinessProbe => &[
-                "Compose services running",
-                "Server reachable on base-url",
-            ],
+            Scenario::MissingBinding => &["Server responding on base-url"],
+            Scenario::ReadinessProbe => {
+                &["Compose services running", "Server reachable on base-url"]
+            }
         }
     }
 
@@ -156,36 +153,75 @@ fn run_happy_path(config: &SmokeConfig) -> Report {
 /// config-lifecycle: Control plane only — no data plane required.
 fn run_config_lifecycle(config: &SmokeConfig) -> Report {
     let mut report = Report::new("scenario-smoke: config-lifecycle");
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
 
-    // Stage 1: Readiness (reuse existing stage)
+    // Stage 1: Bootstrap core control-plane services.
+    let bootstrap =
+        stages::bootstrap_required(config, &["nats", "configctl", "server"], "make up-core");
+    let bootstrapped = bootstrap.status == crate::models::CheckStatus::Pass;
+    report.add(bootstrap);
+    if !bootstrapped {
+        report.add(CheckResult::skip("readiness", "skipped: bootstrap failed"));
+        report.add(CheckResult::skip(
+            "create-draft",
+            "skipped: bootstrap failed",
+        ));
+        report.add(CheckResult::skip("validate", "skipped: bootstrap failed"));
+        report.add(CheckResult::skip("compile", "skipped: bootstrap failed"));
+        report.add(CheckResult::skip("activate", "skipped: bootstrap failed"));
+        report.add(CheckResult::skip(
+            "verify-active",
+            "skipped: bootstrap failed",
+        ));
+        return report;
+    }
+
+    // Stage 2: Readiness (reuse existing stage)
     let readiness = stages::readiness(config);
     let ready = readiness.status == crate::models::CheckStatus::Pass;
     report.add(readiness);
     if !ready {
-        report.add(CheckResult::skip("create-draft", "skipped: readiness failed"));
+        report.add(CheckResult::skip(
+            "create-draft",
+            "skipped: readiness failed",
+        ));
         report.add(CheckResult::skip("validate", "skipped: readiness failed"));
         report.add(CheckResult::skip("compile", "skipped: readiness failed"));
         report.add(CheckResult::skip("activate", "skipped: readiness failed"));
-        report.add(CheckResult::skip("verify-active", "skipped: readiness failed"));
+        report.add(CheckResult::skip(
+            "verify-active",
+            "skipped: readiness failed",
+        ));
         return report;
     }
 
-    // Stage 2: Create draft
-    let content = stages::smoke_config_content();
-    let draft_resp = match client.create_draft("scenario-lifecycle", &content) {
-        Ok(v) => v,
-        Err(e) => {
-            report.add(CheckResult::from_findings(
-                "create-draft",
-                vec![Finding::error("create-draft", format!("create draft failed: {e}"))],
-            ));
-            skip_remaining(&mut report, &["validate", "compile", "activate", "verify-active"], "create-draft");
-            return report;
-        }
-    };
+    // Stage 3: Create draft
+    let content = stages::smoke_config_content(config);
+    let draft_resp =
+        match client.create_draft(&config.scenario_config_key("scenario-lifecycle"), &content) {
+            Ok(v) => v,
+            Err(e) => {
+                report.add(CheckResult::from_findings(
+                    "create-draft",
+                    vec![Finding::error(
+                        "create-draft",
+                        format!("create draft failed: {e}"),
+                    )],
+                ));
+                skip_remaining(
+                    &mut report,
+                    &["validate", "compile", "activate", "verify-active"],
+                    "create-draft",
+                );
+                return report;
+            }
+        };
 
-    let config_id = match draft_resp.get("id").and_then(|v| v.as_str()) {
+    let config_id = match draft_resp
+        .get("config")
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+    {
         Some(id) => {
             let mut result = CheckResult::pass("create-draft");
             result.findings.push(Finding::info(
@@ -198,116 +234,220 @@ fn run_config_lifecycle(config: &SmokeConfig) -> Report {
         None => {
             report.add(CheckResult::from_findings(
                 "create-draft",
-                vec![Finding::error("create-draft", "response missing 'id' field")],
+                vec![Finding::error(
+                    "create-draft",
+                    "response missing 'config.id' field",
+                )],
             ));
-            skip_remaining(&mut report, &["validate", "compile", "activate", "verify-active"], "create-draft");
+            skip_remaining(
+                &mut report,
+                &["validate", "compile", "activate", "verify-active"],
+                "create-draft",
+            );
             return report;
         }
     };
 
-    // Stage 3: Validate
+    // Stage 4: Validate
     match client.validate_config(&config_id) {
         Ok(resp) => {
-            let valid = resp.get("valid").and_then(|v| v.as_bool()).unwrap_or(false);
+            let validation = resp.get("validation");
+            let valid = validation
+                .and_then(|v| v.get("valid"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if valid {
                 let mut result = CheckResult::pass("validate");
-                result.findings.push(Finding::info("validate", "config validated successfully"));
+                result
+                    .findings
+                    .push(Finding::info("validate", "config validated successfully"));
                 report.add(result);
             } else {
-                let diags = resp.get("diagnostics")
+                let diags = validation
+                    .and_then(|v| v.get("diagnostics"))
                     .and_then(|d| serde_json::to_string(d).ok())
                     .unwrap_or_default();
                 report.add(CheckResult::from_findings(
                     "validate",
-                    vec![Finding::error("validate", format!("validation returned invalid: {diags}"))],
+                    vec![Finding::error(
+                        "validate",
+                        format!("validation returned invalid: {diags}"),
+                    )],
                 ));
-                skip_remaining(&mut report, &["compile", "activate", "verify-active"], "validate");
+                skip_remaining(
+                    &mut report,
+                    &["compile", "activate", "verify-active"],
+                    "validate",
+                );
                 return report;
             }
         }
         Err(e) => {
             report.add(CheckResult::from_findings(
                 "validate",
-                vec![Finding::error("validate", format!("validate request failed: {e}"))],
+                vec![Finding::error(
+                    "validate",
+                    format!("validate request failed: {e}"),
+                )],
             ));
-            skip_remaining(&mut report, &["compile", "activate", "verify-active"], "validate");
+            skip_remaining(
+                &mut report,
+                &["compile", "activate", "verify-active"],
+                "validate",
+            );
             return report;
         }
     }
 
-    // Stage 4: Compile
+    // Stage 5: Compile
     match client.compile_config(&config_id) {
         Ok(resp) => {
-            let has_artifact = resp.get("artifact").is_some();
+            let has_artifact = resp.get("config").and_then(|v| v.get("artifact")).is_some();
             if has_artifact {
                 let mut result = CheckResult::pass("compile");
-                result.findings.push(Finding::info("compile", "compilation artifact generated"));
+                result
+                    .findings
+                    .push(Finding::info("compile", "compilation artifact generated"));
                 report.add(result);
             } else {
                 let mut result = CheckResult::pass("compile");
-                result.findings.push(Finding::info("compile", "compiled (no artifact in response)"));
+                result.findings.push(Finding::info(
+                    "compile",
+                    "compiled (no artifact in response)",
+                ));
                 report.add(result);
             }
         }
         Err(e) => {
             report.add(CheckResult::from_findings(
                 "compile",
-                vec![Finding::error("compile", format!("compile request failed: {e}"))],
+                vec![Finding::error(
+                    "compile",
+                    format!("compile request failed: {e}"),
+                )],
             ));
             skip_remaining(&mut report, &["activate", "verify-active"], "compile");
             return report;
         }
     }
 
-    // Stage 5: Activate
-    if let Err(e) = client.activate_config(&config_id) {
+    // Stage 6: Activate
+    if let Err(e) = client.activate_config(&config_id, &config.scope_kind, &config.scope_key) {
         report.add(CheckResult::from_findings(
             "activate",
-            vec![Finding::error("activate", format!("activate request failed: {e}"))],
+            vec![Finding::error(
+                "activate",
+                format!("activate request failed: {e}"),
+            )],
         ));
         skip_remaining(&mut report, &["verify-active"], "activate");
         return report;
     }
     let mut result = CheckResult::pass("activate");
-    result.findings.push(Finding::info("activate", format!("config {config_id} activated in global:default")));
+    result.findings.push(Finding::info(
+        "activate",
+        format!(
+            "config {config_id} activated in {}:{}",
+            config.scope_kind, config.scope_key
+        ),
+    ));
     report.add(result);
 
-    // Stage 6: Verify active config
-    match client.get_active_config() {
+    // Stage 7: Verify active config plus configctl runtime truth.
+    let mut findings = Vec::new();
+
+    match client.get_active_config(&config.scope_kind, &config.scope_key) {
         Ok(resp) => {
-            let active_id = resp.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let active_id = resp
+                .get("config")
+                .and_then(|v| v.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             if active_id == config_id {
-                let mut result = CheckResult::pass("verify-active");
-                result.findings.push(Finding::info(
+                findings.push(Finding::info(
                     "verify-active",
                     "active config matches the activated version",
                 ));
-                report.add(result);
             } else if !active_id.is_empty() {
-                let mut result = CheckResult::pass("verify-active");
-                result.findings.push(Finding::info(
+                findings.push(Finding::warning(
                     "verify-active",
-                    format!("active config found (id: {active_id})"),
+                    format!(
+                        "active config is present but differs from activated version (active={active_id}, activated={config_id})"
+                    ),
                 ));
-                report.add(result);
             } else {
-                report.add(CheckResult::from_findings(
+                findings.push(Finding::error(
                     "verify-active",
-                    vec![Finding::error(
-                        "verify-active",
-                        "no active config found after activation",
-                    )],
+                    "no active config found after activation",
                 ));
             }
         }
         Err(e) => {
-            report.add(CheckResult::from_findings(
+            findings.push(Finding::error(
                 "verify-active",
-                vec![Finding::error("verify-active", format!("failed to query active config: {e}"))],
+                format!("failed to query active config: {e}"),
             ));
         }
     }
 
+    match client.configctl_runtime_projections(&config.scope_kind, &config.scope_key) {
+        Ok(resp) => {
+            let runtimes = resp.get("runtimes").and_then(|v| v.as_array());
+            let matching_projection = runtimes.and_then(|entries| {
+                entries.iter().find(|entry| {
+                    entry.get("version_id").and_then(|v| v.as_str()) == Some(config_id.as_str())
+                })
+            });
+
+            if let Some(entry) = matching_projection {
+                let bindings = entry
+                    .get("bindings")
+                    .and_then(|v| v.as_array())
+                    .map_or(0, |values| values.len());
+                findings.push(Finding::info(
+                    "verify-active",
+                    format!(
+                        "configctl runtime projection includes activated version with {bindings} bindings"
+                    ),
+                ));
+            } else {
+                let observed_versions = runtimes
+                    .map(|entries| {
+                        entries
+                            .iter()
+                            .filter_map(|entry| entry.get("version_id").and_then(|v| v.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .unwrap_or_default();
+
+                if observed_versions.is_empty() {
+                    findings.push(Finding::error(
+                        "verify-active",
+                        format!(
+                            "configctl runtime projections do not include an active version for {}:{}",
+                            config.scope_kind, config.scope_key
+                        ),
+                    ));
+                } else {
+                    findings.push(Finding::error(
+                        "verify-active",
+                        format!(
+                            "configctl runtime projections do not include activated version {config_id} (observed: {observed_versions})"
+                        ),
+                    ));
+                }
+            }
+        }
+        Err(e) => {
+            findings.push(Finding::error(
+                "verify-active",
+                format!("failed to query configctl runtime projections: {e}"),
+            ));
+        }
+    }
+
+    report.add(CheckResult::from_findings("verify-active", findings));
     report
 }
 
@@ -325,23 +465,29 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
 
     let failed_at = run_stages_sequential(&mut report, &stage_fns, config);
     if failed_at.is_some() {
-        report.add(CheckResult::skip("wait-for-failures", "skipped: prior stage failed"));
-        report.add(CheckResult::skip("verify-violations", "skipped: prior stage failed"));
+        report.add(CheckResult::skip(
+            "wait-for-failures",
+            "skipped: prior stage failed",
+        ));
+        report.add(CheckResult::skip(
+            "verify-violations",
+            "skipped: prior stage failed",
+        ));
         return report;
     }
 
     // Stage 5: Wait specifically for failed validation results
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
     let deadline = Instant::now() + Duration::from_secs(config.results_timeout_secs);
     let interval = Duration::from_millis(config.poll_interval_ms);
 
     let mut found_failed = false;
     while Instant::now() < deadline {
-        if let Ok(resp) = client.validation_results(20) {
+        if let Ok(resp) = client.validation_results(&config.scope_kind, &config.scope_key, 20) {
             if let Some(results) = resp.get("results").and_then(|r| r.as_array()) {
-                found_failed = results.iter().any(|r| {
-                    r.get("status").and_then(|s| s.as_str()) == Some("failed")
-                });
+                found_failed = results
+                    .iter()
+                    .any(|r| r.get("status").and_then(|s| s.as_str()) == Some("failed"));
                 if found_failed {
                     break;
                 }
@@ -370,12 +516,15 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
             .with_why("invalid payloads should be caught by validation rules")
             .with_help("check emulator logs; ensure it produces SyntheticScenarioInvalidMissingField samples")],
         ));
-        report.add(CheckResult::skip("verify-violations", "skipped: no failed results to inspect"));
+        report.add(CheckResult::skip(
+            "verify-violations",
+            "skipped: no failed results to inspect",
+        ));
         return report;
     }
 
     // Stage 6: Verify violation structure
-    match client.validation_results(20) {
+    match client.validation_results(&config.scope_kind, &config.scope_key, 20) {
         Ok(resp) => {
             let results = resp.get("results").and_then(|r| r.as_array());
             let mut findings = Vec::new();
@@ -384,12 +533,19 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
             if let Some(results) = results {
                 for entry in results {
                     if entry.get("status").and_then(|s| s.as_str()) == Some("failed") {
-                        if let Some(violations) = entry.get("violations").and_then(|v| v.as_array()) {
+                        if let Some(violations) = entry.get("violations").and_then(|v| v.as_array())
+                        {
                             if !violations.is_empty() {
                                 has_violations = true;
                                 let violation = &violations[0];
-                                let rule = violation.get("rule").and_then(|r| r.as_str()).unwrap_or("unknown");
-                                let field = violation.get("field").and_then(|f| f.as_str()).unwrap_or("unknown");
+                                let rule = violation
+                                    .get("rule")
+                                    .and_then(|r| r.as_str())
+                                    .unwrap_or("unknown");
+                                let field = violation
+                                    .get("field")
+                                    .and_then(|f| f.as_str())
+                                    .unwrap_or("unknown");
                                 findings.push(Finding::info(
                                     "verify-violations",
                                     format!("violation found: rule={rule}, field={field}"),
@@ -402,10 +558,13 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
             }
 
             if has_violations {
-                findings.insert(0, Finding::info(
-                    "verify-violations",
-                    "failed results contain structured violations with rule/field/severity",
-                ));
+                findings.insert(
+                    0,
+                    Finding::info(
+                        "verify-violations",
+                        "failed results contain structured violations with rule/field/severity",
+                    ),
+                );
                 report.add(CheckResult::from_findings("verify-violations", findings));
             } else {
                 report.add(CheckResult::from_findings(
@@ -420,7 +579,10 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
         Err(e) => {
             report.add(CheckResult::from_findings(
                 "verify-violations",
-                vec![Finding::error("verify-violations", format!("failed to fetch results: {e}"))],
+                vec![Finding::error(
+                    "verify-violations",
+                    format!("failed to fetch results: {e}"),
+                )],
             ));
         }
     }
@@ -431,15 +593,21 @@ fn run_invalid_payload(config: &SmokeConfig) -> Report {
 /// missing-binding: Verify the system handles non-existent queries gracefully.
 fn run_missing_binding(config: &SmokeConfig) -> Report {
     let mut report = Report::new("scenario-smoke: missing-binding");
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
 
     // Stage 1: Readiness
     let readiness = stages::readiness(config);
     let ready = readiness.status == crate::models::CheckStatus::Pass;
     report.add(readiness);
     if !ready {
-        report.add(CheckResult::skip("query-missing-bindings", "skipped: readiness failed"));
-        report.add(CheckResult::skip("query-missing-results", "skipped: readiness failed"));
+        report.add(CheckResult::skip(
+            "query-missing-bindings",
+            "skipped: readiness failed",
+        ));
+        report.add(CheckResult::skip(
+            "query-missing-results",
+            "skipped: readiness failed",
+        ));
         return report;
     }
 
@@ -476,8 +644,12 @@ fn run_missing_binding(config: &SmokeConfig) -> Report {
                     "query-missing-bindings",
                     format!("request failed (expected empty response, not error): {e}"),
                 )
-                .with_why("querying non-existent scopes should return empty results, not HTTP errors")
-                .with_help("check if the /runtime/ingestion/bindings endpoint handles unknown scopes")],
+                .with_why(
+                    "querying non-existent scopes should return empty results, not HTTP errors",
+                )
+                .with_help(
+                    "check if the /runtime/ingestion/bindings endpoint handles unknown scopes",
+                )],
             ));
         }
     }
@@ -514,8 +686,12 @@ fn run_missing_binding(config: &SmokeConfig) -> Report {
                     "query-missing-results",
                     format!("request failed (expected empty response, not error): {e}"),
                 )
-                .with_why("querying non-existent scopes should return empty results, not HTTP errors")
-                .with_help("check if the /runtime/validator/results endpoint handles unknown scopes")],
+                .with_why(
+                    "querying non-existent scopes should return empty results, not HTTP errors",
+                )
+                .with_help(
+                    "check if the /runtime/validator/results endpoint handles unknown scopes",
+                )],
             ));
         }
     }
@@ -575,7 +751,10 @@ fn run_stages_sequential<'a>(
 /// Add skip results for remaining stage names.
 fn skip_remaining(report: &mut Report, names: &[&str], blocker: &str) {
     for name in names {
-        report.add(CheckResult::skip(*name, format!("skipped: {blocker} failed")));
+        report.add(CheckResult::skip(
+            *name,
+            format!("skipped: {blocker} failed"),
+        ));
     }
 }
 
@@ -589,10 +768,22 @@ mod tests {
     #[test]
     fn parse_all_valid_scenarios() {
         assert_eq!(Scenario::parse("happy-path"), Some(Scenario::HappyPath));
-        assert_eq!(Scenario::parse("config-lifecycle"), Some(Scenario::ConfigLifecycle));
-        assert_eq!(Scenario::parse("invalid-payload"), Some(Scenario::InvalidPayload));
-        assert_eq!(Scenario::parse("missing-binding"), Some(Scenario::MissingBinding));
-        assert_eq!(Scenario::parse("readiness-probe"), Some(Scenario::ReadinessProbe));
+        assert_eq!(
+            Scenario::parse("config-lifecycle"),
+            Some(Scenario::ConfigLifecycle)
+        );
+        assert_eq!(
+            Scenario::parse("invalid-payload"),
+            Some(Scenario::InvalidPayload)
+        );
+        assert_eq!(
+            Scenario::parse("missing-binding"),
+            Some(Scenario::MissingBinding)
+        );
+        assert_eq!(
+            Scenario::parse("readiness-probe"),
+            Some(Scenario::ReadinessProbe)
+        );
     }
 
     #[test]
@@ -660,15 +851,19 @@ mod tests {
 
     #[test]
     fn config_lifecycle_fails_when_server_unreachable() {
-        let mut config = SmokeConfig::new(std::path::Path::new("/tmp"), None);
+        let temp = tempfile::tempdir().unwrap();
+        let compose_dir = temp.path().join("deploy/compose");
+        std::fs::create_dir_all(&compose_dir).unwrap();
+        std::fs::write(compose_dir.join("docker-compose.yaml"), "").unwrap();
+
+        let mut config = SmokeConfig::new(temp.path(), None);
         config.base_url = "http://127.0.0.1:19999".to_string();
         config.readiness_timeout_secs = 1;
         config.poll_interval_ms = 200;
         let report = run_scenario(Scenario::ConfigLifecycle, &config);
         assert!(!report.passed());
-        assert_eq!(report.checks[0].name, "readiness");
+        assert_eq!(report.checks[0].name, "bootstrap");
         assert_eq!(report.checks[0].status, CheckStatus::Fail);
-        // Remaining stages should be skipped
         for check in &report.checks[1..] {
             assert_eq!(check.status, CheckStatus::Skip);
         }

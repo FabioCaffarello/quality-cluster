@@ -92,6 +92,7 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
             Ok(ct) => {
                 report.add(check_compose(&ct));
                 report.add(check_compose_dependencies(&ct));
+                report.add(check_compose_runtime_contract(&ct));
                 topo.compose = Some(ct);
             }
             Err(e) => {
@@ -131,6 +132,7 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
     report.add(check_kafka_broker_consistency(&topo));
     report.add(check_nats_url_consistency(&topo));
     report.add(check_bootstrap_url_consistency(&topo));
+    report.add(check_bootstrap_reconcile_consistency(&topo));
     report.add(check_stream_subject_alignment(&topo));
     report.add(check_durable_stream_alignment(&topo));
     report.add(check_pipeline_continuity(&topo));
@@ -172,16 +174,17 @@ fn check_configs(configs: &HashMap<String, ServiceConfig>) -> CheckResult {
             .with_help("add nats.url to deploy/configs/consumer.jsonc"));
         }
         if consumer.kafka_consumer_group.is_none() {
-            findings.push(Finding::warning(
-                "consumer-group",
-                "consumer config has no consumer_group",
-            )
-            .with_why("without a consumer group, Kafka assigns a random one on each restart")
-            .with_help("add kafka.consumer_group to deploy/configs/consumer.jsonc"));
+            findings.push(
+                Finding::warning("consumer-group", "consumer config has no consumer_group")
+                    .with_why(
+                        "without a consumer group, Kafka assigns a random one on each restart",
+                    )
+                    .with_help("add kafka.consumer_group to deploy/configs/consumer.jsonc"),
+            );
         }
     }
 
-    // Emulator must have kafka
+    // Emulator must have kafka and nats
     if let Some(emulator) = configs.get("emulator") {
         if emulator.kafka_brokers.is_empty() {
             findings.push(Finding::error(
@@ -190,6 +193,41 @@ fn check_configs(configs: &HashMap<String, ServiceConfig>) -> CheckResult {
             )
             .with_why("emulator produces test data to Kafka; without it no data enters the pipeline")
             .with_help("add kafka.brokers to deploy/configs/emulator.jsonc"));
+        }
+        if emulator.nats_url.is_none() {
+            findings.push(Finding::error(
+                "emulator-nats",
+                "emulator config has no nats url",
+            )
+            .with_why("emulator now listens for config.ingestion_runtime_changed to refresh aggregate bootstrap; without NATS it stays stale after runtime changes")
+            .with_help("add nats.url to deploy/configs/emulator.jsonc"));
+        }
+    }
+
+    for (service, help_path) in [
+        ("consumer", "deploy/configs/consumer.jsonc"),
+        ("emulator", "deploy/configs/emulator.jsonc"),
+    ] {
+        if let Some(cfg) = configs.get(service) {
+            match cfg.bootstrap_reconcile_interval.as_deref().map(str::trim) {
+                Some("") | None => {
+                    findings.push(Finding::error(
+                        "bootstrap-reconcile-interval",
+                        format!("{service} config has no bootstrap.reconcile_interval"),
+                    )
+                    .with_why("event-driven refresh is primary, but the dataplane now relies on bounded bootstrap reconciliation as the self-healing fallback")
+                    .with_help(format!("add bootstrap.reconcile_interval to {help_path}")));
+                }
+                Some("0s") => {
+                    findings.push(Finding::warning(
+                        "bootstrap-reconcile-interval",
+                        format!("{service} config disables bootstrap reconciliation with 0s"),
+                    )
+                    .with_why("a zero interval removes the fallback path that recovers from missed local runtime-change events")
+                    .with_help(format!("set bootstrap.reconcile_interval to a bounded non-zero duration in {help_path}")));
+                }
+                Some(_) => {}
+            }
         }
     }
 
@@ -210,7 +248,15 @@ fn check_configs(configs: &HashMap<String, ServiceConfig>) -> CheckResult {
 
 fn check_compose(ct: &ComposeTopology) -> CheckResult {
     let mut findings = Vec::new();
-    let expected = ["nats", "kafka", "configctl", "server", "consumer", "emulator", "validator"];
+    let expected = [
+        "nats",
+        "kafka",
+        "configctl",
+        "server",
+        "consumer",
+        "emulator",
+        "validator",
+    ];
 
     for name in &expected {
         if !ct.services.contains_key(*name) {
@@ -231,7 +277,10 @@ fn check_compose_dependencies(ct: &ComposeTopology) -> CheckResult {
 
     let expected_deps: &[(&str, &[&str])] = &[
         ("consumer", &["nats", "server", "kafka"]),
-        ("emulator", &["server", "kafka", "consumer", "validator"]),
+        (
+            "emulator",
+            &["nats", "server", "kafka", "consumer", "validator"],
+        ),
         ("validator", &["nats", "configctl"]),
         ("server", &["nats", "configctl"]),
         ("configctl", &["nats"]),
@@ -241,17 +290,93 @@ fn check_compose_dependencies(ct: &ComposeTopology) -> CheckResult {
         if let Some(svc) = ct.services.get(*service) {
             for dep in *deps {
                 if !svc.depends_on.contains(&dep.to_string()) {
-                    findings.push(Finding::warning(
-                        "compose-dependency",
-                        format!("'{service}' should depend on '{dep}'"),
-                    )
-                    .with_location(format!("docker-compose.yaml:{service}")));
+                    findings.push(
+                        Finding::warning(
+                            "compose-dependency",
+                            format!("'{service}' should depend on '{dep}'"),
+                        )
+                        .with_location(format!("docker-compose.yaml:{service}")),
+                    );
                 }
             }
         }
     }
 
     CheckResult::from_findings("compose-dependencies", findings)
+}
+
+fn check_compose_runtime_contract(ct: &ComposeTopology) -> CheckResult {
+    let mut findings = Vec::new();
+
+    let expected_profiles: &[(&str, &[&str])] = &[
+        ("configctl", &["core", "all"]),
+        ("server", &["core", "all"]),
+        ("validator", &["runtime", "all"]),
+        ("kafka", &["dataplane", "all"]),
+        ("consumer", &["dataplane", "all"]),
+        ("emulator", &["dataplane", "all"]),
+    ];
+
+    for (service, profiles) in expected_profiles {
+        if let Some(svc) = ct.services.get(*service) {
+            for profile in *profiles {
+                if !svc.profiles.iter().any(|current| current == profile) {
+                    findings.push(Finding::error(
+                        "compose-profile",
+                        format!("'{service}' must include compose profile '{profile}'"),
+                    )
+                    .with_location(format!("docker-compose.yaml:{service}"))
+                    .with_why("profile drift breaks `make up-core`, `make up-runtime`, `make up-dataplane` and smoke selection")
+                    .with_help(format!("add '{profile}' to service '{service}' profiles")));
+                }
+            }
+        }
+    }
+
+    let expected_images = [
+        ("nats", "nats:2.10.18-alpine"),
+        ("kafka", "bitnamilegacy/kafka:3.9.0"),
+    ];
+
+    for (service, image) in expected_images {
+        if let Some(svc) = ct.services.get(service) {
+            if svc.image.as_deref() != Some(image) {
+                findings.push(Finding::error(
+                    "compose-image",
+                    format!(
+                        "'{service}' image drifted from '{image}' to '{}'",
+                        svc.image.as_deref().unwrap_or("<missing>")
+                    ),
+                )
+                .with_location(format!("docker-compose.yaml:{service}"))
+                .with_why("the project freezes these broker image families to keep local runtime behavior predictable")
+                .with_help(format!("set service '{service}' image to '{image}'")));
+            }
+        }
+    }
+
+    let expected_ports = [
+        ("nats", "4222:4222"),
+        ("nats", "8222:8222"),
+        ("server", "8080:8080"),
+        ("kafka", "19092:19092"),
+    ];
+
+    for (service, port_fragment) in expected_ports {
+        if let Some(svc) = ct.services.get(service) {
+            if !svc.ports.iter().any(|port| port.contains(port_fragment)) {
+                findings.push(Finding::error(
+                    "compose-port",
+                    format!("'{service}' must expose local port mapping containing '{port_fragment}'"),
+                )
+                .with_location(format!("docker-compose.yaml:{service}"))
+                .with_why("local smoke, trace collection and operator workflows depend on these stable host port mappings")
+                .with_help(format!("restore a port mapping containing '{port_fragment}' for '{service}'")));
+            }
+        }
+    }
+
+    CheckResult::from_findings("compose-runtime-contract", findings)
 }
 
 fn check_source_streams(st: &SourceTopology) -> CheckResult {
@@ -275,7 +400,12 @@ fn check_source_streams(st: &SourceTopology) -> CheckResult {
 fn check_source_durables(st: &SourceTopology) -> CheckResult {
     let mut findings = Vec::new();
 
-    let expected_durables = ["validator-dataplane-v1", "validator-runtime-cache-v1"];
+    let expected_durables = [
+        "validator-dataplane-v1",
+        "validator-runtime-cache-v1",
+        "consumer-runtime-refresh-v1",
+        "emulator-runtime-refresh-v1",
+    ];
     for durable in &expected_durables {
         if !st.durables.contains_key(*durable) {
             findings.push(Finding::error(
@@ -298,10 +428,7 @@ fn check_source_subjects(st: &SourceTopology) -> CheckResult {
     ];
 
     for prefix in &expected_prefixes {
-        let found = st
-            .subjects
-            .iter()
-            .any(|s| s.starts_with(prefix));
+        let found = st.subjects.iter().any(|s| s.starts_with(prefix));
         if !found {
             findings.push(Finding::warning(
                 "subject-prefix",
@@ -457,6 +584,35 @@ fn check_bootstrap_url_consistency(topo: &Topology) -> CheckResult {
     CheckResult::from_findings("bootstrap-url-consistency", findings)
 }
 
+fn check_bootstrap_reconcile_consistency(topo: &Topology) -> CheckResult {
+    let mut findings = Vec::new();
+    let consumer = topo
+        .configs
+        .get("consumer")
+        .and_then(|cfg| cfg.bootstrap_reconcile_interval.clone());
+    let emulator = topo
+        .configs
+        .get("emulator")
+        .and_then(|cfg| cfg.bootstrap_reconcile_interval.clone());
+
+    if let (Some(consumer_interval), Some(emulator_interval)) = (consumer, emulator) {
+        if consumer_interval != emulator_interval {
+            findings.push(Finding::warning(
+                "bootstrap-reconcile-consistency",
+                format!(
+                    "bootstrap.reconcile_interval differs between consumer ({consumer_interval}) and emulator ({emulator_interval})"
+                ),
+            )
+            .with_why("the repository treats dataplane self-healing as a shared operational seam; divergent intervals make refresh recovery harder to reason about")
+            .with_help(
+                "align bootstrap.reconcile_interval in deploy/configs/consumer.jsonc and deploy/configs/emulator.jsonc",
+            ));
+        }
+    }
+
+    CheckResult::from_findings("bootstrap-reconcile-consistency", findings)
+}
+
 fn check_stream_subject_alignment(topo: &Topology) -> CheckResult {
     let mut findings = Vec::new();
     let source = match &topo.source {
@@ -470,9 +626,10 @@ fn check_stream_subject_alignment(topo: &Topology) -> CheckResult {
             // A wildcard pattern like "dataplane.ingestion.received.>" should match
             // concrete subjects starting with the prefix
             let prefix = subject_pattern.trim_end_matches(".>");
-            let has_matching = source.subjects.iter().any(|s| {
-                s.starts_with(prefix) || s == subject_pattern
-            });
+            let has_matching = source
+                .subjects
+                .iter()
+                .any(|s| s.starts_with(prefix) || s == subject_pattern);
             if !has_matching {
                 findings.push(Finding::warning(
                     "stream-subject",
@@ -521,11 +678,14 @@ fn check_pipeline_continuity(topo: &Topology) -> CheckResult {
     ];
 
     for (service, transport, description) in &pipeline {
-        let has_transport = topo.configs.get(*service).map_or(false, |cfg| match *transport {
-            "kafka" => !cfg.kafka_brokers.is_empty(),
-            "nats" => cfg.nats_url.is_some(),
-            _ => false,
-        });
+        let has_transport = topo
+            .configs
+            .get(*service)
+            .map_or(false, |cfg| match *transport {
+                "kafka" => !cfg.kafka_brokers.is_empty(),
+                "nats" => cfg.nats_url.is_some(),
+                _ => false,
+            });
 
         if !has_transport {
             findings.push(Finding::error(
@@ -580,6 +740,7 @@ mod tests {
             kafka_client_id: Some("quality-service-consumer".into()),
             nats_url: Some("nats://nats:4222".into()),
             bootstrap_base_url: Some("http://server:8080".into()),
+            bootstrap_reconcile_interval: Some("30s".into()),
         }
     }
 
@@ -589,8 +750,9 @@ mod tests {
             kafka_brokers: vec!["kafka:9092".into()],
             kafka_consumer_group: None,
             kafka_client_id: Some("quality-service-emulator".into()),
-            nats_url: None,
+            nats_url: Some("nats://nats:4222".into()),
             bootstrap_base_url: Some("http://server:8080".into()),
+            bootstrap_reconcile_interval: Some("30s".into()),
         }
     }
 
@@ -602,6 +764,7 @@ mod tests {
             kafka_client_id: None,
             nats_url: Some("nats://nats:4222".into()),
             bootstrap_base_url: None,
+            bootstrap_reconcile_interval: None,
         }
     }
 
@@ -625,6 +788,14 @@ mod tests {
             "validator-runtime-cache-v1".into(),
             "CONFIGCTL_EVENTS".into(),
         );
+        durables.insert(
+            "consumer-runtime-refresh-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
+        durables.insert(
+            "emulator-runtime-refresh-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
 
         let subjects = vec![
             "dataplane.ingestion.received.>".into(),
@@ -638,6 +809,96 @@ mod tests {
             durables,
             subjects,
         }
+    }
+
+    fn make_compose_topology() -> ComposeTopology {
+        let mut services = HashMap::new();
+
+        services.insert(
+            "nats".into(),
+            compose::ComposeService {
+                name: "nats".into(),
+                image: Some("nats:2.10.18-alpine".into()),
+                depends_on: vec![],
+                profiles: vec![],
+                ports: vec!["127.0.0.1:4222:4222".into(), "127.0.0.1:8222:8222".into()],
+                internal_port: None,
+            },
+        );
+        services.insert(
+            "kafka".into(),
+            compose::ComposeService {
+                name: "kafka".into(),
+                image: Some("bitnamilegacy/kafka:3.9.0".into()),
+                depends_on: vec![],
+                profiles: vec!["dataplane".into(), "all".into()],
+                ports: vec!["127.0.0.1:19092:19092".into()],
+                internal_port: Some("9092".into()),
+            },
+        );
+        services.insert(
+            "configctl".into(),
+            compose::ComposeService {
+                name: "configctl".into(),
+                image: Some("quality-service/configctl:dev".into()),
+                depends_on: vec!["nats".into()],
+                profiles: vec!["core".into(), "all".into()],
+                ports: vec![],
+                internal_port: None,
+            },
+        );
+        services.insert(
+            "server".into(),
+            compose::ComposeService {
+                name: "server".into(),
+                image: Some("quality-service/server:dev".into()),
+                depends_on: vec!["nats".into(), "configctl".into()],
+                profiles: vec!["core".into(), "all".into()],
+                ports: vec!["127.0.0.1:8080:8080".into()],
+                internal_port: None,
+            },
+        );
+        services.insert(
+            "consumer".into(),
+            compose::ComposeService {
+                name: "consumer".into(),
+                image: Some("quality-service/consumer:dev".into()),
+                depends_on: vec!["nats".into(), "server".into(), "kafka".into()],
+                profiles: vec!["dataplane".into(), "all".into()],
+                ports: vec![],
+                internal_port: None,
+            },
+        );
+        services.insert(
+            "emulator".into(),
+            compose::ComposeService {
+                name: "emulator".into(),
+                image: Some("quality-service/emulator:dev".into()),
+                depends_on: vec![
+                    "nats".into(),
+                    "server".into(),
+                    "kafka".into(),
+                    "consumer".into(),
+                    "validator".into(),
+                ],
+                profiles: vec!["dataplane".into(), "all".into()],
+                ports: vec![],
+                internal_port: None,
+            },
+        );
+        services.insert(
+            "validator".into(),
+            compose::ComposeService {
+                name: "validator".into(),
+                image: Some("quality-service/validator:dev".into()),
+                depends_on: vec!["nats".into(), "configctl".into()],
+                profiles: vec!["runtime".into(), "all".into()],
+                ports: vec![],
+                internal_port: None,
+            },
+        );
+
+        ComposeTopology { services }
     }
 
     #[test]
@@ -658,7 +919,10 @@ mod tests {
         // missing emulator and validator
 
         let result = check_configs(&configs);
-        assert!(result.findings.iter().any(|f| f.severity == Severity::Warning));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Warning));
     }
 
     #[test]
@@ -680,8 +944,10 @@ mod tests {
     #[test]
     fn kafka_broker_consistency_ok_when_matching() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
-        topo.configs.insert("emulator".into(), make_emulator_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("emulator".into(), make_emulator_config());
 
         let result = check_kafka_broker_consistency(&topo);
         assert_eq!(result.status, crate::models::CheckStatus::Pass);
@@ -690,20 +956,26 @@ mod tests {
     #[test]
     fn kafka_broker_consistency_warns_on_mismatch() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
         let mut emulator = make_emulator_config();
         emulator.kafka_brokers = vec!["other-host:9092".into()];
         topo.configs.insert("emulator".into(), emulator);
 
         let result = check_kafka_broker_consistency(&topo);
-        assert!(result.findings.iter().any(|f| f.severity == Severity::Warning));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Warning));
     }
 
     #[test]
     fn nats_url_consistency_ok_when_matching() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
-        topo.configs.insert("validator".into(), make_validator_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("validator".into(), make_validator_config());
 
         let result = check_nats_url_consistency(&topo);
         assert_eq!(result.status, crate::models::CheckStatus::Pass);
@@ -712,7 +984,9 @@ mod tests {
     #[test]
     fn durable_stream_alignment_fails_on_orphan() {
         let mut source = make_source_topology();
-        source.durables.insert("orphan-durable".into(), "NONEXISTENT_STREAM".into());
+        source
+            .durables
+            .insert("orphan-durable".into(), "NONEXISTENT_STREAM".into());
         let mut topo = Topology::default();
         topo.source = Some(source);
 
@@ -726,9 +1000,12 @@ mod tests {
     #[test]
     fn pipeline_continuity_passes_with_complete_config() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
-        topo.configs.insert("emulator".into(), make_emulator_config());
-        topo.configs.insert("validator".into(), make_validator_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("emulator".into(), make_emulator_config());
+        topo.configs
+            .insert("validator".into(), make_validator_config());
         topo.source = Some(make_source_topology());
 
         let result = check_pipeline_continuity(&topo);
@@ -738,8 +1015,10 @@ mod tests {
     #[test]
     fn pipeline_continuity_fails_without_validator_nats() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
-        topo.configs.insert("emulator".into(), make_emulator_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("emulator".into(), make_emulator_config());
         let mut validator = make_validator_config();
         validator.nats_url = None;
         topo.configs.insert("validator".into(), validator);
@@ -763,10 +1042,9 @@ mod tests {
     #[test]
     fn stream_subject_alignment_warns_orphan_stream_subject() {
         let mut source = make_source_topology();
-        source.streams.insert(
-            "ORPHAN_STREAM".into(),
-            vec!["orphan.events.>".into()],
-        );
+        source
+            .streams
+            .insert("ORPHAN_STREAM".into(), vec!["orphan.events.>".into()]);
         let mut topo = Topology::default();
         topo.source = Some(source);
 
@@ -802,25 +1080,33 @@ mod tests {
     #[test]
     fn nats_url_consistency_warns_on_mismatch() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
         let mut validator = make_validator_config();
         validator.nats_url = Some("nats://other-host:4222".into());
         topo.configs.insert("validator".into(), validator);
 
         let result = check_nats_url_consistency(&topo);
-        assert!(result.findings.iter().any(|f| f.severity == Severity::Warning));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Warning));
     }
 
     #[test]
     fn bootstrap_url_consistency_warns_on_mismatch() {
         let mut topo = Topology::default();
-        topo.configs.insert("consumer".into(), make_consumer_config());
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
         let mut emulator = make_emulator_config();
         emulator.bootstrap_base_url = Some("http://other-server:9090".into());
         topo.configs.insert("emulator".into(), emulator);
 
         let result = check_bootstrap_url_consistency(&topo);
-        assert!(result.findings.iter().any(|f| f.severity == Severity::Warning));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Warning));
     }
 
     #[test]
@@ -829,14 +1115,45 @@ mod tests {
         let mut consumer = make_consumer_config();
         consumer.kafka_brokers.clear(); // remove kafka → broken bridge
         topo.configs.insert("consumer".into(), consumer);
-        topo.configs.insert("emulator".into(), make_emulator_config());
-        topo.configs.insert("validator".into(), make_validator_config());
+        topo.configs
+            .insert("emulator".into(), make_emulator_config());
+        topo.configs
+            .insert("validator".into(), make_validator_config());
 
         let result = check_pipeline_continuity(&topo);
         assert!(result
             .findings
             .iter()
             .any(|f| f.severity == Severity::Error));
+    }
+
+    #[test]
+    fn compose_runtime_contract_passes_when_frozen_invariants_match() {
+        let topo = make_compose_topology();
+        let result = check_compose_runtime_contract(&topo);
+        assert_eq!(result.status, crate::models::CheckStatus::Pass);
+    }
+
+    #[test]
+    fn compose_runtime_contract_fails_on_profile_image_and_port_drift() {
+        let mut topo = make_compose_topology();
+        topo.services
+            .get_mut("kafka")
+            .unwrap()
+            .profiles
+            .retain(|profile| profile != "dataplane");
+        topo.services.get_mut("nats").unwrap().image = Some("nats:latest".into());
+        topo.services
+            .get_mut("server")
+            .unwrap()
+            .ports
+            .retain(|port| !port.contains("8080:8080"));
+
+        let result = check_compose_runtime_contract(&topo);
+        assert_eq!(result.status, crate::models::CheckStatus::Fail);
+        assert!(result.findings.iter().any(|f| f.check == "compose-profile"));
+        assert!(result.findings.iter().any(|f| f.check == "compose-image"));
+        assert!(result.findings.iter().any(|f| f.check == "compose-port"));
     }
 
     #[test]
@@ -856,6 +1173,22 @@ mod tests {
     }
 
     #[test]
+    fn config_check_errors_emulator_without_nats() {
+        let mut configs = HashMap::new();
+        configs.insert("consumer".into(), make_consumer_config());
+        let mut emulator = make_emulator_config();
+        emulator.nats_url = None;
+        configs.insert("emulator".into(), emulator);
+        configs.insert("validator".into(), make_validator_config());
+
+        let result = check_configs(&configs);
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Error && f.message.contains("nats")));
+    }
+
+    #[test]
     fn config_check_errors_validator_without_nats() {
         let mut configs = HashMap::new();
         configs.insert("consumer".into(), make_consumer_config());
@@ -869,6 +1202,37 @@ mod tests {
             .findings
             .iter()
             .any(|f| f.severity == Severity::Error && f.message.contains("validator")));
+    }
+
+    #[test]
+    fn config_check_errors_when_reconcile_interval_missing() {
+        let mut configs = HashMap::new();
+        let mut consumer = make_consumer_config();
+        consumer.bootstrap_reconcile_interval = None;
+        configs.insert("consumer".into(), consumer);
+        configs.insert("emulator".into(), make_emulator_config());
+        configs.insert("validator".into(), make_validator_config());
+
+        let result = check_configs(&configs);
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.check == "bootstrap-reconcile-interval" && f.severity == Severity::Error));
+    }
+
+    #[test]
+    fn bootstrap_reconcile_consistency_warns_on_mismatch() {
+        let mut topo = Topology::default();
+        topo.configs
+            .insert("consumer".into(), make_consumer_config());
+        let mut emulator = make_emulator_config();
+        emulator.bootstrap_reconcile_interval = Some("45s".into());
+        topo.configs.insert("emulator".into(), emulator);
+
+        let result = check_bootstrap_reconcile_consistency(&topo);
+        assert!(result.findings.iter().any(
+            |f| f.check == "bootstrap-reconcile-consistency" && f.severity == Severity::Warning
+        ));
     }
 
     #[test]

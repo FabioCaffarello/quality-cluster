@@ -1,0 +1,22 @@
+validator-1  | time=2026-03-16T05:11:04.490Z level=WARN msg="validator runtime cache: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.492Z level=INFO msg="validator runtime cache started"
+validator-1  | time=2026-03-16T05:11:04.528Z level=INFO msg="validator runtime bootstrap loaded" runtimes=0
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validator results store: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=INFO msg="validator results store started"
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation router: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Started
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Started
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Started
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validation worker: unknown message" type=actor.Started
+validator-1  | time=2026-03-16T05:11:04.529Z level=WARN msg="validator runtime consumer: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.536Z level=WARN msg="validator data plane consumer: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.537Z level=WARN msg="validator runtime responder: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.538Z level=WARN msg="validator results responder: unknown message" type=actor.Initialized
+validator-1  | time=2026-03-16T05:11:04.538Z level=INFO msg="validator started"
+validator-1  | time=2026-03-16T05:11:21.499Z level=INFO msg="validator runtime cache updated" config_set_id=58e9088ef2ea68f848ac4fa1cc88944d version_id=0e2189dea8f5331759707fba56cfae4a version=1 scope=global:default artifact_checksum=1d4f36d482fe473e1ea56477482ebb612badc7952e1511e25f1dd3669947c5ac
+validator-1  | time=2026-03-16T05:11:38.996Z level=INFO msg="validator runtime cache updated" config_set_id=db7a2aa07f51f34631483000940d322f version_id=bd78baa33b4840a3a11af7d68bd82ab6 version=1 scope=global:default artifact_checksum=1d4f36d482fe473e1ea56477482ebb612badc7952e1511e25f1dd3669947c5ac
+validator-1  | time=2026-03-16T05:11:38.996Z level=INFO msg="validator runtime cache cleared" scope=global:default

@@ -231,3 +231,34 @@ func activeIngestionBindingsFromDomain(runtimes []configdomain.IngestionRuntimeP
 
 	return bindings
 }
+
+func compactIngestionRuntimesFromDomain(runtimes []configdomain.IngestionRuntimeProjection) []sharedruntime.RuntimeRecord {
+	if len(runtimes) == 0 {
+		return nil
+	}
+
+	records := make([]sharedruntime.RuntimeRecord, 0, len(runtimes))
+	for _, runtime := range runtimes {
+		records = append(records, sharedruntime.RecordFromIngestionProjection(runtime))
+	}
+
+	sort.SliceStable(records, func(i, j int) bool {
+		left := records[i]
+		right := records[j]
+		if left.Scope.Kind != right.Scope.Kind {
+			return left.Scope.Kind < right.Scope.Kind
+		}
+		if left.Scope.Key != right.Scope.Key {
+			return left.Scope.Key < right.Scope.Key
+		}
+		if left.Config.Key != right.Config.Key {
+			return left.Config.Key < right.Config.Key
+		}
+		if left.Config.VersionID != right.Config.VersionID {
+			return left.Config.VersionID < right.Config.VersionID
+		}
+		return left.ActivatedAt.Before(right.ActivatedAt)
+	})
+
+	return records
+}

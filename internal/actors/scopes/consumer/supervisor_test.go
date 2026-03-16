@@ -71,10 +71,59 @@ func TestSupervisorReplacesRuntimeGenerationOnBootstrapReload(t *testing.T) {
 	}
 }
 
+func TestSupervisorIgnoresStaleRuntimeReadyMessages(t *testing.T) {
+	t.Parallel()
+
+	engine, err := actorcommon.NewDefaultEngine()
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	first := mustBootstrap(t, "orders", "sales.order.created", "cfg-1", "global", "default")
+	second := mustBootstrap(t, "payments", "sales.payment.created", "cfg-2", "tenant", "br")
+
+	supervisorPID := engine.Spawn(newSupervisorProducer(supervisorConfig{
+		appConfig: settings.AppConfig{},
+		registry:  dataplaneapp.DefaultRegistry(),
+		loadBootstrap: func(ctx context.Context, _ *slog.Logger, _ settings.AppConfig, _ string) (runtimebootstrap.ActiveIngestionBootstrap, *problem.Problem) {
+			<-ctx.Done()
+			return runtimebootstrap.ActiveIngestionBootstrap{}, problem.Wrap(ctx.Err(), problem.Unavailable, "bootstrap stopped")
+		},
+		newRuntimeActor: func(cfg ConsumerRuntimeConfig) actor.Producer {
+			return func() actor.Receiver { return &readyRuntimeActor{cfg: cfg} }
+		},
+	}), "consumer-supervisor-stale-ready-test")
+
+	engine.Send(supervisorPID, activeIngestionBootstrapLoadedMessage{Bootstrap: first})
+	_ = awaitConsumerState(t, engine, supervisorPID, func(state ConsumerSupervisorState) bool {
+		return state.Ready && state.Generation == 1 && len(state.Topics) == 1 && state.Topics[0] == "sales.order.created"
+	})
+
+	engine.Send(supervisorPID, activeIngestionBootstrapLoadedMessage{Bootstrap: second})
+	state := awaitConsumerState(t, engine, supervisorPID, func(state ConsumerSupervisorState) bool {
+		return state.Ready && state.Generation == 2 && len(state.Topics) == 1 && state.Topics[0] == "sales.payment.created"
+	})
+	if state.Bindings != 1 {
+		t.Fatalf("expected one binding after second generation, got %+v", state)
+	}
+
+	engine.Send(supervisorPID, consumerRuntimeReadyMessage{
+		Generation: 1,
+		Topology:   first.Topology,
+	})
+
+	state = awaitConsumerState(t, engine, supervisorPID, func(state ConsumerSupervisorState) bool {
+		return state.Ready && state.Generation == 2 && len(state.Topics) == 1 && state.Topics[0] == "sales.payment.created"
+	})
+	if state.Bindings != 1 {
+		t.Fatalf("expected stale ready message to be ignored, got %+v", state)
+	}
+}
+
 func mustBootstrap(t *testing.T, name, topic, versionID, scopeKind, scopeKey string) runtimebootstrap.ActiveIngestionBootstrap {
 	t.Helper()
 
-	index, prob := dataplaneapp.NewBindingIndex([]configctlcontracts.ActiveIngestionBindingRecord{
+	bindings := []configctlcontracts.ActiveIngestionBindingRecord{
 		{
 			Binding: configctlcontracts.BindingRecord{Name: name, Topic: topic},
 			Runtime: sharedruntime.RuntimeRecord{
@@ -82,7 +131,9 @@ func mustBootstrap(t *testing.T, name, topic, versionID, scopeKind, scopeKey str
 				Config: sharedruntime.ConfigRecord{VersionID: versionID},
 			},
 		},
-	})
+	}
+
+	index, prob := dataplaneapp.NewBindingIndex(bindings)
 	if prob != nil {
 		t.Fatalf("new binding index: %v", prob)
 	}
@@ -93,6 +144,7 @@ func mustBootstrap(t *testing.T, name, topic, versionID, scopeKind, scopeKey str
 	}
 
 	return runtimebootstrap.ActiveIngestionBootstrap{
+		Bindings: bindings,
 		Index:    index,
 		Topology: topology,
 	}

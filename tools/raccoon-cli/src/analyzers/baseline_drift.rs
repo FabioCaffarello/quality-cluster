@@ -144,7 +144,10 @@ impl std::fmt::Display for BaselineDriftError {
             BaselineDriftError::Io(e) => write!(f, "I/O error: {e}"),
             BaselineDriftError::Json(e) => write!(f, "JSON parse error: {e}"),
             BaselineDriftError::VersionMismatch { before, after } => {
-                write!(f, "snapshot version mismatch: baseline={before}, current={after}")
+                write!(
+                    f,
+                    "snapshot version mismatch: baseline={before}, current={after}"
+                )
             }
             BaselineDriftError::BaselineNotFound(p) => {
                 write!(f, "baseline snapshot not found: {p}")
@@ -279,10 +282,14 @@ fn assess_baseline_health(baseline: &Snapshot) -> BaselineHealth {
         warnings.push("Baseline has no types or functions — very sparse snapshot.".into());
     }
     if baseline.contracts.is_empty() {
-        warnings.push("Baseline has no detected contracts — contract drift checks will be limited.".into());
+        warnings.push(
+            "Baseline has no detected contracts — contract drift checks will be limited.".into(),
+        );
     }
     if baseline.arch_layers.is_empty() {
-        warnings.push("Baseline has no architecture layers — layer drift checks will be limited.".into());
+        warnings.push(
+            "Baseline has no architecture layers — layer drift checks will be limited.".into(),
+        );
     }
 
     let version_note = if baseline.version != "1" {
@@ -350,7 +357,11 @@ fn collect_contract_surface_drift(diff: &SnapshotDiff, findings: &mut Vec<Findin
 
     // Added contracts are info (growth, not drift per se)
     if !sec.added.is_empty() {
-        let names: Vec<String> = sec.added.iter().map(|c| format!("{} ({})", c.name, c.family)).collect();
+        let names: Vec<String> = sec
+            .added
+            .iter()
+            .map(|c| format!("{} ({})", c.name, c.family))
+            .collect();
         findings.push(Finding {
             class: "contract-surface-drift".into(),
             severity: "info".into(),
@@ -401,14 +412,20 @@ fn collect_interface_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>) {
                 evidence_basis: "observed".into(),
                 message: format!(
                     "Interface '{}.{}' lost method(s): {}.",
-                    iface.package, iface.name, iface.methods_removed.join(", ")
+                    iface.package,
+                    iface.name,
+                    iface.methods_removed.join(", ")
                 ),
-                evidence: iface.methods_removed.iter()
+                evidence: iface
+                    .methods_removed
+                    .iter()
                     .map(|m| format!("Method '{}' removed.", m))
                     .collect(),
                 baseline_value: Some(format!("had methods: {}", iface.methods_removed.join(", "))),
                 current_value: Some("methods absent".into()),
-                recommendation: "All implementors must drop these methods. Run arch-guard and symbol-trace.".into(),
+                recommendation:
+                    "All implementors must drop these methods. Run arch-guard and symbol-trace."
+                        .into(),
             });
         }
         if !iface.methods_added.is_empty() {
@@ -444,10 +461,14 @@ fn collect_layer_boundary_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>
             severity: "warning".into(),
             evidence_basis: "observed".into(),
             message: format!("Architecture layer at '{}' was removed.", l.package_dir),
-            evidence: vec![format!("Package '{}' no longer detected as an architecture layer.", l.package_dir)],
+            evidence: vec![format!(
+                "Package '{}' no longer detected as an architecture layer.",
+                l.package_dir
+            )],
             baseline_value: Some(l.package_dir.clone()),
             current_value: Some("absent".into()),
-            recommendation: "Verify this is intentional. Run arch-guard to check boundary compliance.".into(),
+            recommendation:
+                "Verify this is intentional. Run arch-guard to check boundary compliance.".into(),
         });
     }
 
@@ -465,7 +486,9 @@ fn collect_layer_boundary_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>
                 evidence: vec![format!("Layer reclassification: {} → {}.", old, new)],
                 baseline_value: Some(format!("{} → {}", l.package_dir, old)),
                 current_value: Some(format!("{} → {}", l.package_dir, new)),
-                recommendation: "This changes dependency rules for this package. Run arch-guard immediately.".into(),
+                recommendation:
+                    "This changes dependency rules for this package. Run arch-guard immediately."
+                        .into(),
             });
         }
     }
@@ -493,11 +516,11 @@ fn collect_type_breaking_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>)
             class: "type-breaking".into(),
             severity: "warning".into(),
             evidence_basis: "observed".into(),
-            message: format!(
-                "Type '{}.{}' ({}) was removed.",
-                t.package, t.name, t.kind
-            ),
-            evidence: vec![format!("Type '{}' present in baseline but absent in current.", t.name)],
+            message: format!("Type '{}.{}' ({}) was removed.", t.package, t.name, t.kind),
+            evidence: vec![format!(
+                "Type '{}' present in baseline but absent in current.",
+                t.name
+            )],
             baseline_value: Some(format!("{} {}.{}", t.kind, t.package, t.name)),
             current_value: Some("absent".into()),
             recommendation: "Check for all references to this type. Run symbol-trace.".into(),
@@ -510,15 +533,18 @@ fn collect_type_breaking_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>)
 
         if !t.fields_removed.is_empty() {
             evidence.extend(
-                t.fields_removed.iter().map(|f| format!("Field '{}' removed.", f)),
+                t.fields_removed
+                    .iter()
+                    .map(|f| format!("Field '{}' removed.", f)),
             );
         }
         if !t.fields_type_changed.is_empty() {
-            evidence.extend(
-                t.fields_type_changed.iter().map(|c| {
-                    format!("Field '{}' type changed: {} → {}.", c.name, c.before, c.after)
-                }),
-            );
+            evidence.extend(t.fields_type_changed.iter().map(|c| {
+                format!(
+                    "Field '{}' type changed: {} → {}.",
+                    c.name, c.before, c.after
+                )
+            }));
         }
         if let Some((ref old, ref new)) = t.kind_changed {
             evidence.push(format!("Kind changed: {} → {}.", old, new));
@@ -551,32 +577,41 @@ fn collect_type_breaking_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>)
 fn collect_api_signature_drift(diff: &SnapshotDiff, findings: &mut Vec<Finding>) {
     for f in &diff.sections.functions.modified {
         if let Some((ref before, ref after)) = f.signature_changed {
-            let recv = f.receiver.as_deref().map(|r| format!("({}) ", r)).unwrap_or_default();
+            let recv = f
+                .receiver
+                .as_deref()
+                .map(|r| format!("({}) ", r))
+                .unwrap_or_default();
             findings.push(Finding {
                 class: "api-signature-drift".into(),
                 severity: "warning".into(),
                 evidence_basis: "observed".into(),
-                message: format!(
-                    "Exported function {}{} changed signature.",
-                    recv, f.name
-                ),
+                message: format!("Exported function {}{} changed signature.", recv, f.name),
                 evidence: vec![format!("{} → {}", before, after)],
                 baseline_value: Some(format!("{}{}{}", recv, f.name, before)),
                 current_value: Some(format!("{}{}{}", recv, f.name, after)),
-                recommendation: "All callers must be updated. Run symbol-trace on this function.".into(),
+                recommendation: "All callers must be updated. Run symbol-trace on this function."
+                    .into(),
             });
         }
     }
 
     // Removed exported functions
     for f in &diff.sections.functions.removed {
-        let recv = f.receiver.as_deref().map(|r| format!("({}) ", r)).unwrap_or_default();
+        let recv = f
+            .receiver
+            .as_deref()
+            .map(|r| format!("({}) ", r))
+            .unwrap_or_default();
         findings.push(Finding {
             class: "api-signature-drift".into(),
             severity: "warning".into(),
             evidence_basis: "observed".into(),
             message: format!("Exported function {}{} was removed.", recv, f.name),
-            evidence: vec![format!("Function '{}' present in baseline but absent in current.", f.name)],
+            evidence: vec![format!(
+                "Function '{}' present in baseline but absent in current.",
+                f.name
+            )],
             baseline_value: Some(format!("{}{}", recv, f.name)),
             current_value: Some("absent".into()),
             recommendation: "Verify all callers have been migrated. Run impact-map.".into(),
@@ -642,13 +677,23 @@ fn collect_coupling_increase(
             evidence: cross_layer,
             baseline_value: None,
             current_value: None,
-            recommendation: "New cross-layer dependencies may violate architecture rules. Run arch-guard.".into(),
+            recommendation:
+                "New cross-layer dependencies may violate architecture rules. Run arch-guard."
+                    .into(),
         });
     }
 
     // Also flag overall internal import growth
-    let baseline_internal = baseline.imports.iter().filter(|i| i.kind == "internal").count();
-    let current_internal = current.imports.iter().filter(|i| i.kind == "internal").count();
+    let baseline_internal = baseline
+        .imports
+        .iter()
+        .filter(|i| i.kind == "internal")
+        .count();
+    let current_internal = current
+        .imports
+        .iter()
+        .filter(|i| i.kind == "internal")
+        .count();
     let growth = current_internal as i64 - baseline_internal as i64;
 
     if growth > 5 {
@@ -679,7 +724,10 @@ fn collect_isolation_loss(
 ) {
     // Check if domain or application packages gained new imports from adapters/actors/interfaces
     let current_layers = layer_map(current);
-    let infra_layers: BTreeSet<&str> = ["adapters", "actors", "interfaces"].iter().copied().collect();
+    let infra_layers: BTreeSet<&str> = ["adapters", "actors", "interfaces"]
+        .iter()
+        .copied()
+        .collect();
 
     let mut violations = Vec::new();
 
@@ -688,7 +736,10 @@ fn collect_isolation_loss(
             continue;
         }
         let imported_layer = find_layer_for_path(&imp.path, &current_layers);
-        if !imported_layer.map(|l| infra_layers.contains(l)).unwrap_or(false) {
+        if !imported_layer
+            .map(|l| infra_layers.contains(l))
+            .unwrap_or(false)
+        {
             continue;
         }
 
@@ -774,7 +825,9 @@ fn collect_contract_proliferation(
             evidence: unvalidated,
             baseline_value: Some(format!("{} contracts", baseline.stats.contracts_detected)),
             current_value: Some(format!("{} contracts", current.stats.contracts_detected)),
-            recommendation: "New contracts should have Validate/Normalize methods. Run contract-usage-map.".into(),
+            recommendation:
+                "New contracts should have Validate/Normalize methods. Run contract-usage-map."
+                    .into(),
         });
     }
 }
@@ -798,7 +851,8 @@ fn collect_structural_scale_shift(diff: &SnapshotDiff, findings: &mut Vec<Findin
             ],
             baseline_value: None,
             current_value: None,
-            recommendation: "Review module boundaries and ensure test coverage for new types.".into(),
+            recommendation: "Review module boundaries and ensure test coverage for new types."
+                .into(),
         });
     }
 
@@ -834,7 +888,9 @@ fn collect_structural_scale_shift(diff: &SnapshotDiff, findings: &mut Vec<Findin
             evidence: vec![format!("Packages: {:+}", sd.total_packages)],
             baseline_value: None,
             current_value: None,
-            recommendation: "Review whether new packages follow the expected layer structure. Run arch-guard.".into(),
+            recommendation:
+                "Review whether new packages follow the expected layer structure. Run arch-guard."
+                    .into(),
         });
     }
 }
@@ -862,7 +918,10 @@ fn find_layer_for_dir<'a>(dir: &str, layers: &'a BTreeMap<String, String>) -> Op
     None
 }
 
-fn find_layer_for_path<'a>(import_path: &str, layers: &'a BTreeMap<String, String>) -> Option<&'a str> {
+fn find_layer_for_path<'a>(
+    import_path: &str,
+    layers: &'a BTreeMap<String, String>,
+) -> Option<&'a str> {
     // Import paths look like "quality-service/internal/adapters/nats"
     // We need to extract the dir-like part
     for (pkg_dir, layer) in layers {
@@ -1182,9 +1241,10 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let report = analyze_snapshots(&baseline, &current).unwrap();
 
         // GetConfig was removed from ConfigctlGateway
-        let breaking = report.findings.iter().find(|f| {
-            f.class == "interface-breaking" && f.message.contains("GetConfig")
-        });
+        let breaking = report
+            .findings
+            .iter()
+            .find(|f| f.class == "interface-breaking" && f.message.contains("GetConfig"));
         assert!(breaking.is_some(), "Should detect GetConfig removal");
         assert_eq!(breaking.unwrap().severity, "critical");
         assert_eq!(breaking.unwrap().evidence_basis, "observed");
@@ -1199,9 +1259,10 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 
         let report = analyze_snapshots(&baseline, &current).unwrap();
 
-        let expansion = report.findings.iter().find(|f| {
-            f.class == "interface-expansion" && f.message.contains("DeleteConfig")
-        });
+        let expansion = report
+            .findings
+            .iter()
+            .find(|f| f.class == "interface-expansion" && f.message.contains("DeleteConfig"));
         assert!(expansion.is_some(), "Should detect DeleteConfig addition");
         assert_eq!(expansion.unwrap().severity, "warning");
     }
@@ -1215,12 +1276,20 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 
         let report = analyze_snapshots(&baseline, &current).unwrap();
 
-        let type_break = report.findings.iter().find(|f| {
-            f.class == "type-breaking" && f.message.contains("ConfigVersion")
-        });
-        assert!(type_break.is_some(), "Should detect ConfigVersion breaking change");
+        let type_break = report
+            .findings
+            .iter()
+            .find(|f| f.class == "type-breaking" && f.message.contains("ConfigVersion"));
         assert!(
-            type_break.unwrap().evidence.iter().any(|e| e.contains("CreatedAt")),
+            type_break.is_some(),
+            "Should detect ConfigVersion breaking change"
+        );
+        assert!(
+            type_break
+                .unwrap()
+                .evidence
+                .iter()
+                .any(|e| e.contains("CreatedAt")),
             "Should mention the changed field"
         );
     }
@@ -1234,10 +1303,14 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 
         let report = analyze_snapshots(&baseline, &current).unwrap();
 
-        let sig_drift = report.findings.iter().find(|f| {
-            f.class == "api-signature-drift" && f.message.contains("NewConfigSet")
-        });
-        assert!(sig_drift.is_some(), "Should detect NewConfigSet signature change");
+        let sig_drift = report
+            .findings
+            .iter()
+            .find(|f| f.class == "api-signature-drift" && f.message.contains("NewConfigSet"));
+        assert!(
+            sig_drift.is_some(),
+            "Should detect NewConfigSet signature change"
+        );
     }
 
     #[test]
@@ -1254,7 +1327,10 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
                 && f.severity == "info"
                 && f.evidence.iter().any(|e| e.contains("ScoreComputedEvent"))
         });
-        assert!(contract_info.is_some(), "Should detect new ScoreComputedEvent");
+        assert!(
+            contract_info.is_some(),
+            "Should detect new ScoreComputedEvent"
+        );
     }
 
     // ── Relevant drift (verdict = Drifted) ───────────────────────
@@ -1280,7 +1356,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 
         let report = analyze_snapshots(&baseline, &current).unwrap();
         for f in &report.findings {
-            assert!(!f.recommendation.is_empty(), "Finding should have recommendation: {}", f.message);
+            assert!(
+                !f.recommendation.is_empty(),
+                "Finding should have recommendation: {}",
+                f.message
+            );
         }
     }
 
@@ -1401,10 +1481,7 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 
     #[test]
     fn missing_baseline_returns_error() {
-        let result = analyze(
-            Path::new("/nonexistent/baseline.json"),
-            Path::new("."),
-        );
+        let result = analyze(Path::new("/nonexistent/baseline.json"), Path::new("."));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("not found"));

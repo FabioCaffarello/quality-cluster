@@ -37,9 +37,10 @@ func Defaults() AppConfig {
 			DialTimeout: "10s",
 		},
 		Bootstrap: BootstrapConfig{
-			ScopeKind: "global",
-			ScopeKey:  "default",
-			Timeout:   "5s",
+			ScopeKind:         "global",
+			ScopeKey:          "default",
+			Timeout:           "5s",
+			ReconcileInterval: "30s",
 		},
 		Emulator: EmulatorConfig{
 			PublishInterval: "5s",
@@ -306,10 +307,11 @@ func (c KafkaConfig) DialTimeoutDuration() time.Duration {
 }
 
 type BootstrapConfig struct {
-	BaseURL   string `json:"base_url"`
-	ScopeKind string `json:"scope_kind,omitempty"`
-	ScopeKey  string `json:"scope_key,omitempty"`
-	Timeout   string `json:"timeout"`
+	BaseURL           string `json:"base_url"`
+	ScopeKind         string `json:"scope_kind,omitempty"`
+	ScopeKey          string `json:"scope_key,omitempty"`
+	Timeout           string `json:"timeout"`
+	ReconcileInterval string `json:"reconcile_interval"`
 }
 
 func (c *BootstrapConfig) applyDefaults(defaults BootstrapConfig) {
@@ -325,11 +327,15 @@ func (c *BootstrapConfig) applyDefaults(defaults BootstrapConfig) {
 	if strings.TrimSpace(c.Timeout) == "" {
 		c.Timeout = defaults.Timeout
 	}
+	if strings.TrimSpace(c.ReconcileInterval) == "" {
+		c.ReconcileInterval = defaults.ReconcileInterval
+	}
 }
 
 func (c BootstrapConfig) Validate() *problem.Problem {
 	var issues []problem.ValidationIssue
 	issues = append(issues, durationIssue("bootstrap.timeout", c.Timeout)...)
+	issues = append(issues, durationIssue("bootstrap.reconcile_interval", c.ReconcileInterval)...)
 	if c.ScopeKind == "" && c.ScopeKey != "" {
 		issues = append(issues, problem.ValidationIssue{
 			Field:   "bootstrap.scope_kind",
@@ -352,6 +358,10 @@ func (c BootstrapConfig) Validate() *problem.Problem {
 
 func (c BootstrapConfig) TimeoutDuration() time.Duration {
 	return parseDurationOrDefault(c.Timeout, 5*time.Second)
+}
+
+func (c BootstrapConfig) ReconcileIntervalDuration() time.Duration {
+	return parseDurationOrDefault(c.ReconcileInterval, 30*time.Second)
 }
 
 type EmulatorConfig struct {

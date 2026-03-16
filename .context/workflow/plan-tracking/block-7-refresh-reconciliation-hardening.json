@@ -1,0 +1,43 @@
+{
+  "phases": {
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:52:31.138Z"
+    },
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:52:31.145Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:52:31.182Z"
+    }
+  },
+  "progress": 100,
+  "decisions": [
+    {
+      "title": "Dataplane self-healing uses bounded bootstrap reconciliation",
+      "description": "Block 7 keeps config.ingestion_runtime_changed as the primary refresh trigger, but introduces bootstrap.reconcile_interval as a shared fallback for consumer and emulator. The fallback re-reads aggregate bootstrap and only adopts new state when the binding-set signature changes, so missed local events no longer leave the dataplane stale indefinitely while churn remains bounded.",
+      "phase": "E",
+      "alternatives": [
+        "Rely exclusively on JetStream runtime-change delivery and require restart or a new event for recovery",
+        "Reintroduce broad polling per scope as the primary refresh mechanism"
+      ],
+      "status": "accepted",
+      "id": "dec-1773676351184",
+      "decidedAt": "2026-03-16T15:52:31.184Z"
+    },
+    {
+      "title": "Block 7 closes through the canonical raccoon-cli workflow",
+      "description": "The block was only considered complete after focused Go tests, runtime-bindings, make verify, happy-path smoke, and check-deep all passed. This keeps the new fallback path inside the same safety model already used for event-driven refresh and prevents the .context from documenting unproven operational behavior.",
+      "phase": "V",
+      "alternatives": [
+        "Stop after unit tests and schema changes without live runtime proof",
+        "Treat the fallback as an internal implementation detail and skip documentation updates"
+      ],
+      "status": "accepted",
+      "id": "dec-1773676351185",
+      "decidedAt": "2026-03-16T15:52:31.185Z"
+    }
+  ]
+}

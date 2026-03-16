@@ -94,9 +94,9 @@ impl GoplsClient {
     /// Start with a custom timeout for all requests.
     pub fn start_with_timeout(workspace_root: &Path, timeout: Duration) -> ClientResult<Self> {
         // Validate workspace.
-        let workspace_root = workspace_root.canonicalize().map_err(|_| {
-            ClientError::InvalidWorkspace(workspace_root.to_path_buf())
-        })?;
+        let workspace_root = workspace_root
+            .canonicalize()
+            .map_err(|_| ClientError::InvalidWorkspace(workspace_root.to_path_buf()))?;
 
         if !workspace_root.is_dir() {
             return Err(ClientError::InvalidWorkspace(workspace_root));
@@ -127,9 +127,7 @@ impl GoplsClient {
 
     /// Send the `initialize` request and `initialized` notification.
     fn initialize(&mut self) -> ClientResult<()> {
-        let root_uri = protocol::path_to_uri(
-            self.workspace_root.to_str().unwrap_or(""),
-        );
+        let root_uri = protocol::path_to_uri(self.workspace_root.to_str().unwrap_or(""));
 
         let params = json!({
             "processId": std::process::id(),
@@ -161,7 +159,12 @@ impl GoplsClient {
     // ── Public query methods ────────────────────────────────────────────
 
     /// Go to definition at a file position.
-    pub fn definition(&mut self, file: &str, line: u32, character: u32) -> ClientResult<Vec<LspLocation>> {
+    pub fn definition(
+        &mut self,
+        file: &str,
+        line: u32,
+        character: u32,
+    ) -> ClientResult<Vec<LspLocation>> {
         let params = serde_json::to_value(TextDocumentPositionParams {
             text_document: TextDocumentIdentifier {
                 uri: protocol::path_to_uri(file),
@@ -183,8 +186,14 @@ impl GoplsClient {
                         serde_json::from_value(val).unwrap_or_else(|_| LspLocation {
                             uri: String::new(),
                             range: protocol::Range {
-                                start: Position { line: 0, character: 0 },
-                                end: Position { line: 0, character: 0 },
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                             },
                         });
                     Ok(vec![loc])
@@ -225,7 +234,12 @@ impl GoplsClient {
     }
 
     /// Get hover information at a file position.
-    pub fn hover(&mut self, file: &str, line: u32, character: u32) -> ClientResult<Option<HoverResult>> {
+    pub fn hover(
+        &mut self,
+        file: &str,
+        line: u32,
+        character: u32,
+    ) -> ClientResult<Option<HoverResult>> {
         let params = serde_json::to_value(TextDocumentPositionParams {
             text_document: TextDocumentIdentifier {
                 uri: protocol::path_to_uri(file),
@@ -263,7 +277,11 @@ impl GoplsClient {
 
     // ── Low-level communication ─────────────────────────────────────────
 
-    fn send_request(&mut self, method: &str, params: Option<Value>) -> ClientResult<JsonRpcResponse> {
+    fn send_request(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> ClientResult<JsonRpcResponse> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = JsonRpcRequest::new(id, method, params);
         let encoded = req.encode();
@@ -271,12 +289,20 @@ impl GoplsClient {
         let start = Instant::now();
 
         // Write request.
-        let stdin = self.process.stdin.as_mut().ok_or(ClientError::ProcessExited)?;
+        let stdin = self
+            .process
+            .stdin
+            .as_mut()
+            .ok_or(ClientError::ProcessExited)?;
         stdin.write_all(&encoded)?;
         stdin.flush()?;
 
         // Read response, skipping notifications/diagnostics from gopls.
-        let stdout = self.process.stdout.as_mut().ok_or(ClientError::ProcessExited)?;
+        let stdout = self
+            .process
+            .stdout
+            .as_mut()
+            .ok_or(ClientError::ProcessExited)?;
         let mut reader = BufReader::new(stdout);
 
         loop {
@@ -306,7 +332,11 @@ impl GoplsClient {
         let notif = JsonRpcNotification::new(method, params);
         let encoded = notif.encode();
 
-        let stdin = self.process.stdin.as_mut().ok_or(ClientError::ProcessExited)?;
+        let stdin = self
+            .process
+            .stdin
+            .as_mut()
+            .ok_or(ClientError::ProcessExited)?;
         stdin.write_all(&encoded)?;
         stdin.flush()?;
         Ok(())

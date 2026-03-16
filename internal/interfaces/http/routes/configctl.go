@@ -36,18 +36,8 @@ func Configctl(
 		},
 		{
 			Method:  http.MethodGet,
-			Path:    "/configctl/configs",
-			Handler: handler.ListConfigs,
-		},
-		{
-			Method:  http.MethodGet,
 			Path:    "/configctl/config-versions",
 			Handler: handler.ListConfigs,
-		},
-		{
-			Method:  http.MethodGet,
-			Path:    "/configctl/configs/by-id",
-			Handler: handler.GetConfig,
 		},
 		{
 			Method:  http.MethodGet,
@@ -57,11 +47,6 @@ func Configctl(
 		{
 			Method:  http.MethodGet,
 			Path:    "/configctl/configs/active",
-			Handler: handler.GetActiveConfig,
-		},
-		{
-			Method:  http.MethodGet,
-			Path:    "/configctl/active-config",
 			Handler: handler.GetActiveConfig,
 		},
 		{

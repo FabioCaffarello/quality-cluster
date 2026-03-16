@@ -58,11 +58,11 @@ fn is_allowed_dependency(from_layer: usize, to_layer: usize) -> bool {
         return true;
     }
     match from_layer {
-        0 => false,                // domain imports nothing internal
-        1 => to_layer == 0,        // application → domain only
-        2 => to_layer <= 1,        // adapters → domain, application
-        3 => to_layer <= 2,        // actors → domain, application, adapters
-        4 => to_layer <= 1,        // interfaces → domain, application (NOT adapters, actors)
+        0 => false,         // domain imports nothing internal
+        1 => to_layer == 0, // application → domain only
+        2 => to_layer <= 1, // adapters → domain, application
+        3 => to_layer <= 2, // actors → domain, application, adapters
+        4 => to_layer <= 1, // interfaces → domain, application (NOT adapters, actors)
         _ => false,
     }
 }
@@ -88,7 +88,12 @@ fn type_expr_refs_adapter(expr: &str) -> bool {
     // Matches patterns like `natsadapter.Publisher`, `kafka.Producer` etc.
     // where the package qualifier is an adapter-layer package.
     let adapter_pkgs = [
-        "nats.", "kafka.", "natsadapter.", "kafkaadapter.", "repository.", "repositories.",
+        "nats.",
+        "kafka.",
+        "natsadapter.",
+        "kafkaadapter.",
+        "repository.",
+        "repositories.",
     ];
     adapter_pkgs.iter().any(|p| expr.contains(p))
 }
@@ -102,9 +107,11 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
     if !internal_dir.is_dir() {
         report.add(CheckResult::from_findings(
             "internal-dir",
-            vec![Finding::error("arch-guard", "internal/ directory not found")
-                .with_why("arch-guard scans internal/ for layer dependency violations")
-                .with_help("pass --project-root pointing to the quality-service root")],
+            vec![
+                Finding::error("arch-guard", "internal/ directory not found")
+                    .with_why("arch-guard scans internal/ for layer dependency violations")
+                    .with_help("pass --project-root pointing to the quality-service root"),
+            ],
         ));
         return Ok(report);
     }
@@ -160,9 +167,7 @@ fn check_layer_deps(index: &ProjectIndex) -> CheckResult {
                         findings.push(
                             Finding::error(
                                 "layer-dependency",
-                                format!(
-                                    "{from_layer_name}/ must not import {to_layer_name}/",
-                                ),
+                                format!("{from_layer_name}/ must not import {to_layer_name}/",),
                             )
                             .with_location(format!("{}:{}", file.path, imp.location.line))
                             .with_why(format!(
@@ -336,18 +341,13 @@ fn check_cmd_boundary(index: &ProjectIndex) -> CheckResult {
             if let Some(layer) = extract_internal_layer(&imp.path) {
                 if layer == "domain" {
                     findings.push(
-                        Finding::warning(
-                            "cmd-boundary",
-                            "cmd/ imports domain/ directly",
-                        )
-                        .with_location(format!("{}:{}", file.path, imp.location.line))
-                        .with_why(
-                            "cmd packages should orchestrate via application use cases, \
+                        Finding::warning("cmd-boundary", "cmd/ imports domain/ directly")
+                            .with_location(format!("{}:{}", file.path, imp.location.line))
+                            .with_why(
+                                "cmd packages should orchestrate via application use cases, \
                              not reach into domain directly",
-                        )
-                        .with_help(
-                            "access domain types through application layer contracts",
-                        ),
+                            )
+                            .with_help("access domain types through application layer contracts"),
                     );
                 }
             }
@@ -390,9 +390,12 @@ fn check_tooling_boundary(project_root: &Path) -> CheckResult {
             .unwrap_or(path)
             .to_string_lossy();
         findings.push(
-            Finding::error("tooling-boundary", format!("Go module found in tools/: {rel}"))
-                .with_why("tools/ is the Rust tooling boundary — Go modules here break separation")
-                .with_help("move Go code to cmd/ or internal/"),
+            Finding::error(
+                "tooling-boundary",
+                format!("Go module found in tools/: {rel}"),
+            )
+            .with_why("tools/ is the Rust tooling boundary — Go modules here break separation")
+            .with_help("move Go code to cmd/ or internal/"),
         );
     });
 
@@ -415,8 +418,7 @@ fn check_tooling_boundary(project_root: &Path) -> CheckResult {
                 }
                 let is_use_stmt =
                     trimmed.starts_with("use ") && trimmed.contains("quality_service");
-                let is_mod_stmt =
-                    trimmed.starts_with("mod ") && trimmed.contains("internal");
+                let is_mod_stmt = trimmed.starts_with("mod ") && trimmed.contains("internal");
                 if is_use_stmt || is_mod_stmt {
                     findings.push(
                         Finding::error(
@@ -527,16 +529,13 @@ fn check_deploy_boundary(project_root: &Path) -> CheckResult {
                     || trimmed.contains("deploy/docker/")
                 {
                     findings.push(
-                        Finding::warning(
-                            "deploy-boundary",
-                            "Go source hardcodes a deploy/ path",
-                        )
-                        .with_location(format!("{rel}:{}", i + 1))
-                        .with_why(
-                            "deploy paths should be injected via configuration, \
+                        Finding::warning("deploy-boundary", "Go source hardcodes a deploy/ path")
+                            .with_location(format!("{rel}:{}", i + 1))
+                            .with_why(
+                                "deploy paths should be injected via configuration, \
                              not hardcoded in Go source",
-                        )
-                        .with_help("use settings/config to pass paths at runtime"),
+                            )
+                            .with_help("use settings/config to pass paths at runtime"),
                     );
                 }
             }
@@ -718,9 +717,7 @@ fn check_exported_func_signatures(index: &ProjectIndex) -> CheckResult {
                             "exported functions in inner layers with infrastructure params \
                              force callers to depend on concrete adapters",
                         )
-                        .with_help(
-                            "accept an interface parameter defined in application/ports/",
-                        ),
+                        .with_help("accept an interface parameter defined in application/ports/"),
                     );
                 }
             }
@@ -1002,7 +999,10 @@ mod tests {
     fn domain_cannot_import_other_layers() {
         assert!(is_allowed_dependency(0, 0));
         for to in 1..5 {
-            assert!(!is_allowed_dependency(0, to), "domain should not import layer {to}");
+            assert!(
+                !is_allowed_dependency(0, to),
+                "domain should not import layer {to}"
+            );
         }
     }
 
@@ -1055,7 +1055,11 @@ mod tests {
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "domain-purity").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "domain-purity")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Fail);
         assert!(check.findings[0].message.contains("nats"));
     }
@@ -1072,7 +1076,11 @@ mod tests {
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "domain-purity").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "domain-purity")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Fail);
     }
 
@@ -1088,7 +1096,11 @@ mod tests {
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "domain-purity").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "domain-purity")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Pass);
     }
 
@@ -1138,9 +1150,16 @@ mod tests {
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "cmd-boundary").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "cmd-boundary")
+            .unwrap();
         assert!(
-            check.findings.iter().any(|f| f.severity == Severity::Warning),
+            check
+                .findings
+                .iter()
+                .any(|f| f.severity == Severity::Warning),
             "cmd importing domain should be a warning"
         );
     }
@@ -1166,7 +1185,11 @@ type G interface{}
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "cmd-boundary").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "cmd-boundary")
+            .unwrap();
         assert!(
             check
                 .findings
@@ -1190,14 +1213,14 @@ type G interface{}
         )
         .unwrap();
 
-        fs::write(
-            dir.path().join("cmd/validator/main.go"),
-            "package main\n",
-        )
-        .unwrap();
+        fs::write(dir.path().join("cmd/validator/main.go"), "package main\n").unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "no-cross-cmd").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "no-cross-cmd")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Fail);
         assert!(check.findings[0].message.contains("server"));
         assert!(check.findings[0].message.contains("validator"));
@@ -1215,7 +1238,11 @@ type G interface{}
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "no-cross-cmd").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "no-cross-cmd")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Pass);
     }
 
@@ -1275,9 +1302,16 @@ type G interface{}
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "deploy-boundary").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "deploy-boundary")
+            .unwrap();
         assert!(
-            check.findings.iter().any(|f| f.severity == Severity::Warning),
+            check
+                .findings
+                .iter()
+                .any(|f| f.severity == Severity::Warning),
             "hardcoded deploy path should be a warning"
         );
     }
@@ -1294,7 +1328,11 @@ type G interface{}
         .unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "deploy-boundary").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "deploy-boundary")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Pass);
     }
 
@@ -1609,7 +1647,11 @@ func newService(conn *nats.Conn) *service {
         let report = analyze(dir.path()).unwrap();
         let names: Vec<&str> = report.checks.iter().map(|c| c.name.as_str()).collect();
         let unique: std::collections::HashSet<&str> = names.iter().copied().collect();
-        assert_eq!(names.len(), unique.len(), "check names must be unique: {names:?}");
+        assert_eq!(
+            names.len(),
+            unique.len(),
+            "check names must be unique: {names:?}"
+        );
     }
 
     #[test]
@@ -1719,9 +1761,18 @@ func newService(conn *nats.Conn) *service {
 
     #[test]
     fn file_layer_extraction() {
-        assert_eq!(file_layer("internal/domain/configctl/model.go"), Some("domain"));
-        assert_eq!(file_layer("internal/adapters/nats/gateway.go"), Some("adapters"));
-        assert_eq!(file_layer("internal/shared/settings/schema.go"), Some("shared"));
+        assert_eq!(
+            file_layer("internal/domain/configctl/model.go"),
+            Some("domain")
+        );
+        assert_eq!(
+            file_layer("internal/adapters/nats/gateway.go"),
+            Some("adapters")
+        );
+        assert_eq!(
+            file_layer("internal/shared/settings/schema.go"),
+            Some("shared")
+        );
         assert_eq!(file_layer("cmd/server/main.go"), None);
     }
 
@@ -1806,11 +1857,7 @@ func newService(conn *nats.Conn) *service {
             "package ports\n\ntype Gateway interface{ Get() string }\n",
         )
         .unwrap();
-        fs::write(
-            dir.path().join("cmd/server/main.go"),
-            "package main\n",
-        )
-        .unwrap();
+        fs::write(dir.path().join("cmd/server/main.go"), "package main\n").unwrap();
 
         let report = analyze(dir.path()).unwrap();
         assert_eq!(

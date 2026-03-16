@@ -44,5 +44,6 @@ func (uc *ListActiveIngestionBindingsUseCase) Execute(ctx context.Context, query
 
 	return contracts.ListActiveIngestionBindingsReply{
 		Bindings: activeIngestionBindingsFromDomain(runtimes),
+		Runtimes: compactIngestionRuntimesFromDomain(runtimes),
 	}, nil
 }

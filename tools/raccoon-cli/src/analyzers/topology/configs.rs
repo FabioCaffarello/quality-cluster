@@ -11,6 +11,7 @@ pub struct ServiceConfig {
     pub kafka_client_id: Option<String>,
     pub nats_url: Option<String>,
     pub bootstrap_base_url: Option<String>,
+    pub bootstrap_reconcile_interval: Option<String>,
 }
 
 /// Parse all .jsonc config files from the configs directory.
@@ -88,6 +89,9 @@ fn parse_config(path: &Path) -> Result<ServiceConfig> {
     if let Some(bootstrap) = value.get("bootstrap") {
         if let Some(url) = bootstrap.get("base_url").and_then(|v| v.as_str()) {
             cfg.bootstrap_base_url = Some(url.to_string());
+        }
+        if let Some(interval) = bootstrap.get("reconcile_interval").and_then(|v| v.as_str()) {
+            cfg.bootstrap_reconcile_interval = Some(interval.to_string());
         }
     }
 
@@ -201,6 +205,7 @@ mod tests {
             cfg.bootstrap_base_url.as_deref(),
             Some("http://server:8080")
         );
+        assert_eq!(cfg.bootstrap_reconcile_interval.as_deref(), None);
     }
 
     #[test]
@@ -276,6 +281,7 @@ mod tests {
         assert!(cfg.kafka_brokers.is_empty());
         assert!(cfg.nats_url.is_none());
         assert!(cfg.bootstrap_base_url.is_none());
+        assert!(cfg.bootstrap_reconcile_interval.is_none());
     }
 
     #[test]
@@ -301,5 +307,24 @@ mod tests {
 
         let cfg = parse_config(&path).unwrap();
         assert_eq!(cfg.kafka_brokers.len(), 3);
+    }
+
+    #[test]
+    fn parse_config_bootstrap_reconcile_interval() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("consumer.jsonc");
+        std::fs::write(
+            &path,
+            r#"{
+  "bootstrap": {
+    "base_url": "http://server:8080",
+    "reconcile_interval": "30s"
+  }
+}"#,
+        )
+        .unwrap();
+
+        let cfg = parse_config(&path).unwrap();
+        assert_eq!(cfg.bootstrap_reconcile_interval.as_deref(), Some("30s"));
     }
 }

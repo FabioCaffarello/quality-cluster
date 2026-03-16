@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	adapternats "internal/adapters/nats"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	"internal/shared/problem"
@@ -62,6 +63,9 @@ func (a *ResultsQueryResponderActor) Receive(c *actor.Context) {
 			}
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validator results responder: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

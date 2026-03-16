@@ -194,9 +194,21 @@ impl Report {
     }
 
     pub fn summary(&self) -> (usize, usize, usize) {
-        let pass = self.checks.iter().filter(|c| c.status == CheckStatus::Pass).count();
-        let fail = self.checks.iter().filter(|c| c.status == CheckStatus::Fail).count();
-        let skip = self.checks.iter().filter(|c| c.status == CheckStatus::Skip).count();
+        let pass = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Pass)
+            .count();
+        let fail = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Fail)
+            .count();
+        let skip = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Skip)
+            .count();
         (pass, fail, skip)
     }
 }
@@ -213,7 +225,10 @@ impl fmt::Display for Report {
         }
         let (pass, fail, skip) = self.summary();
         let verdict = if self.passed() { "PASSED" } else { "FAILED" };
-        write!(f, "Result: {verdict} | {pass} passed, {fail} failed, {skip} skipped")
+        write!(
+            f,
+            "Result: {verdict} | {pass} passed, {fail} failed, {skip} skipped"
+        )
     }
 }
 
@@ -230,18 +245,12 @@ mod tests {
     #[test]
     fn finding_display_with_location() {
         let f = Finding::error("test-check", "bad thing").with_location("file.go:42");
-        assert_eq!(
-            f.to_string(),
-            "[error] test-check: bad thing (file.go:42)"
-        );
+        assert_eq!(f.to_string(), "[error] test-check: bad thing (file.go:42)");
     }
 
     #[test]
     fn check_result_from_findings_pass_when_no_errors() {
-        let findings = vec![
-            Finding::info("a", "ok"),
-            Finding::warning("b", "meh"),
-        ];
+        let findings = vec![Finding::info("a", "ok"), Finding::warning("b", "meh")];
         let result = CheckResult::from_findings("my-check", findings);
         assert_eq!(result.status, CheckStatus::Pass);
         assert_eq!(result.findings.len(), 2);
@@ -249,10 +258,7 @@ mod tests {
 
     #[test]
     fn check_result_from_findings_fail_when_error_present() {
-        let findings = vec![
-            Finding::info("a", "ok"),
-            Finding::error("b", "boom"),
-        ];
+        let findings = vec![Finding::info("a", "ok"), Finding::error("b", "boom")];
         let result = CheckResult::from_findings("my-check", findings);
         assert_eq!(result.status, CheckStatus::Fail);
     }
@@ -269,7 +275,10 @@ mod tests {
     fn report_failed_when_any_fail() {
         let mut report = Report::new("test");
         report.add(CheckResult::pass("a"));
-        report.add(CheckResult::from_findings("b", vec![Finding::error("x", "fail")]));
+        report.add(CheckResult::from_findings(
+            "b",
+            vec![Finding::error("x", "fail")],
+        ));
         assert!(!report.passed());
     }
 
@@ -278,7 +287,10 @@ mod tests {
         let mut report = Report::new("test");
         report.add(CheckResult::pass("a"));
         report.add(CheckResult::pass("b"));
-        report.add(CheckResult::from_findings("c", vec![Finding::error("x", "fail")]));
+        report.add(CheckResult::from_findings(
+            "c",
+            vec![Finding::error("x", "fail")],
+        ));
         report.add(CheckResult::skip("d", "not applicable"));
         assert_eq!(report.summary(), (2, 1, 1));
     }
@@ -312,7 +324,10 @@ mod tests {
         assert!(json.contains("\"passed\":true"));
 
         let mut failing = Report::new("test");
-        failing.add(CheckResult::from_findings("b", vec![Finding::error("x", "fail")]));
+        failing.add(CheckResult::from_findings(
+            "b",
+            vec![Finding::error("x", "fail")],
+        ));
         let json = serde_json::to_string(&failing).unwrap();
         assert!(json.contains("\"passed\":false"));
     }
@@ -324,7 +339,10 @@ mod tests {
         assert!(passing.to_string().contains("PASSED"));
 
         let mut failing = Report::new("test");
-        failing.add(CheckResult::from_findings("b", vec![Finding::error("x", "boom")]));
+        failing.add(CheckResult::from_findings(
+            "b",
+            vec![Finding::error("x", "boom")],
+        ));
         assert!(failing.to_string().contains("FAILED"));
     }
 
@@ -334,7 +352,10 @@ mod tests {
         assert!(report.passed());
         report.add(CheckResult::pass("a"));
         assert!(report.passed());
-        report.add(CheckResult::from_findings("b", vec![Finding::error("x", "fail")]));
+        report.add(CheckResult::from_findings(
+            "b",
+            vec![Finding::error("x", "fail")],
+        ));
         assert!(!report.passed());
         report.add(CheckResult::pass("c"));
         assert!(!report.passed()); // still false after adding more passes
@@ -408,7 +429,10 @@ mod tests {
         let mut report = Report::new("test");
         report.add(CheckResult::pass("a"));
         report.add(CheckResult::skip("b", "skipped"));
-        report.add(CheckResult::from_findings("c", vec![Finding::error("x", "boom")]));
+        report.add(CheckResult::from_findings(
+            "c",
+            vec![Finding::error("x", "boom")],
+        ));
         let display = report.to_string();
         assert!(display.contains("=== test ==="));
         assert!(display.contains("a: PASS"));
@@ -459,8 +483,7 @@ mod tests {
 
     #[test]
     fn finding_with_why_display() {
-        let f = Finding::error("check", "something broke")
-            .with_why("this causes data loss");
+        let f = Finding::error("check", "something broke").with_why("this causes data loss");
         assert_eq!(
             f.to_string(),
             "[error] check: something broke -- this causes data loss"
@@ -469,8 +492,7 @@ mod tests {
 
     #[test]
     fn finding_with_help_display() {
-        let f = Finding::error("check", "something broke")
-            .with_help("run fix command");
+        let f = Finding::error("check", "something broke").with_help("run fix command");
         assert_eq!(
             f.to_string(),
             "[error] check: something broke. Fix: run fix command"
@@ -520,8 +542,7 @@ mod tests {
 
     #[test]
     fn finding_with_why_only_no_help() {
-        let f = Finding::warning("check", "something")
-            .with_why("context");
+        let f = Finding::warning("check", "something").with_why("context");
         assert!(f.why.is_some());
         assert!(f.help.is_none());
         assert!(f.to_string().contains("-- context"));

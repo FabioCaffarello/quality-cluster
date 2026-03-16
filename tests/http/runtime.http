@@ -13,7 +13,7 @@ X-Correlation-ID: {{correlationId}}
 ###
 
 ### Active ingestion bindings bootstrap for consumer/emulator on the default scope
-### The response should include `binding`, `fields` and compact runtime metadata.
+### The response should include `bindings` plus a compact `runtimes` set for the same active story.
 GET {{baseUrl}}/runtime/ingestion/bindings?scope_kind=global&scope_key=default
 Accept: application/json
 X-Correlation-ID: {{correlationId}}

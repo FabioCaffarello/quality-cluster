@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
+	configctlcontracts "internal/application/configctl/contracts"
 	sharedruntime "internal/application/runtimecontracts"
 	runtimecontracts "internal/application/validatorruntime/contracts"
 	configdomain "internal/domain/configctl"
@@ -16,6 +18,17 @@ import (
 
 type applyRuntimeUpdateMessage struct {
 	Event configdomain.ConfigActivatedEvent
+}
+
+type bootstrapRuntimeProjectionMessage struct {
+	Projection configdomain.RuntimeProjection
+}
+
+type evictRuntimeScopeMessage struct {
+	Scope         configdomain.ActivationScope
+	ConfigSetID   string
+	VersionID     string
+	DeactivatedAt time.Time
 }
 
 type queryActiveRuntimeMessage struct {
@@ -64,20 +77,11 @@ func (a *RuntimeCacheActor) Receive(c *actor.Context) {
 	case actor.Started:
 		a.logger.Info("validator runtime cache started")
 	case applyRuntimeUpdateMessage:
-		scope := msg.Event.Projection.Scope.Normalize().String()
-		a.runtimes[scope] = cachedRuntime{
-			projection: msg.Event.Projection,
-			loadedAt:   time.Now().UTC(),
-		}
-		runtime := a.runtimes[scope]
-		a.logger.Info(
-			"validator runtime cache updated",
-			"config_set_id", runtime.projection.ConfigSetID,
-			"version_id", runtime.projection.VersionID,
-			"version", runtime.projection.Version,
-			"scope", runtime.projection.Scope.String(),
-			"artifact_checksum", runtime.projection.Artifact.Checksum,
-		)
+		a.applyProjection(msg.Event.Projection)
+	case bootstrapRuntimeProjectionMessage:
+		a.applyProjection(msg.Projection)
+	case evictRuntimeScopeMessage:
+		a.evictScope(msg)
 	case queryActiveRuntimeMessage:
 		runtime, prob := a.runtimeForScope(configdomain.ActivationScope{
 			Kind: msg.Query.ScopeKind,
@@ -98,6 +102,9 @@ func (a *RuntimeCacheActor) Receive(c *actor.Context) {
 			Prob:     prob,
 		})
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validator runtime cache: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }
@@ -128,11 +135,97 @@ func (a *RuntimeCacheActor) runtimeForScope(scope configdomain.ActivationScope) 
 	return runtime, nil
 }
 
+func (a *RuntimeCacheActor) applyProjection(projection configdomain.RuntimeProjection) {
+	scope := projection.Scope.Normalize().String()
+	if current, ok := a.runtimes[scope]; ok && current.projection.ActivatedAt.After(projection.ActivatedAt) {
+		return
+	}
+	a.runtimes[scope] = cachedRuntime{
+		projection: projection,
+		loadedAt:   time.Now().UTC(),
+	}
+	runtime := a.runtimes[scope]
+	a.logger.Info(
+		"validator runtime cache updated",
+		"config_set_id", runtime.projection.ConfigSetID,
+		"version_id", runtime.projection.VersionID,
+		"version", runtime.projection.Version,
+		"scope", runtime.projection.Scope.String(),
+		"artifact_checksum", runtime.projection.Artifact.Checksum,
+	)
+}
+
+func (a *RuntimeCacheActor) evictScope(msg evictRuntimeScopeMessage) {
+	scope := msg.Scope.Normalize()
+	current, ok := a.runtimes[scope.String()]
+	if !ok {
+		return
+	}
+	if msg.ConfigSetID != "" && msg.VersionID != "" {
+		// Ignore stale deactivation events that belong to an older runtime.
+		if current.projection.ConfigSetID != msg.ConfigSetID || current.projection.VersionID != msg.VersionID {
+			return
+		}
+	}
+	if !msg.DeactivatedAt.IsZero() && current.projection.ActivatedAt.After(msg.DeactivatedAt.UTC()) {
+		return
+	}
+	delete(a.runtimes, scope.String())
+	a.logger.Info("validator runtime cache cleared", "scope", scope.String())
+}
+
 func snapshotRuntime(runtime cachedRuntime) runtimecontracts.ActiveRuntimeRecord {
 	return runtimecontracts.ActiveRuntimeRecord{
 		RuntimeRecord: sharedruntime.RecordFromProjection(runtime.projection),
 		LoadedAt:      runtime.loadedAt,
 	}
+}
+
+func runtimeProjectionFromRecord(record configctlcontracts.RuntimeProjectionRecord) configdomain.RuntimeProjection {
+	projection := configdomain.RuntimeProjection{
+		Scope: configdomain.ActivationScope{
+			Kind: record.Scope.Kind,
+			Key:  record.Scope.Key,
+		}.Normalize(),
+		ConfigSetID: record.ConfigSetID,
+		ConfigKey:   record.ConfigKey,
+		VersionID:   record.VersionID,
+		Version:     record.Version,
+		Artifact: configdomain.CompilationArtifact{
+			ID:              record.Artifact.ID,
+			SchemaVersion:   record.Artifact.SchemaVersion,
+			Checksum:        record.Artifact.Checksum,
+			StorageRef:      record.Artifact.StorageRef,
+			RuntimeLoader:   record.Artifact.RuntimeLoader,
+			CompilerVersion: record.Artifact.CompilerVersion,
+			CreatedAt:       record.Artifact.CreatedAt,
+		},
+		ActivatedAt:        record.ActivatedAt,
+		DefinitionChecksum: record.DefinitionChecksum,
+	}
+	for _, binding := range record.Bindings {
+		projection.Bindings = append(projection.Bindings, configdomain.Binding{
+			Name:  binding.Name,
+			Topic: binding.Topic,
+		})
+	}
+	for _, field := range record.Fields {
+		projection.Fields = append(projection.Fields, configdomain.Field{
+			Name:     field.Name,
+			Type:     configdomain.FieldType(field.Type),
+			Required: field.Required,
+		})
+	}
+	for _, rule := range record.Rules {
+		projection.Rules = append(projection.Rules, configdomain.Rule{
+			Name:          rule.Name,
+			Field:         rule.Field,
+			Operator:      configdomain.RuleOperator(rule.Operator),
+			ExpectedValue: rule.ExpectedValue,
+			Severity:      configdomain.RuleSeverity(rule.Severity),
+		})
+	}
+	return projection
 }
 
 func (a *RuntimeCacheActor) reply(c *actor.Context, msg any) {

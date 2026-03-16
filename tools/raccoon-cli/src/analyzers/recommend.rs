@@ -64,11 +64,10 @@ pub fn analyze_with_baseline(
         impact_map::analyze(project_root, changed_files)
     };
 
-    let drift_context =
-        match super::baseline_drift::analyze(baseline_path, project_root) {
-            Ok(drift_report) => Some(DriftContext::from_drift_report(&drift_report)),
-            Err(_) => None,
-        };
+    let drift_context = match super::baseline_drift::analyze(baseline_path, project_root) {
+        Ok(drift_report) => Some(DriftContext::from_drift_report(&drift_report)),
+        Err(_) => None,
+    };
 
     build_report(changed_files, &tdd_report, &impact_report, drift_context)
 }
@@ -394,10 +393,7 @@ fn build_report(
                 evidence_basis: risk.basis.clone(),
                 message: risk.description.clone(),
                 location: None,
-                review_action: format!(
-                    "Review impact in context of {} change",
-                    imp.target
-                ),
+                review_action: format!("Review impact in context of {} change", imp.target),
             });
         }
     }
@@ -477,8 +473,7 @@ fn build_report(
             inferences.push(TaggedItem {
                 tag: "inference".into(),
                 category: "drift".into(),
-                message:
-                    "Contract surface drift detected — consumers may be affected".into(),
+                message: "Contract surface drift detected — consumers may be affected".into(),
                 location: None,
             });
         }
@@ -487,8 +482,7 @@ fn build_report(
             inferences.push(TaggedItem {
                 tag: "inference".into(),
                 category: "drift".into(),
-                message:
-                    "Architecture isolation loss detected — layer boundaries weakened".into(),
+                message: "Architecture isolation loss detected — layer boundaries weakened".into(),
                 location: None,
             });
         }
@@ -516,8 +510,7 @@ fn build_report(
             seen_scenarios.insert("happy-path".into());
             smoke_scenarios.push(SmokeRecommendation {
                 scenario: "happy-path".into(),
-                description: "full E2E: config lifecycle + data plane + validation results"
-                    .into(),
+                description: "full E2E: config lifecycle + data plane + validation results".into(),
                 why: "contract surface drift detected — verify E2E integration".into(),
                 priority: "high".into(),
             });
@@ -547,8 +540,14 @@ fn build_report(
     // Large changes: recommend full suite if not already covered
     if change_scope == "large" {
         for (name, desc) in &[
-            ("happy-path", "full E2E: config lifecycle + data plane + validation results"),
-            ("readiness-probe", "cluster bootstrap and readiness verification"),
+            (
+                "happy-path",
+                "full E2E: config lifecycle + data plane + validation results",
+            ),
+            (
+                "readiness-probe",
+                "cluster bootstrap and readiness verification",
+            ),
         ] {
             if seen_scenarios.insert(name.to_string()) {
                 smoke_scenarios.push(SmokeRecommendation {
@@ -563,12 +562,7 @@ fn build_report(
 
     // ── Gate profile recommendation ──
 
-    let gate_profile = determine_gate_profile(
-        &tdd,
-        &drift,
-        change_scope,
-        &smoke_scenarios,
-    );
+    let gate_profile = determine_gate_profile(&tdd, &drift, change_scope, &smoke_scenarios);
 
     // ── Priority areas ──
 
@@ -715,10 +709,7 @@ fn build_priority_areas(tdd: &tdd::TddReport) -> Vec<PriorityArea> {
 
     for area in &tdd.affected_areas {
         let gap = tdd.coverage_gaps.iter().find(|g| g.area == area.name);
-        let has_tests = tdd
-            .existing_tests
-            .iter()
-            .any(|t| t.for_area == area.name);
+        let has_tests = tdd.existing_tests.iter().any(|t| t.for_area == area.name);
 
         let (coverage_status, suggestion) = match gap {
             Some(g) => {
@@ -733,9 +724,15 @@ fn build_priority_areas(tdd: &tdd::TddReport) -> Vec<PriorityArea> {
             }
             None => {
                 if has_tests {
-                    ("covered".to_string(), "Tests exist — verify they pass".to_string())
+                    (
+                        "covered".to_string(),
+                        "Tests exist — verify they pass".to_string(),
+                    )
                 } else {
-                    ("unknown".to_string(), "Verify coverage manually".to_string())
+                    (
+                        "unknown".to_string(),
+                        "Verify coverage manually".to_string(),
+                    )
                 }
             }
         };
@@ -877,12 +874,7 @@ pub fn render_human(report: &RecommendReport, verbose: bool) -> String {
                 "unit-only" => "partial",
                 _ => "?",
             };
-            writeln!(
-                out,
-                "  [{}] {} — {}",
-                icon, area.area, area.description
-            )
-            .unwrap();
+            writeln!(out, "  [{}] {} — {}", icon, area.area, area.description).unwrap();
             if area.coverage_status != "covered" {
                 writeln!(out, "       {}", area.suggestion).unwrap();
             }
@@ -894,12 +886,7 @@ pub fn render_human(report: &RecommendReport, verbose: bool) -> String {
     if !report.recommendations.is_empty() {
         writeln!(out, "Recommendations:").unwrap();
         for rec in &report.recommendations {
-            writeln!(
-                out,
-                "  [{}] {} — {}",
-                rec.priority, rec.action, rec.why
-            )
-            .unwrap();
+            writeln!(out, "  [{}] {} — {}", rec.priority, rec.action, rec.why).unwrap();
         }
         writeln!(out).unwrap();
     }
@@ -1141,7 +1128,10 @@ func HandleConfig() {}
             &["internal/application/configctl/contracts/commands.go".into()],
         );
 
-        assert!(!report.facts.is_empty(), "should have facts from impact analysis");
+        assert!(
+            !report.facts.is_empty(),
+            "should have facts from impact analysis"
+        );
     }
 
     // ── Adapter changes (no tests, needs infra) ──────────────────────────
@@ -1157,7 +1147,10 @@ func HandleConfig() {}
             "adapter change should recommend smoke scenarios"
         );
         assert!(
-            report.smoke_scenarios.iter().any(|s| s.scenario == "happy-path"),
+            report
+                .smoke_scenarios
+                .iter()
+                .any(|s| s.scenario == "happy-path"),
             "should recommend happy-path, got: {:?}",
             report.smoke_scenarios
         );
@@ -1203,7 +1196,10 @@ func HandleConfig() {}
         );
 
         assert!(
-            report.inferences.iter().any(|i| i.category == "affected-area"),
+            report
+                .inferences
+                .iter()
+                .any(|i| i.category == "affected-area"),
             "should detect affected area inference"
         );
     }
@@ -1306,7 +1302,11 @@ func HandleConfig() {}
         );
 
         // No duplicates
-        let names: Vec<&str> = report.smoke_scenarios.iter().map(|s| s.scenario.as_str()).collect();
+        let names: Vec<&str> = report
+            .smoke_scenarios
+            .iter()
+            .map(|s| s.scenario.as_str())
+            .collect();
         let unique: BTreeSet<&str> = names.iter().copied().collect();
         assert_eq!(
             names.len(),

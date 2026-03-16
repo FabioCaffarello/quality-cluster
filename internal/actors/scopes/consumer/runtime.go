@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	actorcommon "internal/actors/common"
 	adapterkafka "internal/adapters/kafka"
 	adapternats "internal/adapters/nats"
 	dataplaneapp "internal/application/dataplane"
@@ -74,6 +75,9 @@ func (a *ConsumerRuntimeActor) Receive(c *actor.Context) {
 		a.fail(c, fmt.Errorf("topic %s: %w", msg.Topic, msg.Err))
 	case actor.Stopped:
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("consumer runtime: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

@@ -122,17 +122,31 @@ pub fn render_human(report: &InspectReport, verbose: bool) -> String {
     writeln!(out).unwrap();
 
     // Summary
-    writeln!(out, "Total: {}  |  Passed: {}  |  Failed: {}", s.total, s.passed, s.failed).unwrap();
+    writeln!(
+        out,
+        "Total: {}  |  Passed: {}  |  Failed: {}",
+        s.total, s.passed, s.failed
+    )
+    .unwrap();
 
     if s.total == 0 {
         writeln!(out).unwrap();
         writeln!(out, "No validation results found.").unwrap();
-        writeln!(out, "This may mean the validator has not processed any messages yet,").unwrap();
+        writeln!(
+            out,
+            "This may mean the validator has not processed any messages yet,"
+        )
+        .unwrap();
         writeln!(out, "or the applied filters excluded all results.").unwrap();
 
         if let Some(ref filters) = report.filters_applied {
             writeln!(out).unwrap();
-            writeln!(out, "Filters: scope={}/{}", filters.scope_kind, filters.scope_key).unwrap();
+            writeln!(
+                out,
+                "Filters: scope={}/{}",
+                filters.scope_kind, filters.scope_key
+            )
+            .unwrap();
             if let Some(ref b) = filters.binding_name {
                 write!(out, ", binding={b}").unwrap();
             }
@@ -181,7 +195,11 @@ pub fn render_human(report: &InspectReport, verbose: bool) -> String {
     if verbose || s.failed > 0 {
         writeln!(out).unwrap();
         let shown: Vec<_> = if !verbose {
-            report.results.iter().filter(|r| r.status == "failed").collect()
+            report
+                .results
+                .iter()
+                .filter(|r| r.status == "failed")
+                .collect()
         } else {
             report.results.iter().collect()
         };
@@ -229,7 +247,12 @@ pub fn render_human(report: &InspectReport, verbose: bool) -> String {
         writeln!(out, "> All validations passed.").unwrap();
     } else {
         let word = if s.failed == 1 { "result" } else { "results" };
-        writeln!(out, "> {failed} {word} failed — review violations above.", failed = s.failed).unwrap();
+        writeln!(
+            out,
+            "> {failed} {word} failed — review violations above.",
+            failed = s.failed
+        )
+        .unwrap();
     }
 
     out
@@ -274,9 +297,7 @@ fn fetch_results(config: &InspectConfig) -> Result<Value> {
                     )
                 }
                 ureq::Error::Status(code, _) => {
-                    format!(
-                        "quality-service returned HTTP {code} for results query"
-                    )
+                    format!("quality-service returned HTTP {code} for results query")
                 }
             };
             CliError::Command { message: msg }

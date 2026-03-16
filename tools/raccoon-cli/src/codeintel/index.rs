@@ -71,10 +71,7 @@ fn aggregate_packages(files: &[GoFile]) -> Vec<GoPackage> {
             }
 
             // Aggregate types
-            let types: Vec<GoType> = files
-                .iter()
-                .flat_map(|f| f.types.iter().cloned())
-                .collect();
+            let types: Vec<GoType> = files.iter().flat_map(|f| f.types.iter().cloned()).collect();
 
             // Aggregate functions (not from test files)
             let functions: Vec<GoFunc> = files
@@ -220,7 +217,10 @@ impl ProjectIndex {
 
     /// Get all files in a given directory.
     pub fn files_in_dir(&self, dir: &str) -> Vec<&GoFile> {
-        self.files.iter().filter(|f| file_dir(&f.path) == dir).collect()
+        self.files
+            .iter()
+            .filter(|f| file_dir(&f.path) == dir)
+            .collect()
     }
 
     /// List all import paths used across the project, with counts.

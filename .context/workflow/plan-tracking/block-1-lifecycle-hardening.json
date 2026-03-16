@@ -1,0 +1,145 @@
+{
+  "decisions": [
+    {
+      "title": "Preserve current architecture ownership",
+      "description": "Bloco 1 preserva server como facade HTTP fina, configctl como owner do lifecycle e validator como boundary separada para runtime cache, dataplane consume e results query. O bloco endurece seams e remove duplicacao sem trocar o modelo operacional.",
+      "phase": "P",
+      "alternatives": [
+        "Mover orquestracao para server",
+        "Fundir configctl e validator",
+        "Introduzir persistencia nova neste bloco"
+      ],
+      "status": "accepted",
+      "id": "dec-1773634978733",
+      "decidedAt": "2026-03-16T04:22:58.733Z"
+    },
+    {
+      "title": "Freeze canonical lifecycle surface first",
+      "description": "Antes de qualquer refactor, o bloco deve congelar endpoints e payloads canonicos do lifecycle para evitar drift simultaneo entre handlers HTTP, .http, smoke local e raccoon-cli.",
+      "phase": "P",
+      "alternatives": [
+        "Remover aliases diretamente no codigo",
+        "Ajustar smoke antes de definir API canonica",
+        "Manter aliases indefinidamente"
+      ],
+      "status": "accepted",
+      "id": "dec-1773634978739",
+      "decidedAt": "2026-03-16T04:22:58.739Z"
+    },
+    {
+      "title": "No persistence expansion in Block 1",
+      "description": "Results store em memoria e bootstrap atual do validator permanecem neste bloco. O objetivo aqui e clarificar replay/startup e readiness, nao introduzir banco, snapshots ou nova camada de armazenamento.",
+      "phase": "P",
+      "alternatives": [
+        "Persistir results neste bloco",
+        "Adicionar snapshot store para runtime",
+        "Horizontalizar validator agora"
+      ],
+      "status": "accepted",
+      "id": "dec-1773634978743",
+      "decidedAt": "2026-03-16T04:22:58.743Z"
+    },
+    {
+      "title": "Adopt version-centric configctl surface",
+      "description": "A superficie canonica do lifecycle fica em POST /configctl/configs para create draft, GET /configctl/config-versions para listagem de versoes, GET /configctl/config-versions/:id para lookup de versao e GET /configctl/configs/active para config ativa. Os aliases GET /configctl/configs, GET /configctl/configs/by-id e GET /configctl/active-config entram como legado a remover no Bloco 1.",
+      "phase": "P",
+      "alternatives": [
+        "Manter todos os aliases indefinidamente",
+        "Migrar para uma familia nova de endpoints nao existente no repo",
+        "Preservar /configctl/active-config como rota primaria"
+      ],
+      "status": "accepted",
+      "id": "dec-1773635369265",
+      "decidedAt": "2026-03-16T04:29:29.265Z"
+    },
+    {
+      "title": "Adopt hybrid bootstrap for validator runtime cache",
+      "description": "O validator deve usar configctl como fonte de verdade para bootstrap de runtime ativo e manter configctl.events.config.activated como canal de atualizacao continua. Replay puro de JetStream nao pode ser a fonte primaria de reidratacao, e o cache precisa de clear path para desativacoes por scope.",
+      "phase": "P",
+      "alternatives": [
+        "Depender apenas do durable consumer atual",
+        "Reconstruir runtime a partir de GetActiveConfig com heuristicas",
+        "Persistir runtime em nova store neste bloco"
+      ],
+      "status": "accepted",
+      "id": "dec-1773635604279",
+      "decidedAt": "2026-03-16T04:33:24.279Z"
+    },
+    {
+      "title": "Use composite readiness for server",
+      "description": "O readyz do server deve validar as superficies que ele realmente publica: configctl lifecycle, active ingestion bindings, validator results e validator runtime. Listagens vazias e runtime NotFound sem ativacao previa sao aceitaveis; unavailable, timeout e incoerencia entre bindings ativos e runtime ausente devem derrubar a prontidao.",
+      "phase": "P",
+      "alternatives": [
+        "Manter readyz baseado apenas em configctl.ListConfigs",
+        "Exigir runtime ativo sempre",
+        "Ignorar validator runtime e validator results no readyz"
+      ],
+      "status": "accepted",
+      "id": "dec-1773635604285",
+      "decidedAt": "2026-03-16T04:33:24.285Z"
+    },
+    {
+      "title": "Phase 3 runtime proof blocked by local Docker availability",
+      "description": "Static guard rails and make verify passed. scenario-smoke config-lifecycle now fails fast at bootstrap with explicit Docker daemon diagnostics instead of hanging, and trace-pack captured deploy configs plus unavailable Docker/HTTP evidence in .context/plans/artifacts/block-1-phase-3/trace-pack-20260316-050225.",
+      "phase": "V",
+      "alternatives": [
+        "Keep waiting in readiness and infer environment failure indirectly",
+        "Defer raccoon-cli hardening and treat the hang as an operator issue"
+      ],
+      "status": "accepted",
+      "id": "dec-1773637397432",
+      "decidedAt": "2026-03-16T05:03:17.433Z"
+    },
+    {
+      "title": "Validator runtime eviction ignores stale deactivation events from replaced configs",
+      "description": "The runtime cache now evicts only when a deactivation event matches the currently loaded config_set_id/version_id for the scope, preventing out-of-order deactivation events from clearing a newer runtime and dropping server readiness during deep quality-gate validation.",
+      "phase": "V",
+      "alternatives": [
+        "Keep separate consumers and rely only on timestamps",
+        "Remove validator runtime clear handling from Block 1"
+      ],
+      "status": "accepted",
+      "id": "dec-1773638179173",
+      "decidedAt": "2026-03-16T05:16:19.173Z"
+    },
+    {
+      "title": "Dataplane Compose uses bitnamilegacy Kafka image for 3.9 line",
+      "description": "The Compose dataplane now points to bitnamilegacy/kafka:3.9.0 because the original bitnami/kafka:3.9.0 tag is no longer available on Docker Hub. This preserves the existing 3.9 runtime line and current Bitnami-specific environment and healthcheck layout without a broader Compose redesign.",
+      "phase": "V",
+      "alternatives": [
+        "Jump directly to Kafka 4.0 image line",
+        "Replace the Kafka service image family entirely"
+      ],
+      "status": "accepted",
+      "id": "dec-1773638179186",
+      "decidedAt": "2026-03-16T05:16:19.186Z"
+    },
+    {
+      "title": "Reenquadrar o trilho dos Blocos 1 e 2",
+      "description": "O Bloco 1 continua como lifecycle hardening entre server, configctl e validator, mas o Bloco 2 deixa de ser signal hardening operacional do CLI e passa a consolidar o runtime contract da ingestão com configctl como fonte de verdade, queries canônicas e superfície HTTP estável para preparação do consumer futuro.",
+      "phase": "P",
+      "alternatives": [
+        "Manter o antigo block-2-operational-signal-hardening como bloco 2 canônico",
+        "Criar apenas notas soltas fora do sistema de planos do ai-context"
+      ],
+      "status": "accepted",
+      "id": "dec-1773678917285",
+      "decidedAt": "2026-03-16T16:35:17.285Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T04:33:24.289Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T04:50:38.529Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T05:16:19.181Z"
+    }
+  },
+  "progress": 100
+}

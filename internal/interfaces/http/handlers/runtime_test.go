@@ -32,6 +32,17 @@ type listActiveIngestionBindingsUseCaseSpy struct {
 	prob  *problem.Problem
 }
 
+type listActiveRuntimeProjectionsUseCaseSpy struct {
+	query configctlcontracts.ListActiveRuntimeProjectionsQuery
+	reply configctlcontracts.ListActiveRuntimeProjectionsReply
+	prob  *problem.Problem
+}
+
+func (s *listActiveRuntimeProjectionsUseCaseSpy) Execute(_ context.Context, query configctlcontracts.ListActiveRuntimeProjectionsQuery) (configctlcontracts.ListActiveRuntimeProjectionsReply, *problem.Problem) {
+	s.query = query
+	return s.reply, s.prob
+}
+
 func (s *listActiveIngestionBindingsUseCaseSpy) Execute(_ context.Context, query configctlcontracts.ListActiveIngestionBindingsQuery) (configctlcontracts.ListActiveIngestionBindingsReply, *problem.Problem) {
 	s.query = query
 	return s.reply, s.prob
@@ -68,7 +79,7 @@ func TestGetActiveValidatorRuntime(t *testing.T) {
 			},
 		},
 	}
-	handler := NewRuntimeWebHandler(spy, nil, nil)
+	handler := NewRuntimeWebHandler(spy, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/active?scope_kind=tenant&scope_key=br", nil)
 	rec := httptest.NewRecorder()
@@ -101,7 +112,7 @@ func TestGetActiveValidatorRuntimeMapsProblems(t *testing.T) {
 
 	handler := NewRuntimeWebHandler(&getValidatorRuntimeUseCaseSpy{
 		prob: problem.New(problem.NotFound, "validator runtime is not loaded"),
-	}, nil, nil)
+	}, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/active", nil)
 	rec := httptest.NewRecorder()
@@ -110,6 +121,88 @@ func TestGetActiveValidatorRuntimeMapsProblems(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestListActiveRuntimeProjections(t *testing.T) {
+	t.Parallel()
+
+	spy := &listActiveRuntimeProjectionsUseCaseSpy{
+		reply: configctlcontracts.ListActiveRuntimeProjectionsReply{
+			Runtimes: []configctlcontracts.RuntimeProjectionRecord{{
+				Scope:       configctlcontracts.ActivationScopeRecord{Kind: "tenant", Key: "br"},
+				ConfigSetID: "set-1",
+				ConfigKey:   "core",
+				VersionID:   "cfg-123",
+				Version:     3,
+				Artifact: configctlcontracts.CompilationArtifactRecord{
+					ID:            "artifact-1",
+					SchemaVersion: "runtime/v1",
+					Checksum:      "artifact-checksum",
+					RuntimeLoader: "validator:v1",
+				},
+				ActivatedAt: time.Unix(10, 0).UTC(),
+				Bindings: []configctlcontracts.BindingRecord{{
+					Name:  "orders",
+					Topic: "orders.v1",
+				}},
+				Fields: []configctlcontracts.FieldRecord{{
+					Name:     "order_id",
+					Type:     "string",
+					Required: true,
+				}},
+				Rules: []configctlcontracts.RuleRecord{{
+					Name:     "order_id_required",
+					Field:    "order_id",
+					Operator: "required",
+					Severity: "error",
+				}},
+				DefinitionChecksum: "definition-1",
+			}},
+		},
+	}
+	handler := NewRuntimeWebHandler(nil, spy, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/runtime/configctl/projections?scope_kind=tenant&scope_key=br", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListActiveRuntimeProjections(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if spy.query.ScopeKind != "tenant" || spy.query.ScopeKey != "br" {
+		t.Fatalf("unexpected runtime projections query: %+v", spy.query)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	runtimes := body["runtimes"].([]any)
+	if len(runtimes) != 1 {
+		t.Fatalf("expected one runtime projection, got %v", runtimes)
+	}
+	first := runtimes[0].(map[string]any)
+	if _, ok := first["artifact"]; !ok {
+		t.Fatalf("expected artifact payload, got %v", first)
+	}
+}
+
+func TestListActiveRuntimeProjectionsMapsProblems(t *testing.T) {
+	t.Parallel()
+
+	handler := NewRuntimeWebHandler(nil, &listActiveRuntimeProjectionsUseCaseSpy{
+		prob: problem.New(problem.InvalidArgument, "active runtime projections query is invalid"),
+	}, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/runtime/configctl/projections?scope_kind=tenant", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListActiveRuntimeProjections(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
@@ -143,9 +236,26 @@ func TestListActiveIngestionBindings(t *testing.T) {
 					ActivatedAt: time.Unix(10, 0).UTC(),
 				},
 			}},
+			Runtimes: []sharedruntime.RuntimeRecord{{
+				Scope: sharedruntime.ScopeRecord{Kind: "tenant", Key: "br"},
+				Config: sharedruntime.ConfigRecord{
+					SetID:              "set-1",
+					Key:                "core",
+					VersionID:          "cfg-123",
+					Version:            3,
+					DefinitionChecksum: "definition-1",
+				},
+				Artifact: sharedruntime.ArtifactRecord{
+					ID:            "artifact-1",
+					SchemaVersion: "runtime/v1",
+					Checksum:      "artifact-checksum",
+					RuntimeLoader: "validator:v1",
+				},
+				ActivatedAt: time.Unix(10, 0).UTC(),
+			}},
 		},
 	}
-	handler := NewRuntimeWebHandler(nil, spy, nil)
+	handler := NewRuntimeWebHandler(nil, nil, spy, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/ingestion/bindings?scope_kind=tenant&scope_key=br", nil)
 	rec := httptest.NewRecorder()
@@ -175,12 +285,21 @@ func TestListActiveIngestionBindings(t *testing.T) {
 	if len(fields) != 1 {
 		t.Fatalf("expected bootstrap fields to be exposed, got %v", first)
 	}
+	runtimes := body["runtimes"].([]any)
+	if len(runtimes) != 1 {
+		t.Fatalf("expected one compact runtime, got %v", runtimes)
+	}
+	runtimeBody := runtimes[0].(map[string]any)
+	configBody := runtimeBody["config"].(map[string]any)
+	if configBody["version_id"] != "cfg-123" {
+		t.Fatalf("expected compact runtime config metadata, got %v", runtimeBody)
+	}
 }
 
 func TestListActiveIngestionBindingsMapsProblems(t *testing.T) {
 	t.Parallel()
 
-	handler := NewRuntimeWebHandler(nil, &listActiveIngestionBindingsUseCaseSpy{
+	handler := NewRuntimeWebHandler(nil, nil, &listActiveIngestionBindingsUseCaseSpy{
 		prob: problem.New(problem.InvalidArgument, "ingestion bindings query is invalid"),
 	}, nil)
 
@@ -219,7 +338,7 @@ func TestListValidationResults(t *testing.T) {
 			}},
 		},
 	}
-	handler := NewRuntimeWebHandler(nil, nil, spy)
+	handler := NewRuntimeWebHandler(nil, nil, nil, spy)
 
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?binding_name=orders&limit=5", nil)
 	rec := httptest.NewRecorder()
@@ -246,7 +365,7 @@ func TestListValidationResults(t *testing.T) {
 func TestListValidationResultsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
-	handler := NewRuntimeWebHandler(nil, nil, &listValidationResultsUseCaseSpy{})
+	handler := NewRuntimeWebHandler(nil, nil, nil, &listValidationResultsUseCaseSpy{})
 	req := httptest.NewRequest(http.MethodGet, "/runtime/validator/results?limit=abc", nil)
 	rec := httptest.NewRecorder()
 

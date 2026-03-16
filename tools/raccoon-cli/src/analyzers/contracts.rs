@@ -8,7 +8,6 @@ mod envelope;
 mod events;
 mod registry;
 
-
 // ── Discovered contracts ────────────────────────────────────────────
 
 /// Full contract index built from scanning the source.
@@ -77,21 +76,27 @@ fn check_registry_control_completeness(index: &ContractIndex) -> CheckResult {
     let mut findings = Vec::new();
 
     if index.registry.control_specs.is_empty() {
-        findings.push(Finding::error(
-            "control-specs",
-            "no control specs found in registry files",
-        )
-        .with_why("control specs define the request-reply contract for NATS communication")
-        .with_help("add ControlSpec definitions to the registry files in internal/adapters/nats/"));
+        findings.push(
+            Finding::error("control-specs", "no control specs found in registry files")
+                .with_why("control specs define the request-reply contract for NATS communication")
+                .with_help(
+                    "add ControlSpec definitions to the registry files in internal/adapters/nats/",
+                ),
+        );
         return CheckResult::from_findings("registry-control-completeness", findings);
     }
 
     for spec in &index.registry.control_specs {
         if spec.subject.is_empty() {
             findings.push(
-                Finding::error("control-subject", format!("'{}' has empty Subject", spec.name))
-                    .with_location(&spec.file)
-                    .with_why("Subject is the NATS routing address; without it requests cannot be dispatched"),
+                Finding::error(
+                    "control-subject",
+                    format!("'{}' has empty Subject", spec.name),
+                )
+                .with_location(&spec.file)
+                .with_why(
+                    "Subject is the NATS routing address; without it requests cannot be dispatched",
+                ),
             );
         }
         if spec.request_type.is_empty() {
@@ -155,7 +160,9 @@ fn check_registry_event_completeness(index: &ContractIndex) -> CheckResult {
             findings.push(
                 Finding::error("event-type", format!("'{}' has empty Type", spec.name))
                     .with_location(&spec.file)
-                    .with_why("Type is used for envelope kind routing and consumer deserialization"),
+                    .with_why(
+                        "Type is used for envelope kind routing and consumer deserialization",
+                    ),
             );
         }
     }
@@ -273,16 +280,8 @@ fn check_reply_type_symmetry(index: &ContractIndex) -> CheckResult {
 
     for spec in &index.registry.control_specs {
         // The request-reply pair should share the same operation suffix
-        let req_suffix = spec
-            .request_type
-            .split('.')
-            .last()
-            .unwrap_or("");
-        let reply_suffix = spec
-            .reply_type
-            .split('.')
-            .last()
-            .unwrap_or("");
+        let req_suffix = spec.request_type.split('.').last().unwrap_or("");
+        let reply_suffix = spec.reply_type.split('.').last().unwrap_or("");
 
         if req_suffix != reply_suffix {
             findings.push(
@@ -350,10 +349,7 @@ fn check_event_stream_coverage(index: &ContractIndex) -> CheckResult {
     let mut findings = Vec::new();
 
     if index.registry.streams.is_empty() {
-        return CheckResult::skip(
-            "event-stream-coverage",
-            "no stream specs found",
-        );
+        return CheckResult::skip("event-stream-coverage", "no stream specs found");
     }
 
     // Build set of all stream subject patterns
@@ -361,13 +357,17 @@ fn check_event_stream_coverage(index: &ContractIndex) -> CheckResult {
         .registry
         .streams
         .iter()
-        .flat_map(|s| s.subjects.iter().map(move |subj| (s.name.as_str(), subj.as_str())))
+        .flat_map(|s| {
+            s.subjects
+                .iter()
+                .map(move |subj| (s.name.as_str(), subj.as_str()))
+        })
         .collect();
 
     for event in &index.registry.event_specs {
-        let covered = stream_patterns.iter().any(|(_, pattern)| {
-            subject_matches_pattern(&event.subject, pattern)
-        });
+        let covered = stream_patterns
+            .iter()
+            .any(|(_, pattern)| subject_matches_pattern(&event.subject, pattern));
 
         if !covered {
             findings.push(
@@ -400,9 +400,10 @@ fn check_consumer_filter_validity(index: &ContractIndex) -> CheckResult {
 
         if let Some(stream) = stream {
             for filter in &consumer.filter_subjects {
-                let valid = stream.subjects.iter().any(|stream_subj| {
-                    subject_matches_pattern(filter, stream_subj)
-                });
+                let valid = stream
+                    .subjects
+                    .iter()
+                    .any(|stream_subj| subject_matches_pattern(filter, stream_subj));
 
                 if !valid {
                     findings.push(
@@ -526,7 +527,10 @@ fn check_codec_consistency(index: &ContractIndex) -> CheckResult {
             .with_location(&codec.file),
         );
     } else {
-        findings.push(Finding::info("codec-format", "NATS codec uses CBOR serialization"));
+        findings.push(Finding::info(
+            "codec-format",
+            "NATS codec uses CBOR serialization",
+        ));
     }
 
     // Verify encode functions set correct Kind
@@ -537,7 +541,11 @@ fn check_codec_consistency(index: &ContractIndex) -> CheckResult {
     ];
 
     for (func, expected_kind) in &expected_encode {
-        match codec.encode_kind_checks.iter().find(|c| c.function == *func) {
+        match codec
+            .encode_kind_checks
+            .iter()
+            .find(|c| c.function == *func)
+        {
             Some(check) => {
                 if check.expected_kind != *expected_kind {
                     findings.push(
@@ -572,7 +580,11 @@ fn check_codec_consistency(index: &ContractIndex) -> CheckResult {
     ];
 
     for (func, expected_kind) in &expected_decode {
-        match codec.decode_kind_checks.iter().find(|c| c.function == *func) {
+        match codec
+            .decode_kind_checks
+            .iter()
+            .find(|c| c.function == *func)
+        {
             Some(check) => {
                 if check.expected_kind != *expected_kind {
                     findings.push(
@@ -682,10 +694,7 @@ fn check_dataplane_content_type_default(index: &ContractIndex) -> CheckResult {
     let dp = match &index.dataplane {
         Some(d) => d,
         None => {
-            return CheckResult::skip(
-                "dataplane-content-type",
-                "dataplane contracts.go not found",
-            );
+            return CheckResult::skip("dataplane-content-type", "dataplane contracts.go not found");
         }
     };
 
@@ -700,7 +709,10 @@ fn check_dataplane_content_type_default(index: &ContractIndex) -> CheckResult {
             findings.push(
                 Finding::warning(
                     "dataplane-content-type",
-                    format!("DataPlane default content_type is '{}', expected 'application/json'", ct),
+                    format!(
+                        "DataPlane default content_type is '{}', expected 'application/json'",
+                        ct
+                    ),
                 )
                 .with_location(&dp.file),
             );
@@ -735,8 +747,11 @@ fn check_dataplane_content_type_default(index: &ContractIndex) -> CheckResult {
         }
         None => {
             findings.push(
-                Finding::warning("dataplane-source", "DataPlane SourceKafka constant not found")
-                    .with_location(&dp.file),
+                Finding::warning(
+                    "dataplane-source",
+                    "DataPlane SourceKafka constant not found",
+                )
+                .with_location(&dp.file),
             );
         }
     }
@@ -835,9 +850,11 @@ fn check_event_registry_alignment(index: &ContractIndex) -> CheckResult {
 
     // Check domain events have matching registry specs
     for event in &index.events.events {
-        let has_registry = index.registry.event_specs.iter().any(|spec| {
-            spec.subject.ends_with(&event.event_name)
-        });
+        let has_registry = index
+            .registry
+            .event_specs
+            .iter()
+            .any(|spec| spec.subject.ends_with(&event.event_name));
 
         if !has_registry {
             findings.push(
@@ -1125,7 +1142,10 @@ mod tests {
         let mut index = make_test_index();
         index.registry.control_specs[0].queue_group = "singleword".into();
         let result = check_queue_group_convention(&index);
-        assert!(result.findings.iter().any(|f| f.message.contains("domain.scope")));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.message.contains("domain.scope")));
     }
 
     #[test]

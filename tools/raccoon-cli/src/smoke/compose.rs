@@ -1,4 +1,6 @@
+use crate::process_utils::run_command_with_timeout;
 use std::process::Command;
+use std::time::Duration;
 
 /// Check if docker compose services in the dataplane profile are running.
 /// Returns a list of running service names.
@@ -6,21 +8,29 @@ pub fn running_services(compose_file: &std::path::Path) -> Result<Vec<String>, S
     let compose_dir = compose_file
         .parent()
         .ok_or_else(|| "cannot determine compose directory".to_string())?;
+    let compose_file_arg = compose_file
+        .canonicalize()
+        .unwrap_or_else(|_| compose_file.to_path_buf());
 
-    let output = Command::new("docker")
+    let mut command = Command::new("docker");
+    command
         .args(["compose", "-f"])
-        .arg(compose_file)
+        .arg(&compose_file_arg)
         .args(["ps", "--format", "{{.Service}}:{{.State}}", "--all"])
-        .current_dir(compose_dir)
-        .output()
-        .map_err(|e| format!("failed to run docker compose ps: {e}"))?;
+        .current_dir(compose_dir);
+
+    let output =
+        run_command_with_timeout(&mut command, Duration::from_secs(5), "docker compose ps")?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = output.stderr.trim();
+        if stderr.is_empty() {
+            return Err("docker compose ps failed".to_string());
+        }
         return Err(format!("docker compose ps failed: {stderr}"));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = output.stdout;
     let running: Vec<String> = stdout
         .lines()
         .filter_map(|line| {
@@ -47,13 +57,17 @@ pub const REQUIRED_SERVICES: &[&str] = &[
     "emulator",
 ];
 
-/// Check which required services are missing from the running set.
-pub fn missing_services(running: &[String]) -> Vec<&'static str> {
-    REQUIRED_SERVICES
+pub fn missing_required_services<'a>(running: &[String], required: &'a [&'a str]) -> Vec<&'a str> {
+    required
         .iter()
         .filter(|svc| !running.iter().any(|r| r == **svc))
         .copied()
         .collect()
+}
+
+/// Check which required services are missing from the running set.
+pub fn missing_services(running: &[String]) -> Vec<&'static str> {
+    missing_required_services(running, REQUIRED_SERVICES)
 }
 
 #[cfg(test)]
@@ -83,5 +97,12 @@ mod tests {
     fn missing_services_empty() {
         let missing = missing_services(&[]);
         assert_eq!(missing.len(), REQUIRED_SERVICES.len());
+    }
+
+    #[test]
+    fn missing_required_services_supports_subset_bootstrap() {
+        let running = vec!["nats".to_string(), "server".to_string()];
+        let missing = missing_required_services(&running, &["nats", "configctl", "server"]);
+        assert_eq!(missing, vec!["configctl"]);
     }
 }

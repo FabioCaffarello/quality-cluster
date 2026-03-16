@@ -1,0 +1,43 @@
+{
+  "decisions": [
+    {
+      "title": "Diagnostic modes use only existing monitor and config signals",
+      "description": "Refresh mode is derived from bootstrap.reconcile_interval plus CONFIGCTL_EVENTS durable state in jsz. The classifier uses pending, ack_pending, redelivered, delivered, ack_floor, last_active, and ts without adding runtime endpoints.",
+      "phase": "E",
+      "alternatives": [
+        "Add a dedicated refresh health endpoint in the Go runtime",
+        "Use service logs as primary input for refresh mode classification"
+      ],
+      "status": "accepted",
+      "id": "dec-1773678194096",
+      "decidedAt": "2026-03-16T16:23:14.096Z"
+    },
+    {
+      "title": "Refresh status stays binary; degraded gets explicit mode",
+      "description": "Trace-pack keeps healthy or degraded as the top-level refresh status, but degraded now carries a canonical refresh mode so operators can distinguish telemetry loss, config drift, transient lag, and stalled refresh.",
+      "phase": "P",
+      "alternatives": [
+        "Promote refresh mode to the primary status instead of keeping healthy/degraded",
+        "Keep degraded as a single bucket and only vary the prose in diagnosis"
+      ],
+      "status": "accepted",
+      "id": "dec-1773678194099",
+      "decidedAt": "2026-03-16T16:23:14.099Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:23:23.682Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:23:23.688Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:23:23.699Z"
+    }
+  },
+  "progress": 100
+}

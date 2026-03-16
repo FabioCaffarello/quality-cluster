@@ -12,20 +12,22 @@ type gatewaySpy struct {
 	createDraftCommand         contracts.CreateDraftCommand
 	getConfigQuery             contracts.GetConfigQuery
 	listCalled                 bool
+	listRuntimeProjectionsCall bool
 	listIngestionBindingsQuery contracts.ListActiveIngestionBindingsQuery
 	validateCommand            contracts.ValidateDraftCommand
 	validateConfigCmd          contracts.ValidateConfigCommand
 	compileCommand             contracts.CompileConfigCommand
 	activateCommand            contracts.ActivateConfigCommand
 
-	createDraftReply    contracts.CreateDraftReply
-	getConfigReply      contracts.GetConfigReply
-	listReply           contracts.ListConfigsReply
-	validateReply       contracts.ValidateDraftReply
-	validateConfigReply contracts.ValidateConfigReply
-	compileReply        contracts.CompileConfigReply
-	activateReply       contracts.ActivateConfigReply
-	prob                *problem.Problem
+	createDraftReply            contracts.CreateDraftReply
+	getConfigReply              contracts.GetConfigReply
+	listReply                   contracts.ListConfigsReply
+	listRuntimeProjectionsReply contracts.ListActiveRuntimeProjectionsReply
+	validateReply               contracts.ValidateDraftReply
+	validateConfigReply         contracts.ValidateConfigReply
+	compileReply                contracts.CompileConfigReply
+	activateReply               contracts.ActivateConfigReply
+	prob                        *problem.Problem
 }
 
 func (s *gatewaySpy) CreateDraft(_ context.Context, command contracts.CreateDraftCommand) (contracts.CreateDraftReply, *problem.Problem) {
@@ -40,6 +42,11 @@ func (s *gatewaySpy) GetConfig(_ context.Context, query contracts.GetConfigQuery
 
 func (s *gatewaySpy) GetActiveConfig(context.Context, contracts.GetActiveConfigQuery) (contracts.GetActiveConfigReply, *problem.Problem) {
 	return contracts.GetActiveConfigReply{}, s.prob
+}
+
+func (s *gatewaySpy) ListActiveRuntimeProjections(context.Context, contracts.ListActiveRuntimeProjectionsQuery) (contracts.ListActiveRuntimeProjectionsReply, *problem.Problem) {
+	s.listRuntimeProjectionsCall = true
+	return s.listRuntimeProjectionsReply, s.prob
 }
 
 func (s *gatewaySpy) ListActiveIngestionBindings(_ context.Context, query contracts.ListActiveIngestionBindingsQuery) (contracts.ListActiveIngestionBindingsReply, *problem.Problem) {
@@ -136,6 +143,18 @@ func TestGetAndListUseCasesCallGateway(t *testing.T) {
 	}
 	if len(ingestionReply.Bindings) != 1 || ingestionReply.Bindings[0].Binding.Name != "orders" {
 		t.Fatalf("unexpected ingestion bindings reply: %+v", ingestionReply.Bindings)
+	}
+
+	runtimeReply, prob := NewListActiveRuntimeProjectionsUseCase(&gatewaySpy{
+		listRuntimeProjectionsReply: contracts.ListActiveRuntimeProjectionsReply{
+			Runtimes: []contracts.RuntimeProjectionRecord{{VersionID: "cfg-123"}},
+		},
+	}).Execute(context.Background(), contracts.ListActiveRuntimeProjectionsQuery{})
+	if prob != nil {
+		t.Fatalf("list runtime projections: %v", prob)
+	}
+	if len(runtimeReply.Runtimes) != 1 || runtimeReply.Runtimes[0].VersionID != "cfg-123" {
+		t.Fatalf("unexpected runtime projections reply: %+v", runtimeReply.Runtimes)
 	}
 }
 

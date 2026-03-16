@@ -20,6 +20,7 @@
     "base_url": "http://server:8080",
     "scope_kind": "global",
     "scope_key": "default",
-    "timeout": "5s"
+    "timeout": "5s",
+    "reconcile_interval": "30s"
   }
 }

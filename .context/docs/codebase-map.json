@@ -1,0 +1,156 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-03-16T01:20:19.708Z",
+  "stack": {
+    "primaryLanguage": "go",
+    "languages": [
+      "rust",
+      "go"
+    ],
+    "frameworks": [
+      "cli"
+    ],
+    "buildTools": [],
+    "testFrameworks": [],
+    "packageManager": null,
+    "isMonorepo": false,
+    "hasDocker": false,
+    "hasCI": false
+  },
+  "structure": {
+    "totalFiles": 40118,
+    "rootPath": ".",
+    "topDirectories": [
+      {
+        "name": "bin",
+        "fileCount": 4,
+        "description": "CLI binaries and executables"
+      },
+      {
+        "name": "cmd",
+        "fileCount": 18,
+        "description": "Module directory"
+      },
+      {
+        "name": "deploy",
+        "fileCount": 8,
+        "description": "Module directory"
+      },
+      {
+        "name": "internal",
+        "fileCount": 173,
+        "description": "Module directory"
+      },
+      {
+        "name": "scripts",
+        "fileCount": 2,
+        "description": "Build and utility scripts"
+      },
+      {
+        "name": "tests",
+        "fileCount": 4,
+        "description": "Test files and fixtures"
+      },
+      {
+        "name": "tools",
+        "fileCount": 39905,
+        "description": "Tool definitions"
+      }
+    ],
+    "languageDistribution": [
+      {
+        "extension": ".o",
+        "count": 38763
+      },
+      {
+        "extension": ".d",
+        "count": 332
+      },
+      {
+        "extension": ".rmeta",
+        "count": 266
+      },
+      {
+        "extension": ".rlib",
+        "count": 204
+      },
+      {
+        "extension": ".go",
+        "count": 172
+      },
+      {
+        "extension": ".rs",
+        "count": 56
+      },
+      {
+        "extension": ".timestamp",
+        "count": 34
+      },
+      {
+        "extension": ".bin",
+        "count": 27
+      },
+      {
+        "extension": ".dylib",
+        "count": 16
+      },
+      {
+        "extension": ".mod",
+        "count": 13
+      }
+    ]
+  },
+  "architecture": {
+    "layers": [],
+    "patterns": [],
+    "entryPoints": [],
+    "mainEntryPoints": [],
+    "moduleExports": []
+  },
+  "symbols": {
+    "classes": [],
+    "interfaces": [],
+    "functions": [],
+    "types": [],
+    "enums": []
+  },
+  "publicAPI": [],
+  "dependencies": {
+    "mostImported": []
+  },
+  "stats": {
+    "totalSymbols": 0,
+    "exportedSymbols": 0,
+    "analysisTimeMs": 16
+  },
+  "keyFiles": [
+    {
+      "path": "bin/configctl",
+      "description": "CLI executable",
+      "category": "entrypoint"
+    },
+    {
+      "path": "bin/server",
+      "description": "CLI executable",
+      "category": "entrypoint"
+    },
+    {
+      "path": "bin/topology-doctor",
+      "description": "CLI executable",
+      "category": "entrypoint"
+    },
+    {
+      "path": "bin/validator",
+      "description": "CLI executable",
+      "category": "entrypoint"
+    }
+  ],
+  "navigation": {
+    "tests": "src/**/*.test.ts",
+    "config": [],
+    "types": [],
+    "mainLogic": [
+      "src"
+    ]
+  }
+}

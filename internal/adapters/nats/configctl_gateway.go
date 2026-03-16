@@ -36,6 +36,10 @@ func (g *ConfigctlGateway) GetActiveConfig(ctx context.Context, query contracts.
 	return invokeControl[contracts.GetActiveConfigQuery, contracts.GetActiveConfigReply](ctx, g, g.registry.GetActive, query, "request configctl active config")
 }
 
+func (g *ConfigctlGateway) ListActiveRuntimeProjections(ctx context.Context, query contracts.ListActiveRuntimeProjectionsQuery) (contracts.ListActiveRuntimeProjectionsReply, *problem.Problem) {
+	return invokeControl[contracts.ListActiveRuntimeProjectionsQuery, contracts.ListActiveRuntimeProjectionsReply](ctx, g, g.registry.ListActiveRuntimeProjections, query, "request configctl active runtime projections")
+}
+
 func (g *ConfigctlGateway) ListActiveIngestionBindings(ctx context.Context, query contracts.ListActiveIngestionBindingsQuery) (contracts.ListActiveIngestionBindingsReply, *problem.Problem) {
 	return invokeControl[contracts.ListActiveIngestionBindingsQuery, contracts.ListActiveIngestionBindingsReply](ctx, g, g.registry.ListActiveIngestionBindings, query, "request configctl active ingestion bindings")
 }

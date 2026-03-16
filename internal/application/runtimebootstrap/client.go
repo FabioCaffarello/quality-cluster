@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,10 +31,35 @@ type WaitOptions struct {
 	PollInterval  time.Duration
 }
 
+type AggregateWaitOptions struct {
+	CorrelationID string
+	PollInterval  time.Duration
+}
+
 type ActiveIngestionBootstrap struct {
 	Bindings []configctlcontracts.ActiveIngestionBindingRecord
 	Index    dataplaneapp.BindingIndex
 	Topology dataplaneapp.RuntimeTopology
+}
+
+func (b ActiveIngestionBootstrap) Signature() string {
+	if len(b.Bindings) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(b.Bindings))
+	for _, binding := range b.Bindings {
+		parts = append(parts, strings.Join([]string{
+			strings.TrimSpace(binding.Runtime.Scope.Kind),
+			strings.TrimSpace(binding.Runtime.Scope.Key),
+			strings.TrimSpace(binding.Runtime.Config.VersionID),
+			strings.TrimSpace(binding.Runtime.Config.DefinitionChecksum),
+			strings.TrimSpace(binding.Binding.Name),
+			strings.TrimSpace(binding.Binding.Topic),
+		}, "|"))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\n")
 }
 
 func NewClient(baseURL string, timeout time.Duration) *Client {
@@ -102,8 +128,17 @@ func (c *Client) WaitForActiveIngestionBootstrap(ctx context.Context, logger *sl
 		ScopeKey:  options.ScopeKey,
 	}
 
+	return c.waitForActiveIngestionBootstrap(ctx, logger, query, options.CorrelationID, options.PollInterval)
+}
+
+func (c *Client) WaitForActiveIngestionBootstrapSet(ctx context.Context, logger *slog.Logger, options AggregateWaitOptions) (ActiveIngestionBootstrap, *problem.Problem) {
+	options = options.normalize()
+	return c.waitForActiveIngestionBootstrap(ctx, logger, configctlcontracts.ListActiveIngestionBindingsQuery{}, options.CorrelationID, options.PollInterval)
+}
+
+func (c *Client) waitForActiveIngestionBootstrap(ctx context.Context, logger *slog.Logger, query configctlcontracts.ListActiveIngestionBindingsQuery, correlationID string, pollInterval time.Duration) (ActiveIngestionBootstrap, *problem.Problem) {
 	for {
-		reply, prob := c.ListActiveIngestionBindings(requestctx.WithCorrelationID(ctx, options.CorrelationID), query)
+		reply, prob := c.ListActiveIngestionBindings(requestctx.WithCorrelationID(ctx, correlationID), query)
 		if prob == nil && len(reply.Bindings) > 0 {
 			index, indexProb := dataplaneapp.NewBindingIndex(reply.Bindings)
 			if indexProb != nil {
@@ -129,7 +164,7 @@ func (c *Client) WaitForActiveIngestionBootstrap(ctx context.Context, logger *sl
 			logWait(logger, "waiting for active ingestion bindings", "reason", "none active yet")
 		}
 
-		timer := time.NewTimer(options.PollInterval)
+		timer := time.NewTimer(pollInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -148,6 +183,13 @@ func (o WaitOptions) normalize() WaitOptions {
 	if o.ScopeKey == "" {
 		o.ScopeKey = "default"
 	}
+	if o.PollInterval <= 0 {
+		o.PollInterval = DefaultPollInterval
+	}
+	return o
+}
+
+func (o AggregateWaitOptions) normalize() AggregateWaitOptions {
 	if o.PollInterval <= 0 {
 		o.PollInterval = DefaultPollInterval
 	}

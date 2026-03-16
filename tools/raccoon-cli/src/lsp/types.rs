@@ -163,8 +163,7 @@ mod tests {
         let no_results = serde_json::to_value(LspStatus::NoResults).unwrap();
         assert_eq!(no_results, serde_json::json!("no_results"));
 
-        let unavail =
-            serde_json::to_value(LspStatus::Unavailable { reason: "x".into() }).unwrap();
+        let unavail = serde_json::to_value(LspStatus::Unavailable { reason: "x".into() }).unwrap();
         assert!(unavail.is_object());
     }
 }

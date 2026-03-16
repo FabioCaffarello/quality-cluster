@@ -125,7 +125,12 @@ fn quality_gate_json_output_is_valid() {
 #[test]
 fn topology_doctor_json_output_is_valid() {
     let output = raccoon()
-        .args(["--json", "--project-root", "/nonexistent", "topology-doctor"])
+        .args([
+            "--json",
+            "--project-root",
+            "/nonexistent",
+            "topology-doctor",
+        ])
         .output()
         .unwrap();
 
@@ -152,7 +157,12 @@ fn contract_audit_json_output_is_valid() {
 
 #[test]
 fn json_flag_works_with_all_commands() {
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-bindings"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-bindings",
+    ] {
         let output = raccoon()
             .args(["--json", "--project-root", "/nonexistent", cmd])
             .output()
@@ -194,7 +204,12 @@ fn project_root_flag_accepted_by_all_commands() {
     let dir = TempDir::new().unwrap();
     make_project(&dir);
 
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-bindings"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-bindings",
+    ] {
         let result = raccoon()
             .args(["--project-root", dir.path().to_str().unwrap(), cmd])
             .output()
@@ -211,7 +226,12 @@ fn project_root_flag_accepted_by_all_commands() {
 
 #[test]
 fn verbose_flag_accepted_with_all_commands() {
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-bindings"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-bindings",
+    ] {
         raccoon()
             .args(["-v", "--project-root", "/nonexistent", cmd])
             .output()
@@ -273,11 +293,15 @@ fn quality_gate_human_output_shows_actionable_steps() {
 
 #[test]
 // ── Runtime Bindings ──────────────────────────────────────────────────
-
 #[test]
 fn runtime_bindings_json_output_is_valid() {
     let output = raccoon()
-        .args(["--json", "--project-root", "/nonexistent", "runtime-bindings"])
+        .args([
+            "--json",
+            "--project-root",
+            "/nonexistent",
+            "runtime-bindings",
+        ])
         .output()
         .unwrap();
 
@@ -311,7 +335,11 @@ fn runtime_bindings_on_minimal_project() {
     make_project(&dir);
 
     let output = raccoon()
-        .args(["--project-root", dir.path().to_str().unwrap(), "runtime-bindings"])
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "runtime-bindings",
+        ])
         .output()
         .unwrap();
 
@@ -344,9 +372,18 @@ fn runtime_bindings_json_has_all_check_names() {
         .collect();
 
     // Core checks should always be present
-    assert!(check_names.contains(&"subject-pattern"), "missing subject-pattern check");
-    assert!(check_names.contains(&"routing-constants"), "missing routing-constants check");
-    assert!(check_names.contains(&"lifecycle-events"), "missing lifecycle-events check");
+    assert!(
+        check_names.contains(&"subject-pattern"),
+        "missing subject-pattern check"
+    );
+    assert!(
+        check_names.contains(&"routing-constants"),
+        "missing routing-constants check"
+    );
+    assert!(
+        check_names.contains(&"lifecycle-events"),
+        "missing lifecycle-events check"
+    );
 }
 
 // ── Results Inspect ───────────────────────────────────────────────────
@@ -366,11 +403,7 @@ fn results_inspect_help_shows_examples() {
 fn results_inspect_unreachable_exits_2() {
     // When service is unreachable, should exit 2 (execution error)
     raccoon()
-        .args([
-            "results-inspect",
-            "--base-url",
-            "http://127.0.0.1:19999",
-        ])
+        .args(["results-inspect", "--base-url", "http://127.0.0.1:19999"])
         .assert()
         .code(2)
         .stderr(predicate::str::contains("cannot reach quality-service"));
@@ -396,14 +429,21 @@ fn results_inspect_accepts_all_filter_flags() {
     let result = raccoon()
         .args([
             "results-inspect",
-            "--base-url", "http://127.0.0.1:19999",
-            "--scope-kind", "global",
-            "--scope-key", "default",
-            "--binding", "orders",
-            "--topic", "orders.v1",
-            "--limit", "50",
+            "--base-url",
+            "http://127.0.0.1:19999",
+            "--scope-kind",
+            "global",
+            "--scope-key",
+            "default",
+            "--binding",
+            "orders",
+            "--topic",
+            "orders.v1",
+            "--limit",
+            "50",
             "--failed-only",
-            "--latest", "5",
+            "--latest",
+            "5",
         ])
         .output()
         .unwrap();
@@ -470,7 +510,12 @@ fn scenario_smoke_unknown_scenario_exits_2() {
 #[test]
 fn scenario_smoke_happy_path_fails_without_compose() {
     raccoon()
-        .args(["--project-root", "/nonexistent", "scenario-smoke", "happy-path"])
+        .args([
+            "--project-root",
+            "/nonexistent",
+            "scenario-smoke",
+            "happy-path",
+        ])
         .assert()
         .code(1)
         .stdout(predicate::str::contains("FAILED"))
@@ -480,7 +525,12 @@ fn scenario_smoke_happy_path_fails_without_compose() {
 #[test]
 fn scenario_smoke_readiness_probe_fails_without_compose() {
     raccoon()
-        .args(["--project-root", "/nonexistent", "scenario-smoke", "readiness-probe"])
+        .args([
+            "--project-root",
+            "/nonexistent",
+            "scenario-smoke",
+            "readiness-probe",
+        ])
         .assert()
         .code(1)
         .stdout(predicate::str::contains("FAILED"));
@@ -489,7 +539,13 @@ fn scenario_smoke_readiness_probe_fails_without_compose() {
 #[test]
 fn scenario_smoke_json_output_is_valid() {
     let output = raccoon()
-        .args(["--json", "--project-root", "/nonexistent", "scenario-smoke", "happy-path"])
+        .args([
+            "--json",
+            "--project-root",
+            "/nonexistent",
+            "scenario-smoke",
+            "happy-path",
+        ])
         .output()
         .unwrap();
 
@@ -502,10 +558,7 @@ fn scenario_smoke_json_output_is_valid() {
 
 #[test]
 fn scenario_smoke_requires_scenario_or_list() {
-    raccoon()
-        .args(["scenario-smoke"])
-        .assert()
-        .failure();
+    raccoon().args(["scenario-smoke"]).assert().failure();
 }
 
 // ── Verbose Output ────────────────────────────────────────────────────
@@ -621,10 +674,7 @@ fn lsp_enrich_unknown_symbol_returns_empty() {
 
 #[test]
 fn lsp_enrich_requires_symbol_arg() {
-    raccoon()
-        .args(["lsp-enrich"])
-        .assert()
-        .failure();
+    raccoon().args(["lsp-enrich"]).assert().failure();
 }
 
 // ── Contract Usage Map ──────────────────────────────────────────────
@@ -632,7 +682,12 @@ fn lsp_enrich_requires_symbol_arg() {
 #[test]
 fn contract_usage_map_json_output_is_valid() {
     let output = raccoon()
-        .args(["--json", "--project-root", "/nonexistent", "contract-usage-map"])
+        .args([
+            "--json",
+            "--project-root",
+            "/nonexistent",
+            "contract-usage-map",
+        ])
         .output()
         .unwrap();
 
@@ -793,7 +848,12 @@ fn snapshot_verbose_shows_more() {
         .unwrap();
 
     let verbose = raccoon()
-        .args(["-v", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .args([
+            "-v",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
         .output()
         .unwrap();
 
@@ -815,11 +875,21 @@ fn snapshot_is_deterministic_across_runs() {
     .unwrap();
 
     let out1 = raccoon()
-        .args(["--json", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
         .output()
         .unwrap();
     let out2 = raccoon()
-        .args(["--json", "--project-root", dir.path().to_str().unwrap(), "snapshot"])
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "snapshot",
+        ])
         .output()
         .unwrap();
 
@@ -917,7 +987,11 @@ fn snapshot_diff_json_output_is_valid() {
 #[test]
 fn snapshot_diff_missing_file_fails() {
     raccoon()
-        .args(["snapshot-diff", "/nonexistent/before.json", "/nonexistent/after.json"])
+        .args([
+            "snapshot-diff",
+            "/nonexistent/before.json",
+            "/nonexistent/after.json",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("failed to load"));
@@ -1087,14 +1161,10 @@ fn briefing_with_symbol_target() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(parsed["targets"][0], "ConfigSet");
     // Should have found the symbol definition
-    let has_def = parsed["facts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|f| {
-            f["category"] == "symbol-definition"
-                && f["message"].as_str().unwrap_or("").contains("ConfigSet")
-        });
+    let has_def = parsed["facts"].as_array().unwrap().iter().any(|f| {
+        f["category"] == "symbol-definition"
+            && f["message"].as_str().unwrap_or("").contains("ConfigSet")
+    });
     assert!(has_def, "should find ConfigSet in facts");
 }
 
@@ -1417,9 +1487,7 @@ fn baseline_drift_detects_drift_after_change() {
     assert!(total > 0, "Should have findings after changes");
     // Should detect api-signature-drift for NewConfig
     let findings = parsed["findings"].as_array().unwrap();
-    let has_sig_drift = findings
-        .iter()
-        .any(|f| f["class"] == "api-signature-drift");
+    let has_sig_drift = findings.iter().any(|f| f["class"] == "api-signature-drift");
     assert!(has_sig_drift, "Should detect NewConfig signature change");
 }
 
@@ -1466,7 +1534,10 @@ fn baseline_drift_verbose_shows_evidence() {
         .unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("evidence:"), "Verbose output should show evidence");
+    assert!(
+        stdout.contains("evidence:"),
+        "Verbose output should show evidence"
+    );
 }
 
 // ── Recommend ────────────────────────────────────────────────────────
@@ -1570,11 +1641,7 @@ fn recommend_json_with_file_targets_has_facts() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(
-        parsed["input"]["changed_files"]
-            .as_array()
-            .unwrap()
-            .len()
-            == 1,
+        parsed["input"]["changed_files"].as_array().unwrap().len() == 1,
         "should have 1 changed file"
     );
     assert!(

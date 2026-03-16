@@ -1,0 +1,102 @@
+{
+  "active": [
+    {
+      "slug": "context-bootstrap",
+      "path": "plans/context-bootstrap.md",
+      "title": "Bootstrap do ai-context no quality-service",
+      "summary": "Consolidar a inicializacao do `.context`, revisar a documentacao base gerada, vincular um plano ao workflow PREVC e deixar o repositorio pronto para execucoes estruturadas futuras.",
+      "linkedAt": "2026-03-16T01:41:31.850Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-1-lifecycle-hardening",
+      "path": "plans/block-1-lifecycle-hardening.md",
+      "title": "Bloco 1 - Lifecycle Hardening",
+      "summary": "Plano executivo e tecnico para endurecer e limpar o lifecycle atual entre `server`, `configctl` e `validator`, preservando o que ja esta correto e removendo duplicacao, legado e acoplamentos desnecessarios.",
+      "linkedAt": "2026-03-16T04:10:09.071Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-2-operational-signal-hardening",
+      "path": "plans/block-2-operational-signal-hardening.md",
+      "title": "Bloco 2 - Operational Signal Hardening",
+      "summary": "Reduzir ruido operacional do cluster, transformar topologia Compose em contrato testavel fora do runtime e manter o raccoon-cli como motor de qualidade para signal, drift e smoke.",
+      "linkedAt": "2026-03-16T05:21:45.660Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-3-smoke-isolation-hardening",
+      "path": "plans/block-3-smoke-isolation-hardening.md",
+      "title": "Bloco 3 - Smoke Isolation Hardening",
+      "summary": "Tornar `runtime-smoke` e `scenario-smoke` determinísticos, isoláveis e reutilizáveis como motor de qualidade do repositório, sem falsos conflitos causados por chaves de config, bindings, correlação ou scope fixos.",
+      "linkedAt": "2026-03-16T14:29:14.516Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-4-dataplane-multiscope-hardening",
+      "path": "plans/block-4-dataplane-multiscope-hardening.md",
+      "title": "Block 4 - Dataplane Multiscope Hardening",
+      "summary": "Hardening cirúrgico do dataplane para que `consumer` e `emulator` deixem de depender do snapshot único em `global/default` e passem a acompanhar o conjunto ativo de scopes sem regredir o `raccoon-cli` como motor de qualidade.",
+      "linkedAt": "2026-03-16T14:45:54.611Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-5-event-driven-dataplane-refresh",
+      "path": "plans/block-5-event-driven-dataplane-refresh.md",
+      "title": "Block 5 - Event Driven Dataplane Refresh",
+      "summary": "Trocar o refresh contínuo por polling do dataplane por reconciliação orientada ao evento `config.ingestion_runtime_changed`, preservando o bootstrap agregado como seam de verdade e o `raccoon-cli` como motor de prova operacional.",
+      "linkedAt": "2026-03-16T15:10:02.672Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-6-event-refresh-diagnostics-hardening",
+      "path": "plans/block-6-event-refresh-diagnostics-hardening.md",
+      "title": "Block 6 - Event Refresh Diagnostics Hardening",
+      "summary": "Endurecer o motor de qualidade para que o refresh orientado a `config.ingestion_runtime_changed` não fique correto só no runtime, mas também auditável e diagnosticável pelo `raccoon-cli`.",
+      "linkedAt": "2026-03-16T15:30:43.138Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-7-refresh-reconciliation-hardening",
+      "path": "plans/block-7-refresh-reconciliation-hardening.md",
+      "title": "Block 7 - Refresh Reconciliation Hardening",
+      "summary": "Endurecer a convergencia do dataplane para que `consumer` e `emulator` se recuperem de eventos `config.ingestion_runtime_changed` perdidos ou atrasados sem abandonar o modelo event-driven como caminho primario.",
+      "linkedAt": "2026-03-16T15:50:37.881Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-8-refresh-sla-observability",
+      "path": "plans/block-8-refresh-sla-observability.md",
+      "title": "Block 8 - Refresh SLA Observability",
+      "summary": "Endurecer o `raccoon-cli` para que a saúde do refresh do dataplane deixe de depender de leitura manual de configs e `jsz`, e passe a aparecer como sinal consolidado e reutilizável no workflow normal do repositório.",
+      "linkedAt": "2026-03-16T16:01:51.153Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-9-refresh-health-classification",
+      "path": "plans/block-9-refresh-health-classification.md",
+      "title": "Block 9 - Refresh Health Classification",
+      "summary": "Endurecer o `trace-pack` para que a observabilidade de refresh do dataplane deixe de ser apenas leitura de cadence e counters, e passe a produzir um sinal operacional explícito de `healthy` ou `degraded`, com diagnóstico e próximo passo.",
+      "linkedAt": "2026-03-16T16:15:02.804Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-10-refresh-degradation-diagnostics",
+      "path": "plans/block-10-refresh-degradation-diagnostics.md",
+      "title": "Block 10 - Refresh Degradation Diagnostics",
+      "summary": "Endurecer o `trace-pack` para que `refresh status: degraded` deixe de ser um único balde e passe a distinguir indisponibilidade de telemetria, mismatch de cadence, lag transitório, refresh parado e redelivery relevante.",
+      "linkedAt": "2026-03-16T16:23:13.957Z",
+      "status": "active"
+    },
+    {
+      "slug": "block-2-ingestion-runtime-contract",
+      "path": "plans/block-2-ingestion-runtime-contract.md",
+      "title": "Block 2 - Ingestion Runtime Contract",
+      "summary": "Consolidar o runtime contract da ingestão com configctl como fonte de verdade, explicitando bindings ativos, tópicos governados, artefatos associados, queries canônicas e superfícies HTTP operacionais estáveis para preparar consumer futuro sem transferir domínio para os serviços de ingestão.",
+      "linkedAt": "2026-03-16T16:35:17.288Z",
+      "status": "active"
+    }
+  ],
+  "completed": [],
+  "primary": "context-bootstrap"
+}

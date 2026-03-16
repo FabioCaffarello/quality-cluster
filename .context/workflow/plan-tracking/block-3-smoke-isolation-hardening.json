@@ -1,0 +1,55 @@
+{
+  "decisions": [
+    {
+      "title": "Block 3 targets smoke identity isolation before broader parallelism",
+      "description": "The next repository-level gap is inside raccoon-cli itself: scenario-smoke still reuses fixed config keys, bindings, and global/default assumptions, which creates false 409 conflicts and mixed evidence. Block 3 should isolate execution identity in the tooling before any broader parallel smoke strategy.",
+      "phase": "P",
+      "alternatives": [
+        "Move directly into new runtime architecture work",
+        "Accept sequential-only smoke without hardening the CLI identity model"
+      ],
+      "status": "accepted",
+      "id": "dec-1773671354523",
+      "decidedAt": "2026-03-16T14:29:14.523Z"
+    },
+    {
+      "title": "Prefer unique run identity over destructive cleanup",
+      "description": "Smoke isolation should start by generating unique execution identifiers and threading them through config creation, bindings, correlation ids, and evidence filters. Destructive cleanup or new runtime endpoints are out of scope for the first pass.",
+      "phase": "P",
+      "alternatives": [
+        "Add cleanup endpoints to configctl first",
+        "Delete or deactivate previous smoke configs as the primary isolation strategy"
+      ],
+      "status": "accepted",
+      "id": "dec-1773671354528",
+      "decidedAt": "2026-03-16T14:29:14.528Z"
+    },
+    {
+      "title": "Keep global/default as the smoke runtime baseline",
+      "description": "Runtime proof showed that validator and configctl can represent tenant-scoped smoke state, but the active dataplane behavior used by consumer and emulator still aligns with the canonical global/default baseline. Block 3 therefore isolates tooling-owned identifiers while preserving the runtime scope baseline.",
+      "phase": "E",
+      "alternatives": [
+        "Force tenant-scoped smoke as part of this block",
+        "Redesign consumer and emulator runtime behavior inside the same block"
+      ],
+      "status": "accepted",
+      "id": "dec-1773672006970",
+      "decidedAt": "2026-03-16T14:40:06.970Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:29:14.531Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:40:07.074Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:40:07.078Z"
+    }
+  },
+  "progress": 100
+}

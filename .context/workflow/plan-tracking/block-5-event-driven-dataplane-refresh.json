@@ -1,0 +1,55 @@
+{
+  "decisions": [
+    {
+      "title": "Block 5 uses config.ingestion_runtime_changed as the canonical dataplane refresh signal",
+      "description": "After Block 4, the remaining refinement is not bootstrap correctness but refresh trigger selection. The canonical signal for consumer and emulator refresh should be config.ingestion_runtime_changed, because it encodes exactly the operational mutation relevant to ingestion runtime without forcing dataplane code to infer it from generic activation or deactivation events.",
+      "phase": "P",
+      "alternatives": [
+        "Use config.activated and config.deactivated together as the refresh trigger",
+        "Keep aggregate polling as the primary refresh mechanism"
+      ],
+      "status": "accepted",
+      "id": "dec-1773673802723",
+      "decidedAt": "2026-03-16T15:10:02.723Z"
+    },
+    {
+      "title": "Aggregate bootstrap remains the state source while events become the reload trigger",
+      "description": "Block 5 does not replace runtimebootstrap. Event consumers will trigger reload, but the dataplane should continue to load effective state from the aggregate bootstrap seam so that event ordering and partial payload issues do not become a second source of truth.",
+      "phase": "P",
+      "alternatives": [
+        "Make the event payload itself the source of truth for dataplane state",
+        "Introduce a new HTTP or NATS API dedicated to event-driven dataplane state"
+      ],
+      "status": "accepted",
+      "id": "dec-1773673802725",
+      "decidedAt": "2026-03-16T15:10:02.725Z"
+    },
+    {
+      "title": "Block 5 closes with config.ingestion_runtime_changed as the canonical dataplane refresh trigger",
+      "description": "Consumer and emulator now reload aggregate runtime bootstrap on dedicated JetStream consumers for config.ingestion_runtime_changed. Aggregate bootstrap remains the state source, while the event becomes the canonical trigger for dataplane convergence. This removes polling as the primary refresh mechanism without introducing a second source of truth.",
+      "phase": "V",
+      "alternatives": [
+        "Keep aggregate polling as the primary refresh mechanism",
+        "Use config.activated/config.deactivated as the dataplane refresh signal"
+      ],
+      "status": "accepted",
+      "id": "dec-1773674690880",
+      "decidedAt": "2026-03-16T15:24:50.880Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:10:02.726Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:24:50.749Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:24:50.755Z"
+    }
+  },
+  "progress": 100
+}

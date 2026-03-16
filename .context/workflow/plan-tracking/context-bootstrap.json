@@ -1,0 +1,43 @@
+{
+  "decisions": [
+    {
+      "title": "Bootstrap limitado ao contexto principal",
+      "description": "O bootstrap cobre docs, playbooks, plano e workflow em .context. As skills auto-geradas com status unfilled permanecem fora do escopo imediato para evitar expandir o trabalho alem da inicializacao operacional.",
+      "phase": "E",
+      "alternatives": [
+        "Preencher todas as skills geradas automaticamente neste bootstrap",
+        "Ignorar o workflow PREVC e manter apenas a scaffolding base"
+      ],
+      "status": "accepted",
+      "id": "dec-1773625566267",
+      "decidedAt": "2026-03-16T01:46:06.267Z"
+    },
+    {
+      "title": "Criterio de validacao do bootstrap",
+      "description": "A validacao do bootstrap foi considerada suficiente quando o contexto MCP reportou docs, agents e plans inicializados, o workflow status file existia e nao havia status unfilled nos docs, agents e plano principais.",
+      "phase": "V",
+      "alternatives": [
+        "Exigir preenchimento imediato de todas as skills geradas automaticamente",
+        "Executar verificacoes adicionais de runtime do repositorio fora do escopo do bootstrap"
+      ],
+      "status": "accepted",
+      "id": "dec-1773625587778",
+      "decidedAt": "2026-03-16T01:46:27.778Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T01:46:06.273Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T01:46:06.278Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T01:46:27.773Z"
+    }
+  },
+  "progress": 100
+}

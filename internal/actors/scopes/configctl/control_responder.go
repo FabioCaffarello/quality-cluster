@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	adapternats "internal/adapters/nats"
 	"internal/application/configctl/contracts"
 	"internal/shared/problem"
@@ -49,6 +50,7 @@ func (a *ControlResponderActor) Receive(c *actor.Context) {
 			adapternats.NewTypedControlRoute(a.cfg.Registry.CreateDraft, a.cfg.Source, a.handleCreateDraft),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.GetConfig, a.cfg.Source, a.handleGetConfig),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.GetActive, a.cfg.Source, a.handleGetActive),
+			adapternats.NewTypedControlRoute(a.cfg.Registry.ListActiveRuntimeProjections, a.cfg.Source, a.handleListActiveRuntimeProjections),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.ListActiveIngestionBindings, a.cfg.Source, a.handleListActiveIngestionBindings),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.ListConfigs, a.cfg.Source, a.handleListConfigs),
 			adapternats.NewTypedControlRoute(a.cfg.Registry.ValidateDraft, a.cfg.Source, a.handleValidateDraft),
@@ -70,6 +72,9 @@ func (a *ControlResponderActor) Receive(c *actor.Context) {
 			}
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("configctl control responder: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }
@@ -92,6 +97,14 @@ func (a *ControlResponderActor) handleGetConfig(ctx context.Context, query contr
 
 func (a *ControlResponderActor) handleGetActive(ctx context.Context, query contracts.GetActiveConfigQuery) (contracts.GetActiveConfigReply, *problem.Problem) {
 	result, prob := requestActor[getActiveConfigResult](a.engine, a.cfg.ControlRouter, getActiveConfigMessage{
+		Query:         query,
+		CorrelationID: requestctx.CorrelationID(ctx),
+	}, a.cfg.RequestTimeout)
+	return result.Reply, mergeProblems(result.Prob, prob)
+}
+
+func (a *ControlResponderActor) handleListActiveRuntimeProjections(ctx context.Context, query contracts.ListActiveRuntimeProjectionsQuery) (contracts.ListActiveRuntimeProjectionsReply, *problem.Problem) {
+	result, prob := requestActor[listActiveRuntimeProjectionsResult](a.engine, a.cfg.ControlRouter, listActiveRuntimeProjectionsMessage{
 		Query:         query,
 		CorrelationID: requestctx.CorrelationID(ctx),
 	}, a.cfg.RequestTimeout)

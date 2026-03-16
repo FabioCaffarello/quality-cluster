@@ -54,29 +54,36 @@ X-Correlation-ID: {{correlationId}}
 ###
 
 ### 5. Confirm active config in configctl
-GET {{baseUrl}}/configctl/active-config?scope_kind=global&scope_key=default
+GET {{baseUrl}}/configctl/configs/active?scope_kind=global&scope_key=default
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 
 ###
 
-### 6. Confirm validator runtime cache was updated
+### 6. Confirm configctl runtime projections expose the canonical active runtime state
+GET {{baseUrl}}/runtime/configctl/projections?scope_kind=global&scope_key=default
+Accept: application/json
+X-Correlation-ID: {{correlationId}}
+
+###
+
+### 7. Confirm validator runtime cache was updated
 GET {{baseUrl}}/runtime/validator/active?scope_kind=global&scope_key=default
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 
 ###
 
-### 7. Confirm ingestion runtime bindings projected by configctl
-###    The response should expose the active binding plus its field shape,
-###    which is what bootstraps consumer/emulator in block 3A.
+### 8. Confirm ingestion runtime bindings projected by configctl
+###    The response should expose the active bindings plus the compact runtime set
+###    for the same activation, which is what bootstraps consumer/emulator.
 GET {{baseUrl}}/runtime/ingestion/bindings?scope_kind=global&scope_key=default
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 
 ###
 
-### 8. Confirm validation results produced from the data plane
+### 9. Confirm validation results produced from the data plane
 ###    Wait a few seconds after activation if needed; the emulator publishes
 ###    both a valid and an invalid sample for each active binding.
 GET {{baseUrl}}/runtime/validator/results?scope_kind=global&scope_key=default&limit=10

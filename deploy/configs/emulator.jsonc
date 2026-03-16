@@ -10,11 +10,17 @@
     "client_id": "quality-service-emulator",
     "dial_timeout": "10s"
   },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  },
   "bootstrap": {
     "base_url": "http://server:8080",
     "scope_kind": "global",
     "scope_key": "default",
-    "timeout": "5s"
+    "timeout": "5s",
+    "reconcile_interval": "30s"
   },
   "emulator": {
     "publish_interval": "5s"

@@ -1,0 +1,43 @@
+{
+  "decisions": [
+    {
+      "title": "Trace-pack classifies refresh health",
+      "description": "The canonical refresh signal in trace-pack is now a health classification. Operators should see healthy or degraded plus diagnosis rather than inferring state from raw JetStream counters.",
+      "phase": "P",
+      "alternatives": [
+        "Keep exposing only cadence and durable counters in SUMMARY.md",
+        "Add external alerting before defining an in-tool health classification"
+      ],
+      "status": "accepted",
+      "id": "dec-1773677702941",
+      "decidedAt": "2026-03-16T16:15:02.941Z"
+    },
+    {
+      "title": "Classification remains anchored in existing signals",
+      "description": "Refresh health is derived only from existing canonical signals: bootstrap.reconcile_interval and the consumer/emulator refresh durables in CONFIGCTL_EVENTS. Missing monitor state, missing durables, pending work, redeliveries, or cadence misalignment degrade the signal.",
+      "phase": "E",
+      "alternatives": [
+        "Introduce new runtime endpoints for refresh health",
+        "Derive health from logs instead of config plus JetStream state"
+      ],
+      "status": "accepted",
+      "id": "dec-1773677702942",
+      "decidedAt": "2026-03-16T16:15:02.942Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:15:08.367Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:15:08.373Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:15:08.376Z"
+    }
+  },
+  "progress": 100
+}

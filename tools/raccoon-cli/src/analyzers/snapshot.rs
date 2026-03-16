@@ -34,9 +34,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::codeintel;
-use crate::codeintel::{
-    GoFunc, ImportKind, ProjectIndex, TypeKind, Visibility,
-};
+use crate::codeintel::{GoFunc, ImportKind, ProjectIndex, TypeKind, Visibility};
 
 // ── Snapshot model ─────────────────────────────────────────────────────
 
@@ -197,18 +195,11 @@ pub struct SnapshotStats {
 
 // ── Layer detection (mirrors arch_guard layer model) ───────────────────
 
-const LAYERS: &[&str] = &[
-    "domain",
-    "application",
-    "adapters",
-    "actors",
-    "interfaces",
-];
+const LAYERS: &[&str] = &["domain", "application", "adapters", "actors", "interfaces"];
 
 fn detect_layer(dir: &str) -> Option<&'static str> {
     for &layer in LAYERS {
-        if dir.contains(&format!("internal/{layer}"))
-            || dir.contains(&format!("internal\\{layer}"))
+        if dir.contains(&format!("internal/{layer}")) || dir.contains(&format!("internal\\{layer}"))
         {
             return Some(layer);
         }
@@ -388,9 +379,14 @@ fn build_types(index: &ProjectIndex) -> Vec<TypeEntry> {
                     ("struct", fs)
                 }
                 TypeKind::Interface { .. } => ("interface", Vec::new()),
-                TypeKind::Alias { underlying } => {
-                    (if underlying.contains("=") { "alias" } else { "alias" }, Vec::new())
-                }
+                TypeKind::Alias { underlying } => (
+                    if underlying.contains("=") {
+                        "alias"
+                    } else {
+                        "alias"
+                    },
+                    Vec::new(),
+                ),
             };
 
             entries.push(TypeEntry {
@@ -406,11 +402,7 @@ fn build_types(index: &ProjectIndex) -> Vec<TypeEntry> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        a.package
-            .cmp(&b.package)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    entries.sort_by(|a, b| a.package.cmp(&b.package).then_with(|| a.name.cmp(&b.name)));
     entries
 }
 
@@ -447,21 +439,29 @@ fn func_entry(f: &GoFunc, package: &str, file_path: &str) -> FunctionEntry {
         }
     });
 
-    let params: Vec<String> = f.params.iter().map(|p| {
-        if p.name.is_empty() {
-            p.type_expr.clone()
-        } else {
-            format!("{} {}", p.name, p.type_expr)
-        }
-    }).collect();
+    let params: Vec<String> = f
+        .params
+        .iter()
+        .map(|p| {
+            if p.name.is_empty() {
+                p.type_expr.clone()
+            } else {
+                format!("{} {}", p.name, p.type_expr)
+            }
+        })
+        .collect();
 
-    let returns: Vec<String> = f.returns.iter().map(|p| {
-        if p.name.is_empty() {
-            p.type_expr.clone()
-        } else {
-            format!("{} {}", p.name, p.type_expr)
-        }
-    }).collect();
+    let returns: Vec<String> = f
+        .returns
+        .iter()
+        .map(|p| {
+            if p.name.is_empty() {
+                p.type_expr.clone()
+            } else {
+                format!("{} {}", p.name, p.type_expr)
+            }
+        })
+        .collect();
 
     let ret_str = if returns.is_empty() {
         String::new()
@@ -507,11 +507,7 @@ fn build_constants(index: &ProjectIndex) -> Vec<ConstantEntry> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        a.package
-            .cmp(&b.package)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    entries.sort_by(|a, b| a.package.cmp(&b.package).then_with(|| a.name.cmp(&b.name)));
     entries
 }
 
@@ -545,11 +541,7 @@ fn build_interfaces(index: &ProjectIndex) -> Vec<InterfaceEntry> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        a.package
-            .cmp(&b.package)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    entries.sort_by(|a, b| a.package.cmp(&b.package).then_with(|| a.name.cmp(&b.name)));
     entries
 }
 
@@ -594,11 +586,7 @@ fn build_contracts(index: &ProjectIndex) -> Vec<ContractEntry> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        a.family
-            .cmp(&b.family)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    entries.sort_by(|a, b| a.family.cmp(&b.family).then_with(|| a.name.cmp(&b.name)));
     entries
 }
 
@@ -628,30 +616,48 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
     // Stats summary
     out.push_str("Stats:\n");
     out.push_str(&format!("  Files:      {}\n", snapshot.stats.total_files));
-    out.push_str(&format!("  Packages:   {}\n", snapshot.stats.total_packages));
-    out.push_str(&format!("  Types:      {} (structs: {}, interfaces: {}, aliases: {})\n",
+    out.push_str(&format!(
+        "  Packages:   {}\n",
+        snapshot.stats.total_packages
+    ));
+    out.push_str(&format!(
+        "  Types:      {} (structs: {}, interfaces: {}, aliases: {})\n",
         snapshot.stats.total_types,
         snapshot.stats.structs,
         snapshot.stats.interfaces,
         snapshot.stats.type_aliases,
     ));
-    out.push_str(&format!("  Functions:  {} (exported: {})\n",
-        snapshot.stats.total_functions,
-        snapshot.stats.exported_functions,
+    out.push_str(&format!(
+        "  Functions:  {} (exported: {})\n",
+        snapshot.stats.total_functions, snapshot.stats.exported_functions,
     ));
-    out.push_str(&format!("  Constants:  {}\n", snapshot.stats.total_constants));
+    out.push_str(&format!(
+        "  Constants:  {}\n",
+        snapshot.stats.total_constants
+    ));
     out.push_str(&format!("  Imports:    {}\n", snapshot.stats.total_imports));
     out.push_str(&format!("  Lines:      {}\n", snapshot.stats.total_lines));
     out.push_str(&format!("  Test files: {}\n", snapshot.stats.test_files));
-    out.push_str(&format!("  Arch layers: {}\n", snapshot.stats.arch_layers_detected));
-    out.push_str(&format!("  Contracts:  {}\n", snapshot.stats.contracts_detected));
+    out.push_str(&format!(
+        "  Arch layers: {}\n",
+        snapshot.stats.arch_layers_detected
+    ));
+    out.push_str(&format!(
+        "  Contracts:  {}\n",
+        snapshot.stats.contracts_detected
+    ));
     out.push('\n');
 
     // Packages
     out.push_str(&format!("Packages ({}):\n", snapshot.packages.len()));
     for pkg in &snapshot.packages {
-        out.push_str(&format!("  {} ({}) — {} files [{}]\n",
-            pkg.name, pkg.dir, pkg.file_count, pkg.provenance_tag()));
+        out.push_str(&format!(
+            "  {} ({}) — {} files [{}]\n",
+            pkg.name,
+            pkg.dir,
+            pkg.file_count,
+            pkg.provenance_tag()
+        ));
     }
     out.push('\n');
 
@@ -659,8 +665,13 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
     if !snapshot.interfaces.is_empty() {
         out.push_str(&format!("Interfaces ({}):\n", snapshot.interfaces.len()));
         for iface in &snapshot.interfaces {
-            out.push_str(&format!("  {} ({}) — {} methods [{}]\n",
-                iface.name, iface.package, iface.methods.len(), iface.provenance_tag()));
+            out.push_str(&format!(
+                "  {} ({}) — {} methods [{}]\n",
+                iface.name,
+                iface.package,
+                iface.methods.len(),
+                iface.provenance_tag()
+            ));
             if verbose {
                 for m in &iface.methods {
                     out.push_str(&format!("    - {m}\n"));
@@ -677,18 +688,31 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
     if !snapshot.contracts.is_empty() {
         out.push_str(&format!("Contracts ({}):\n", snapshot.contracts.len()));
         for c in &snapshot.contracts {
-            out.push_str(&format!("  {} (family: {}) at {}:{} [{}]\n",
-                c.name, c.family, c.file, c.line, c.provenance_tag()));
+            out.push_str(&format!(
+                "  {} (family: {}) at {}:{} [{}]\n",
+                c.name,
+                c.family,
+                c.file,
+                c.line,
+                c.provenance_tag()
+            ));
         }
         out.push('\n');
     }
 
     // Arch layers
     if !snapshot.arch_layers.is_empty() {
-        out.push_str(&format!("Architecture layers ({}):\n", snapshot.arch_layers.len()));
+        out.push_str(&format!(
+            "Architecture layers ({}):\n",
+            snapshot.arch_layers.len()
+        ));
         for l in &snapshot.arch_layers {
-            out.push_str(&format!("  {} → {} [{}]\n",
-                l.package_dir, l.layer, l.provenance_tag()));
+            out.push_str(&format!(
+                "  {} → {} [{}]\n",
+                l.package_dir,
+                l.layer,
+                l.provenance_tag()
+            ));
         }
         out.push('\n');
     }
@@ -698,8 +722,15 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
         if !snapshot.types.is_empty() {
             out.push_str(&format!("Types ({}):\n", snapshot.types.len()));
             for t in &snapshot.types {
-                out.push_str(&format!("  {} {} ({}) at {}:{} [{}]\n",
-                    t.kind, t.name, t.package, t.file, t.line, t.provenance_tag()));
+                out.push_str(&format!(
+                    "  {} {} ({}) at {}:{} [{}]\n",
+                    t.kind,
+                    t.name,
+                    t.package,
+                    t.file,
+                    t.line,
+                    t.provenance_tag()
+                ));
                 for f in &t.fields {
                     let embed = if f.embedded { " [embedded]" } else { "" };
                     out.push_str(&format!("    .{}: {}{}\n", f.name, f.type_expr, embed));
@@ -709,22 +740,41 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
         }
 
         if !snapshot.functions.is_empty() {
-            out.push_str(&format!("Exported functions ({}):\n", snapshot.functions.len()));
+            out.push_str(&format!(
+                "Exported functions ({}):\n",
+                snapshot.functions.len()
+            ));
             for f in &snapshot.functions {
-                let recv = f.receiver.as_deref().map(|r| format!("({r}) ")).unwrap_or_default();
-                out.push_str(&format!("  {recv}{}{} [{}]\n",
-                    f.name, f.signature, f.provenance_tag()));
+                let recv = f
+                    .receiver
+                    .as_deref()
+                    .map(|r| format!("({r}) "))
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "  {recv}{}{} [{}]\n",
+                    f.name,
+                    f.signature,
+                    f.provenance_tag()
+                ));
             }
             out.push('\n');
         }
 
         if !snapshot.constants.is_empty() {
-            out.push_str(&format!("Exported constants ({}):\n", snapshot.constants.len()));
+            out.push_str(&format!(
+                "Exported constants ({}):\n",
+                snapshot.constants.len()
+            ));
             for c in &snapshot.constants {
                 let th = c.type_hint.as_deref().unwrap_or("?");
                 let val = c.value.as_deref().unwrap_or("?");
-                out.push_str(&format!("  {} {} = {} [{}]\n",
-                    c.name, th, val, c.provenance_tag()));
+                out.push_str(&format!(
+                    "  {} {} = {} [{}]\n",
+                    c.name,
+                    th,
+                    val,
+                    c.provenance_tag()
+                ));
             }
             out.push('\n');
         }
@@ -732,8 +782,13 @@ pub fn render_human(snapshot: &Snapshot, verbose: bool) -> String {
         if !snapshot.imports.is_empty() {
             out.push_str(&format!("Imports ({}):\n", snapshot.imports.len()));
             for imp in &snapshot.imports {
-                out.push_str(&format!("  {} ({}) — used by: {} [{}]\n",
-                    imp.path, imp.kind, imp.used_by.join(", "), imp.provenance_tag()));
+                out.push_str(&format!(
+                    "  {} ({}) — used by: {} [{}]\n",
+                    imp.path,
+                    imp.kind,
+                    imp.used_by.join(", "),
+                    imp.provenance_tag()
+                ));
             }
             out.push('\n');
         }
@@ -994,7 +1049,11 @@ func NewEventPublisher(conn string) *EventPublisher {
 
         // Test functions should not appear in types or functions
         for f in &snap.functions {
-            assert!(!f.name.starts_with("Test"), "test func should not appear: {}", f.name);
+            assert!(
+                !f.name.starts_with("Test"),
+                "test func should not appear: {}",
+                f.name
+            );
         }
     }
 
@@ -1005,9 +1064,18 @@ func NewEventPublisher(conn string) *EventPublisher {
         let snap = generate(root);
 
         let layer_names: Vec<&str> = snap.arch_layers.iter().map(|l| l.layer.as_str()).collect();
-        assert!(layer_names.contains(&"domain"), "should detect domain layer");
-        assert!(layer_names.contains(&"application"), "should detect application layer");
-        assert!(layer_names.contains(&"adapters"), "should detect adapters layer");
+        assert!(
+            layer_names.contains(&"domain"),
+            "should detect domain layer"
+        );
+        assert!(
+            layer_names.contains(&"application"),
+            "should detect application layer"
+        );
+        assert!(
+            layer_names.contains(&"adapters"),
+            "should detect adapters layer"
+        );
     }
 
     #[test]
@@ -1017,7 +1085,10 @@ func NewEventPublisher(conn string) *EventPublisher {
         let snap = generate(root);
 
         let contract_names: Vec<&str> = snap.contracts.iter().map(|c| c.name.as_str()).collect();
-        assert!(contract_names.contains(&"ConfigctlGateway"), "should detect gateway contract");
+        assert!(
+            contract_names.contains(&"ConfigctlGateway"),
+            "should detect gateway contract"
+        );
     }
 
     #[test]
@@ -1029,7 +1100,11 @@ func NewEventPublisher(conn string) *EventPublisher {
         let iface_names: Vec<&str> = snap.interfaces.iter().map(|i| i.name.as_str()).collect();
         assert!(iface_names.contains(&"ConfigctlGateway"));
 
-        let gw = snap.interfaces.iter().find(|i| i.name == "ConfigctlGateway").unwrap();
+        let gw = snap
+            .interfaces
+            .iter()
+            .find(|i| i.name == "ConfigctlGateway")
+            .unwrap();
         assert_eq!(gw.methods.len(), 2);
         assert!(gw.methods.contains(&"CreateDraft".to_string()));
         assert!(gw.methods.contains(&"GetConfig".to_string()));
@@ -1161,7 +1236,10 @@ func NewEventPublisher(conn string) *EventPublisher {
     #[test]
     fn detect_layer_classification() {
         assert_eq!(detect_layer("internal/domain/configctl"), Some("domain"));
-        assert_eq!(detect_layer("internal/application/ports"), Some("application"));
+        assert_eq!(
+            detect_layer("internal/application/ports"),
+            Some("application")
+        );
         assert_eq!(detect_layer("internal/adapters/nats"), Some("adapters"));
         assert_eq!(detect_layer("internal/actors/scopes"), Some("actors"));
         assert_eq!(detect_layer("internal/interfaces/http"), Some("interfaces"));
@@ -1172,7 +1250,10 @@ func NewEventPublisher(conn string) *EventPublisher {
 
     #[test]
     fn detect_contract_families() {
-        assert_eq!(detect_contract_family("CreateDraftCommand"), Some("command"));
+        assert_eq!(
+            detect_contract_family("CreateDraftCommand"),
+            Some("command")
+        );
         assert_eq!(detect_contract_family("GetConfigQuery"), Some("query"));
         assert_eq!(detect_contract_family("DraftCreatedEvent"), Some("event"));
         assert_eq!(detect_contract_family("ConfigctlGateway"), Some("port"));
@@ -1190,7 +1271,8 @@ func NewEventPublisher(conn string) *EventPublisher {
         let snap = generate(root);
 
         // "time" should appear exactly once
-        let time_imports: Vec<&ImportEntry> = snap.imports.iter().filter(|i| i.path == "time").collect();
+        let time_imports: Vec<&ImportEntry> =
+            snap.imports.iter().filter(|i| i.path == "time").collect();
         assert_eq!(time_imports.len(), 1);
         assert_eq!(time_imports[0].kind, "stdlib");
     }
@@ -1201,15 +1283,27 @@ func NewEventPublisher(conn string) *EventPublisher {
         let root = create_fixture(&tmp);
         let snap = generate(root);
 
-        let new_cs = snap.functions.iter().find(|f| f.name == "NewConfigSet").unwrap();
+        let new_cs = snap
+            .functions
+            .iter()
+            .find(|f| f.name == "NewConfigSet")
+            .unwrap();
         assert!(new_cs.receiver.is_none());
         assert!(new_cs.signature.contains("id string"));
         assert!(new_cs.signature.contains("ConfigSet"));
 
-        let add_ver = snap.functions.iter().find(|f| f.name == "AddVersion").unwrap();
+        let add_ver = snap
+            .functions
+            .iter()
+            .find(|f| f.name == "AddVersion")
+            .unwrap();
         assert_eq!(add_ver.receiver.as_deref(), Some("*ConfigSet"));
 
-        let count = snap.functions.iter().find(|f| f.name == "VersionCount").unwrap();
+        let count = snap
+            .functions
+            .iter()
+            .find(|f| f.name == "VersionCount")
+            .unwrap();
         assert_eq!(count.receiver.as_deref(), Some("ConfigSet"));
     }
 }

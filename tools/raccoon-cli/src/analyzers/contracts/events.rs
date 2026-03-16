@@ -43,7 +43,10 @@ fn extract_domain_events(source: &str, file: &str, index: &mut DomainEventIndex)
         let trimmed = line.trim();
         // Match patterns like: EventDraftCreated events.Name = "config.draft_created"
         // or: EventDraftCreated            events.Name = "config.draft_created"
-        if trimmed.starts_with("Event") && trimmed.contains("events.Name") && trimmed.contains("= \"") {
+        if trimmed.starts_with("Event")
+            && trimmed.contains("events.Name")
+            && trimmed.contains("= \"")
+        {
             let const_name = trimmed.split_whitespace().next().unwrap_or("").to_string();
             if let Some(start) = trimmed.find('"') {
                 if let Some(end) = trimmed[start + 1..].find('"') {
@@ -109,7 +112,8 @@ fn extract_event_structs(source: &str) -> Vec<(String, bool)> {
                 let brace_start = abs_pos + "Event struct {".len();
                 if let Some(end) = find_closing_brace(source, brace_start) {
                     let body = &source[brace_start..end];
-                    let has_metadata = body.contains("Metadata") && body.contains("events.Metadata");
+                    let has_metadata =
+                        body.contains("Metadata") && body.contains("events.Metadata");
                     results.push((type_name, has_metadata));
                     i = end + 1;
                     continue;
@@ -144,7 +148,9 @@ fn extract_receiver_type(line: &str) -> Option<String> {
 fn extract_return_value(line: &str) -> Option<String> {
     if let Some(pos) = line.find("return ") {
         let after = &line[pos + 7..];
-        let end = after.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(after.len());
+        let end = after
+            .find(|c: char| !c.is_alphanumeric() && c != '_')
+            .unwrap_or(after.len());
         let value = &after[..end];
         if !value.is_empty() {
             return Some(value.to_string());
@@ -242,12 +248,20 @@ func (e ConfigArchivedEvent) EventMetadata() events.Metadata          { return e
 
         assert_eq!(index.events.len(), 5);
 
-        let draft = index.events.iter().find(|e| e.event_name == "config.draft_created").unwrap();
+        let draft = index
+            .events
+            .iter()
+            .find(|e| e.event_name == "config.draft_created")
+            .unwrap();
         assert_eq!(draft.struct_name, "DraftCreatedEvent");
         assert_eq!(draft.const_name, "EventDraftCreated");
         assert!(draft.has_metadata);
 
-        let validated = index.events.iter().find(|e| e.event_name == "config.validated").unwrap();
+        let validated = index
+            .events
+            .iter()
+            .find(|e| e.event_name == "config.validated")
+            .unwrap();
         assert_eq!(validated.struct_name, "ConfigValidatedEvent");
         assert!(validated.has_metadata);
     }
@@ -258,7 +272,11 @@ func (e ConfigArchivedEvent) EventMetadata() events.Metadata          { return e
         extract_domain_events(SAMPLE_EVENTS, "test.go", &mut index);
 
         for event in &index.events {
-            assert!(event.has_metadata, "event {} should have metadata", event.struct_name);
+            assert!(
+                event.has_metadata,
+                "event {} should have metadata",
+                event.struct_name
+            );
         }
     }
 

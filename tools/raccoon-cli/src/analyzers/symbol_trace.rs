@@ -32,7 +32,7 @@ use serde::Serialize;
 
 use crate::codeintel::{self, GoFunc, ProjectIndex, TypeKind, Visibility};
 use crate::lsp::bridge::GoplsBridge;
-use crate::lsp::types::{LspDefinition, LspReference, LspStatus, HoverInfo};
+use crate::lsp::types::{HoverInfo, LspDefinition, LspReference, LspStatus};
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -64,9 +64,10 @@ pub fn trace_with_lsp(
         .lsp_definitions
         .into_iter()
         .filter(|ld| {
-            !report.definitions.iter().any(|d| {
-                d.file == ld.location.file && d.line == ld.location.line
-            })
+            !report
+                .definitions
+                .iter()
+                .any(|d| d.file == ld.location.file && d.line == ld.location.line)
         })
         .collect();
 
@@ -75,9 +76,10 @@ pub fn trace_with_lsp(
         .lsp_references
         .into_iter()
         .filter(|lr| {
-            !report.references.iter().any(|r| {
-                r.file == lr.location.file && r.line == lr.location.line
-            })
+            !report
+                .references
+                .iter()
+                .any(|r| r.file == lr.location.file && r.line == lr.location.line)
         })
         .collect();
 
@@ -106,14 +108,17 @@ pub fn trace_with_lsp(
     // Update scope note to reflect LSP presence.
     match &report.lsp_enrichment.as_ref().unwrap().status {
         LspStatus::Enriched => {
-            report.scope_note = "Trace combines structural AST indexing (declarations, signatures, \
+            report.scope_note =
+                "Trace combines structural AST indexing (declarations, signatures, \
                 struct fields) with gopls semantic analysis (type-resolved definitions, \
                 cross-package references including call sites). Each fact is tagged with \
-                its source: [ast] or [lsp].".to_string();
+                its source: [ast] or [lsp]."
+                    .to_string();
         }
         LspStatus::NoResults => {
             report.scope_note = "Trace is computed from structural AST indexing. gopls was \
-                available but returned no additional results for this symbol.".to_string();
+                available but returned no additional results for this symbol."
+                .to_string();
         }
         LspStatus::Unavailable { reason } => {
             report.scope_note = format!(
@@ -557,8 +562,7 @@ fn type_expr_mentions(expr: &str, symbol: &str) -> bool {
     while i + sym_len <= bytes.len() {
         if &bytes[i..i + sym_len] == sym_bytes {
             let before_ok = i == 0 || !is_ident_char(bytes[i - 1]);
-            let after_ok =
-                i + sym_len == bytes.len() || !is_ident_char(bytes[i + sym_len]);
+            let after_ok = i + sym_len == bytes.len() || !is_ident_char(bytes[i + sym_len]);
             if before_ok && after_ok {
                 return true;
             }
@@ -776,15 +780,23 @@ pub fn render_human(report: &SymbolTraceReport, verbose: bool) -> String {
                 report.symbol
             )
             .unwrap();
+            writeln!(out, "in the structural index. Possible reasons:").unwrap();
+            writeln!(out, "  - The name is misspelled").unwrap();
             writeln!(
                 out,
-                "in the structural index. Possible reasons:"
+                "  - It is defined inside a function body (not indexed)"
             )
             .unwrap();
-            writeln!(out, "  - The name is misspelled").unwrap();
-            writeln!(out, "  - It is defined inside a function body (not indexed)").unwrap();
-            writeln!(out, "  - It is a field name or local variable (not a top-level symbol)").unwrap();
-            writeln!(out, "  - It exists in vendor/ or generated code (excluded from index)").unwrap();
+            writeln!(
+                out,
+                "  - It is a field name or local variable (not a top-level symbol)"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "  - It exists in vendor/ or generated code (excluded from index)"
+            )
+            .unwrap();
             writeln!(out).unwrap();
             writeln!(out, "Scope: {}", report.scope_note).unwrap();
             return out;
@@ -875,12 +887,7 @@ pub fn render_human(report: &SymbolTraceReport, verbose: bool) -> String {
     // LSP references (call sites, usages in function bodies)
     if let Some(ref lsp) = report.lsp_enrichment {
         if !lsp.references.is_empty() {
-            writeln!(
-                out,
-                "Semantic references ({}): [lsp]",
-                lsp.references.len()
-            )
-            .unwrap();
+            writeln!(out, "Semantic references ({}): [lsp]", lsp.references.len()).unwrap();
             let limit = if verbose { lsp.references.len() } else { 20 };
             for r in lsp.references.iter().take(limit) {
                 let ctx = r.context.as_deref().unwrap_or("");
@@ -928,12 +935,7 @@ pub fn render_human(report: &SymbolTraceReport, verbose: bool) -> String {
 
     // Contracts
     if !report.contracts.is_empty() {
-        writeln!(
-            out,
-            "Contract connections ({}): ",
-            report.contracts.len()
-        )
-        .unwrap();
+        writeln!(out, "Contract connections ({}): ", report.contracts.len()).unwrap();
         for c in &report.contracts {
             writeln!(
                 out,
@@ -983,11 +985,7 @@ fn type_details(kind: &TypeKind) -> Vec<String> {
         TypeKind::Struct { fields } => {
             let mut details = Vec::new();
             for f in fields {
-                let tag_info = f
-                    .tag
-                    .as_ref()
-                    .map(|t| format!(" {t}"))
-                    .unwrap_or_default();
+                let tag_info = f.tag.as_ref().map(|t| format!(" {t}")).unwrap_or_default();
                 if f.embedded {
                     details.push(format!("embed: {}{}", f.type_expr, tag_info));
                 } else {
@@ -1041,22 +1039,33 @@ fn func_info(f: &GoFunc) -> (String, Vec<String>) {
 
     if let Some(ref recv) = f.receiver {
         let ptr = if recv.pointer { "*" } else { "" };
-        details.push(format!("receiver: ({} {}{})", recv.name, ptr, recv.type_name));
+        details.push(format!(
+            "receiver: ({} {}{})",
+            recv.name, ptr, recv.type_name
+        ));
     }
 
     if !f.params.is_empty() {
-        let params: Vec<String> = f.params.iter().map(|p| format!("{} {}", p.name, p.type_expr)).collect();
+        let params: Vec<String> = f
+            .params
+            .iter()
+            .map(|p| format!("{} {}", p.name, p.type_expr))
+            .collect();
         details.push(format!("params: ({})", params.join(", ")));
     }
 
     if !f.returns.is_empty() {
-        let rets: Vec<String> = f.returns.iter().map(|r| {
-            if r.name.is_empty() {
-                r.type_expr.clone()
-            } else {
-                format!("{} {}", r.name, r.type_expr)
-            }
-        }).collect();
+        let rets: Vec<String> = f
+            .returns
+            .iter()
+            .map(|r| {
+                if r.name.is_empty() {
+                    r.type_expr.clone()
+                } else {
+                    format!("{} {}", r.name, r.type_expr)
+                }
+            })
+            .collect();
         details.push(format!("returns: ({})", rets.join(", ")));
     }
 
@@ -1678,7 +1687,10 @@ type Supervisor struct {
         assert!(!report.references.is_empty());
 
         // LSP enrichment should be present but unavailable.
-        let lsp = report.lsp_enrichment.as_ref().expect("lsp_enrichment should be Some");
+        let lsp = report
+            .lsp_enrichment
+            .as_ref()
+            .expect("lsp_enrichment should be Some");
         assert!(
             matches!(lsp.status, LspStatus::Unavailable { .. }),
             "LSP status should be unavailable, got: {:?}",
@@ -1704,7 +1716,10 @@ type Supervisor struct {
         let report = trace_with_lsp(root, "DoesNotExist", &mut bridge);
 
         assert_eq!(report.status, ResolutionStatus::NotFound);
-        let lsp = report.lsp_enrichment.as_ref().expect("lsp_enrichment should be Some");
+        let lsp = report
+            .lsp_enrichment
+            .as_ref()
+            .expect("lsp_enrichment should be Some");
         assert!(matches!(lsp.status, LspStatus::Unavailable { .. }));
     }
 
@@ -1769,8 +1784,14 @@ type Supervisor struct {
         let json = render_json(&report).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert!(parsed["lsp_enrichment"].is_object(), "JSON should include lsp_enrichment section");
-        assert!(parsed["lsp_enrichment"]["status"].is_object(), "status should be present");
+        assert!(
+            parsed["lsp_enrichment"].is_object(),
+            "JSON should include lsp_enrichment section"
+        );
+        assert!(
+            parsed["lsp_enrichment"]["status"].is_object(),
+            "status should be present"
+        );
         assert!(parsed["lsp_enrichment"]["definitions"].is_array());
         assert!(parsed["lsp_enrichment"]["references"].is_array());
     }
@@ -1823,7 +1844,10 @@ type Supervisor struct {
 
     #[test]
     fn file_to_package_extracts_correctly() {
-        assert_eq!(file_to_package("internal/domain/configctl/config.go"), "configctl");
+        assert_eq!(
+            file_to_package("internal/domain/configctl/config.go"),
+            "configctl"
+        );
         assert_eq!(file_to_package("internal/adapters/nats/codec.go"), "nats");
         assert_eq!(file_to_package("main.go"), "");
     }

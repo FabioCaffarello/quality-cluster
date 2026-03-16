@@ -1,0 +1,12 @@
+{
+  // configctl is the control-plane owner and only needs NATS locally.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  }
+}

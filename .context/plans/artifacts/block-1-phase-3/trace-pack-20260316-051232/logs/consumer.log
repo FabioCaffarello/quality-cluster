@@ -1,0 +1,10 @@
+consumer-1  | time=2026-03-16T05:11:10.084Z level=WARN msg="consumer supervisor: unknown message" type=actor.Initialized
+consumer-1  | time=2026-03-16T05:11:10.104Z level=INFO msg="waiting for active ingestion bindings" reason="none active yet"
+consumer-1  | time=2026-03-16T05:11:15.106Z level=INFO msg="waiting for active ingestion bindings" reason="none active yet"
+consumer-1  | time=2026-03-16T05:11:20.111Z level=INFO msg="waiting for active ingestion bindings" reason="none active yet"
+consumer-1  | time=2026-03-16T05:11:25.117Z level=WARN msg="consumer runtime: unknown message" type=actor.Initialized
+consumer-1  | time=2026-03-16T05:11:25.118Z level=WARN msg="consumer publisher: unknown message" type=actor.Initialized
+consumer-1  | time=2026-03-16T05:11:25.131Z level=WARN msg="consumer topic router: unknown message" type=actor.Initialized
+consumer-1  | time=2026-03-16T05:11:25.131Z level=WARN msg="consumer topic router: unknown message" type=actor.Started
+consumer-1  | time=2026-03-16T05:11:25.179Z level=WARN msg="kafka topic consumer: unknown message" type=actor.Initialized
+consumer-1  | time=2026-03-16T05:11:25.179Z level=INFO msg="consumer runtime ready" generation=1 topics=[smoke.events.created] bindings=1

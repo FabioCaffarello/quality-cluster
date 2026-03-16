@@ -312,7 +312,8 @@ func TestConfigctlMapsProblemResponses(t *testing.T) {
 		prob: problem.New(problem.NotFound, "config not found"),
 	}, nil, nil, nil, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/configctl/configs/by-id?id=cfg-404", nil)
+	req := httptest.NewRequest(http.MethodGet, "/configctl/config-versions/cfg-404", nil)
+	req = req.WithContext(context.WithValue(req.Context(), httprouter.ParamsKey, httprouter.Params{{Key: "id", Value: "cfg-404"}}))
 	rec := httptest.NewRecorder()
 
 	handler.GetConfig(rec, req)

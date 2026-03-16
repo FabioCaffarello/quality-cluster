@@ -98,12 +98,9 @@ func TestConfigctlRoutesRegisterHandlers(t *testing.T) {
 		code   int
 	}{
 		{method: http.MethodPost, path: "/configctl/configs", body: `{"name":"core","format":"json","content":"{}"}`, code: http.StatusCreated},
-		{method: http.MethodGet, path: "/configctl/configs", code: http.StatusOK},
 		{method: http.MethodGet, path: "/configctl/config-versions", code: http.StatusOK},
-		{method: http.MethodGet, path: "/configctl/configs/by-id?id=cfg-123", code: http.StatusOK},
 		{method: http.MethodGet, path: "/configctl/config-versions/cfg-123", code: http.StatusOK},
 		{method: http.MethodGet, path: "/configctl/configs/active", code: http.StatusOK},
-		{method: http.MethodGet, path: "/configctl/active-config", code: http.StatusOK},
 		{method: http.MethodPost, path: "/configctl/configs/validate", body: `{"format":"json","content":"{}"}`, code: http.StatusOK},
 		{method: http.MethodPost, path: "/configctl/config-versions/cfg-123/validate", code: http.StatusOK},
 		{method: http.MethodPost, path: "/configctl/config-versions/cfg-123/compile", body: `{}`, code: http.StatusOK},

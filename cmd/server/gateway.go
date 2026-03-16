@@ -68,6 +68,10 @@ func (unavailableConfigctlGateway) GetActiveConfig(context.Context, configctlcon
 	return configctlcontracts.GetActiveConfigReply{}, unavailableConfigctlProblem()
 }
 
+func (unavailableConfigctlGateway) ListActiveRuntimeProjections(context.Context, configctlcontracts.ListActiveRuntimeProjectionsQuery) (configctlcontracts.ListActiveRuntimeProjectionsReply, *problem.Problem) {
+	return configctlcontracts.ListActiveRuntimeProjectionsReply{}, unavailableConfigctlProblem()
+}
+
 func (unavailableConfigctlGateway) ListActiveIngestionBindings(context.Context, configctlcontracts.ListActiveIngestionBindingsQuery) (configctlcontracts.ListActiveIngestionBindingsReply, *problem.Problem) {
 	return configctlcontracts.ListActiveIngestionBindingsReply{}, unavailableConfigctlProblem()
 }

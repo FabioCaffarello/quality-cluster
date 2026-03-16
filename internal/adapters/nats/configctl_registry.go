@@ -46,24 +46,28 @@ type ConsumerSpec struct {
 }
 
 type ConfigctlRegistry struct {
-	CreateDraft                 ControlSpec
-	GetConfig                   ControlSpec
-	GetActive                   ControlSpec
-	ListActiveIngestionBindings ControlSpec
-	ListConfigs                 ControlSpec
-	ValidateDraft               ControlSpec
-	ValidateConfig              ControlSpec
-	CompileConfig               ControlSpec
-	ActivateConfig              ControlSpec
-	DraftCreated                EventSpec
-	Validated                   EventSpec
-	Compiled                    EventSpec
-	Activated                   EventSpec
-	Deactivated                 EventSpec
-	IngestionRuntimeChanged     EventSpec
-	Archived                    EventSpec
-	Rejected                    EventSpec
-	ValidatorRuntime            ConsumerSpec
+	CreateDraft                  ControlSpec
+	GetConfig                    ControlSpec
+	GetActive                    ControlSpec
+	ListActiveRuntimeProjections ControlSpec
+	ListActiveIngestionBindings  ControlSpec
+	ListConfigs                  ControlSpec
+	ValidateDraft                ControlSpec
+	ValidateConfig               ControlSpec
+	CompileConfig                ControlSpec
+	ActivateConfig               ControlSpec
+	DraftCreated                 EventSpec
+	Validated                    EventSpec
+	Compiled                     EventSpec
+	Activated                    EventSpec
+	Deactivated                  EventSpec
+	IngestionRuntimeChanged      EventSpec
+	Archived                     EventSpec
+	Rejected                     EventSpec
+	ValidatorRuntime             ConsumerSpec
+	ValidatorRuntimeCleared      ConsumerSpec
+	ConsumerRuntimeChanged       ConsumerSpec
+	EmulatorRuntimeChanged       ConsumerSpec
 }
 
 func DefaultConfigctlRegistry() ConfigctlRegistry {
@@ -92,6 +96,12 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
 			Subject:     "configctl.control.get_active",
 			RequestType: "configctl.query.get_active",
 			ReplyType:   "configctl.reply.get_active",
+			QueueGroup:  "configctl.control",
+		},
+		ListActiveRuntimeProjections: ControlSpec{
+			Subject:     "configctl.control.list_active_runtime_projections",
+			RequestType: "configctl.query.list_active_runtime_projections",
+			ReplyType:   "configctl.reply.list_active_runtime_projections",
 			QueueGroup:  "configctl.control",
 		},
 		ListActiveIngestionBindings: ControlSpec{
@@ -175,6 +185,36 @@ func DefaultConfigctlRegistry() ConfigctlRegistry {
 			Event: EventSpec{
 				Subject: "configctl.events.config.activated",
 				Type:    "configctl.event.config.activated",
+				Stream:  eventStream,
+			},
+			AckWait:    30 * time.Second,
+			MaxDeliver: 10,
+		},
+		ValidatorRuntimeCleared: ConsumerSpec{
+			Durable: "validator-runtime-clear-v1",
+			Event: EventSpec{
+				Subject: "configctl.events.config.deactivated",
+				Type:    "configctl.event.config.deactivated",
+				Stream:  eventStream,
+			},
+			AckWait:    30 * time.Second,
+			MaxDeliver: 10,
+		},
+		ConsumerRuntimeChanged: ConsumerSpec{
+			Durable: "consumer-runtime-refresh-v1",
+			Event: EventSpec{
+				Subject: "configctl.events.config.ingestion_runtime_changed",
+				Type:    "configctl.event.config.ingestion_runtime_changed",
+				Stream:  eventStream,
+			},
+			AckWait:    30 * time.Second,
+			MaxDeliver: 10,
+		},
+		EmulatorRuntimeChanged: ConsumerSpec{
+			Durable: "emulator-runtime-refresh-v1",
+			Event: EventSpec{
+				Subject: "configctl.events.config.ingestion_runtime_changed",
+				Type:    "configctl.event.config.ingestion_runtime_changed",
 				Stream:  eventStream,
 			},
 			AckWait:    30 * time.Second,

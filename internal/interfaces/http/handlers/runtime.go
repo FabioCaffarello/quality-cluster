@@ -16,9 +16,14 @@ type getValidatorRuntimeUseCase interface {
 }
 
 type RuntimeWebHandler struct {
-	getActiveRuntime            getValidatorRuntimeUseCase
-	listActiveIngestionBindings listActiveIngestionBindingsUseCase
-	listValidationResults       listValidationResultsUseCase
+	getActiveRuntime             getValidatorRuntimeUseCase
+	listActiveRuntimeProjections listActiveRuntimeProjectionsUseCase
+	listActiveIngestionBindings  listActiveIngestionBindingsUseCase
+	listValidationResults        listValidationResultsUseCase
+}
+
+type listActiveRuntimeProjectionsUseCase interface {
+	Execute(context.Context, configctlcontracts.ListActiveRuntimeProjectionsQuery) (configctlcontracts.ListActiveRuntimeProjectionsReply, *problem.Problem)
 }
 
 type listActiveIngestionBindingsUseCase interface {
@@ -29,11 +34,12 @@ type listValidationResultsUseCase interface {
 	Execute(context.Context, validatorresultscontracts.ListValidationResultsQuery) (validatorresultscontracts.ListValidationResultsReply, *problem.Problem)
 }
 
-func NewRuntimeWebHandler(getActiveRuntime getValidatorRuntimeUseCase, listActiveIngestionBindings listActiveIngestionBindingsUseCase, listValidationResults listValidationResultsUseCase) *RuntimeWebHandler {
+func NewRuntimeWebHandler(getActiveRuntime getValidatorRuntimeUseCase, listActiveRuntimeProjections listActiveRuntimeProjectionsUseCase, listActiveIngestionBindings listActiveIngestionBindingsUseCase, listValidationResults listValidationResultsUseCase) *RuntimeWebHandler {
 	return &RuntimeWebHandler{
-		getActiveRuntime:            getActiveRuntime,
-		listActiveIngestionBindings: listActiveIngestionBindings,
-		listValidationResults:       listValidationResults,
+		getActiveRuntime:             getActiveRuntime,
+		listActiveRuntimeProjections: listActiveRuntimeProjections,
+		listActiveIngestionBindings:  listActiveIngestionBindings,
+		listValidationResults:        listValidationResults,
 	}
 }
 
@@ -44,6 +50,24 @@ func (h *RuntimeWebHandler) GetActiveValidatorRuntime(w http.ResponseWriter, r *
 	}
 
 	reply, prob := h.getActiveRuntime.Execute(withCorrelationID(r), runtimecontracts.GetActiveRuntimeQuery{
+		ScopeKind: r.URL.Query().Get("scope_kind"),
+		ScopeKey:  r.URL.Query().Get("scope_key"),
+	})
+	if prob != nil {
+		writeProblemResponse(w, prob)
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, reply)
+}
+
+func (h *RuntimeWebHandler) ListActiveRuntimeProjections(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.listActiveRuntimeProjections == nil {
+		writeProblemResponse(w, problem.New(problem.Unavailable, "active runtime projections lookup is unavailable"))
+		return
+	}
+
+	reply, prob := h.listActiveRuntimeProjections.Execute(withCorrelationID(r), configctlcontracts.ListActiveRuntimeProjectionsQuery{
 		ScopeKind: r.URL.Query().Get("scope_kind"),
 		ScopeKey:  r.URL.Query().Get("scope_key"),
 	})

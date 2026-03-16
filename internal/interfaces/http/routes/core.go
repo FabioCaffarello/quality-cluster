@@ -13,18 +13,19 @@ import (
 )
 
 type Dependencies struct {
-	Readiness                   handlers.ReadinessChecker
-	CreateDraft                 handlersCreateDraftUseCase
-	GetConfig                   handlersGetConfigUseCase
-	GetActive                   handlersGetActiveConfigUseCase
-	ListActiveIngestionBindings handlersListActiveIngestionBindingsUseCase
-	ListConfigs                 handlersListConfigsUseCase
-	ValidateDraft               handlersValidateDraftUseCase
-	ValidateConfig              handlersValidateConfigUseCase
-	CompileConfig               handlersCompileConfigUseCase
-	ActivateConfig              handlersActivateConfigUseCase
-	GetRuntime                  handlersGetValidatorRuntimeUseCase
-	ListValidationResults       handlersListValidationResultsUseCase
+	Readiness                    handlers.ReadinessChecker
+	CreateDraft                  handlersCreateDraftUseCase
+	GetConfig                    handlersGetConfigUseCase
+	GetActive                    handlersGetActiveConfigUseCase
+	ListActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase
+	ListActiveIngestionBindings  handlersListActiveIngestionBindingsUseCase
+	ListConfigs                  handlersListConfigsUseCase
+	ValidateDraft                handlersValidateDraftUseCase
+	ValidateConfig               handlersValidateConfigUseCase
+	CompileConfig                handlersCompileConfigUseCase
+	ActivateConfig               handlersActivateConfigUseCase
+	GetRuntime                   handlersGetValidatorRuntimeUseCase
+	ListValidationResults        handlersListValidationResultsUseCase
 }
 
 type handlersCreateDraftUseCase interface {
@@ -41,6 +42,10 @@ type handlersGetActiveConfigUseCase interface {
 
 type handlersListConfigsUseCase interface {
 	Execute(context.Context, configctlcontracts.ListConfigsQuery) (configctlcontracts.ListConfigsReply, *problem.Problem)
+}
+
+type handlersListActiveRuntimeProjectionsUseCase interface {
+	Execute(context.Context, configctlcontracts.ListActiveRuntimeProjectionsQuery) (configctlcontracts.ListActiveRuntimeProjectionsReply, *problem.Problem)
 }
 
 type handlersListActiveIngestionBindingsUseCase interface {
@@ -88,7 +93,7 @@ func DefaultRoutes(deps Dependencies) []webserver.Route {
 		deps.CompileConfig,
 		deps.ActivateConfig,
 	)...)
-	routes = append(routes, RuntimeWithValidationResults(deps.GetRuntime, deps.ListActiveIngestionBindings, deps.ListValidationResults)...)
+	routes = append(routes, RuntimeWithValidationResults(deps.GetRuntime, deps.ListActiveRuntimeProjections, deps.ListActiveIngestionBindings, deps.ListValidationResults)...)
 	return routes
 }
 

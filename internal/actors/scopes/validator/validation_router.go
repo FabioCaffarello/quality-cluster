@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	dataplaneapp "internal/application/dataplane"
 	"internal/shared/problem"
 
@@ -81,6 +82,9 @@ func (a *ValidationRouterActor) Receive(c *actor.Context) {
 		}
 	case actor.Stopped:
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validation router: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

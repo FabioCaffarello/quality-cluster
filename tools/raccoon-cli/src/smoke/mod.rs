@@ -5,6 +5,7 @@ pub mod stages;
 
 use crate::error::Result;
 use crate::models::{CheckResult, CheckStatus, Report};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Configuration for the runtime smoke test.
 #[derive(Debug, Clone)]
@@ -16,11 +17,17 @@ pub struct SmokeConfig {
     pub readiness_timeout_secs: u64,
     pub poll_interval_ms: u64,
     pub results_timeout_secs: u64,
+    pub run_id: String,
+    pub scope_kind: String,
+    pub scope_key: String,
+    pub config_key: String,
+    pub binding_name: String,
 }
 
 impl SmokeConfig {
     pub fn new(project_root: &std::path::Path, base_url: Option<&str>) -> Self {
         let compose_file = project_root.join("deploy/compose/docker-compose.yaml");
+        let run_id = default_run_id();
         Self {
             project_root: project_root.to_path_buf(),
             base_url: base_url.unwrap_or("http://127.0.0.1:8080").to_string(),
@@ -28,12 +35,37 @@ impl SmokeConfig {
             readiness_timeout_secs: 60,
             poll_interval_ms: 500,
             results_timeout_secs: 30,
+            config_key: format!("raccoon-smoke-{run_id}"),
+            binding_name: format!("smoke_events_{run_id}"),
+            scope_kind: "global".to_string(),
+            scope_key: "default".to_string(),
+            run_id,
         }
+    }
+
+    pub fn scenario_config_key(&self, prefix: &str) -> String {
+        format!("{prefix}-{}", self.run_id)
     }
 }
 
+fn default_run_id() -> String {
+    let pid = std::process::id();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("{pid}-{now}")
+}
+
 /// Stage definitions: name and runner function.
-const STAGE_NAMES: &[&str] = &["bootstrap", "readiness", "inject", "route", "consume", "validate"];
+const STAGE_NAMES: &[&str] = &[
+    "bootstrap",
+    "readiness",
+    "inject",
+    "route",
+    "consume",
+    "validate",
+];
 
 /// Run the full runtime smoke test pipeline.
 /// Stages execute sequentially; if any stage fails, remaining stages are skipped.
@@ -86,14 +118,15 @@ mod tests {
             std::path::PathBuf::from("/tmp/proj/deploy/compose/docker-compose.yaml")
         );
         assert_eq!(cfg.readiness_timeout_secs, 60);
+        assert_eq!(cfg.scope_kind, "global");
+        assert_eq!(cfg.scope_key, "default");
+        assert!(cfg.config_key.starts_with("raccoon-smoke-"));
+        assert!(cfg.binding_name.starts_with("smoke_events_"));
     }
 
     #[test]
     fn smoke_config_custom_url() {
-        let cfg = SmokeConfig::new(
-            std::path::Path::new("/tmp"),
-            Some("http://localhost:9090"),
-        );
+        let cfg = SmokeConfig::new(std::path::Path::new("/tmp"), Some("http://localhost:9090"));
         assert_eq!(cfg.base_url, "http://localhost:9090");
     }
 
@@ -117,6 +150,15 @@ mod tests {
         assert_eq!(cfg.readiness_timeout_secs, 60);
         assert_eq!(cfg.poll_interval_ms, 500);
         assert_eq!(cfg.results_timeout_secs, 30);
+        assert!(!cfg.run_id.is_empty());
+    }
+
+    #[test]
+    fn scenario_config_key_uses_run_identity() {
+        let cfg = SmokeConfig::new(std::path::Path::new("/tmp/proj"), None);
+        let key = cfg.scenario_config_key("scenario-lifecycle");
+        assert!(key.starts_with("scenario-lifecycle-"));
+        assert!(key.ends_with(&cfg.run_id));
     }
 
     #[test]
@@ -133,7 +175,14 @@ mod tests {
         let names: Vec<&str> = report.checks.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(
             names,
-            vec!["bootstrap", "readiness", "inject", "route", "consume", "validate"]
+            vec![
+                "bootstrap",
+                "readiness",
+                "inject",
+                "route",
+                "consume",
+                "validate"
+            ]
         );
     }
 

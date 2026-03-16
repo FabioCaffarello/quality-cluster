@@ -242,7 +242,10 @@ impl std::fmt::Display for DiffError {
             DiffError::Io(e) => write!(f, "I/O error: {e}"),
             DiffError::Json(e) => write!(f, "JSON parse error: {e}"),
             DiffError::VersionMismatch { before, after } => {
-                write!(f, "snapshot version mismatch: before={before}, after={after}")
+                write!(
+                    f,
+                    "snapshot version mismatch: before={before}, after={after}"
+                )
             }
         }
     }
@@ -332,8 +335,10 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Result<SnapshotDiff, DiffErr
 // ── Section diffing ───────────────────────────────────────────────────
 
 fn diff_packages(before: &[PackageEntry], after: &[PackageEntry]) -> SectionDiff<PackageDelta> {
-    let before_map: BTreeMap<&str, &PackageEntry> = before.iter().map(|p| (p.dir.as_str(), p)).collect();
-    let after_map: BTreeMap<&str, &PackageEntry> = after.iter().map(|p| (p.dir.as_str(), p)).collect();
+    let before_map: BTreeMap<&str, &PackageEntry> =
+        before.iter().map(|p| (p.dir.as_str(), p)).collect();
+    let after_map: BTreeMap<&str, &PackageEntry> =
+        after.iter().map(|p| (p.dir.as_str(), p)).collect();
 
     let mut result = SectionDiff::empty();
 
@@ -366,8 +371,14 @@ fn diff_packages(before: &[PackageEntry], after: &[PackageEntry]) -> SectionDiff
             let b_files: BTreeSet<&str> = b.files.iter().map(|f| f.as_str()).collect();
             let a_files: BTreeSet<&str> = a.files.iter().map(|f| f.as_str()).collect();
 
-            let added: Vec<String> = a_files.difference(&b_files).map(|f| f.to_string()).collect();
-            let removed: Vec<String> = b_files.difference(&a_files).map(|f| f.to_string()).collect();
+            let added: Vec<String> = a_files
+                .difference(&b_files)
+                .map(|f| f.to_string())
+                .collect();
+            let removed: Vec<String> = b_files
+                .difference(&a_files)
+                .map(|f| f.to_string())
+                .collect();
 
             if !added.is_empty() || !removed.is_empty() || a.name != b.name {
                 result.modified.push(PackageDelta {
@@ -385,8 +396,10 @@ fn diff_packages(before: &[PackageEntry], after: &[PackageEntry]) -> SectionDiff
 }
 
 fn diff_imports(before: &[ImportEntry], after: &[ImportEntry]) -> SectionDiff<ImportDelta> {
-    let before_map: BTreeMap<&str, &ImportEntry> = before.iter().map(|i| (i.path.as_str(), i)).collect();
-    let after_map: BTreeMap<&str, &ImportEntry> = after.iter().map(|i| (i.path.as_str(), i)).collect();
+    let before_map: BTreeMap<&str, &ImportEntry> =
+        before.iter().map(|i| (i.path.as_str(), i)).collect();
+    let after_map: BTreeMap<&str, &ImportEntry> =
+        after.iter().map(|i| (i.path.as_str(), i)).collect();
 
     let mut result = SectionDiff::empty();
 
@@ -419,8 +432,14 @@ fn diff_imports(before: &[ImportEntry], after: &[ImportEntry]) -> SectionDiff<Im
             let b_users: BTreeSet<&str> = b.used_by.iter().map(|u| u.as_str()).collect();
             let a_users: BTreeSet<&str> = a.used_by.iter().map(|u| u.as_str()).collect();
 
-            let added: Vec<String> = a_users.difference(&b_users).map(|u| u.to_string()).collect();
-            let removed: Vec<String> = b_users.difference(&a_users).map(|u| u.to_string()).collect();
+            let added: Vec<String> = a_users
+                .difference(&b_users)
+                .map(|u| u.to_string())
+                .collect();
+            let removed: Vec<String> = b_users
+                .difference(&a_users)
+                .map(|u| u.to_string())
+                .collect();
 
             if !added.is_empty() || !removed.is_empty() || a.kind != b.kind {
                 result.modified.push(ImportDelta {
@@ -439,10 +458,14 @@ fn diff_imports(before: &[ImportEntry], after: &[ImportEntry]) -> SectionDiff<Im
 
 fn diff_types(before: &[TypeEntry], after: &[TypeEntry]) -> SectionDiff<TypeDelta> {
     // Key: (package, name)
-    let before_map: BTreeMap<(&str, &str), &TypeEntry> =
-        before.iter().map(|t| ((t.package.as_str(), t.name.as_str()), t)).collect();
-    let after_map: BTreeMap<(&str, &str), &TypeEntry> =
-        after.iter().map(|t| ((t.package.as_str(), t.name.as_str()), t)).collect();
+    let before_map: BTreeMap<(&str, &str), &TypeEntry> = before
+        .iter()
+        .map(|t| ((t.package.as_str(), t.name.as_str()), t))
+        .collect();
+    let after_map: BTreeMap<(&str, &str), &TypeEntry> = after
+        .iter()
+        .map(|t| ((t.package.as_str(), t.name.as_str()), t))
+        .collect();
 
     let mut result = SectionDiff::empty();
 
@@ -498,11 +521,13 @@ fn diff_types(before: &[TypeEntry], after: &[TypeEntry]) -> SectionDiff<TypeDelt
             let a_fields: BTreeMap<&str, &FieldEntry> =
                 a.fields.iter().map(|f| (f.name.as_str(), f)).collect();
 
-            let fields_added: Vec<String> = a_fields.keys()
+            let fields_added: Vec<String> = a_fields
+                .keys()
                 .filter(|k| !b_fields.contains_key(*k))
                 .map(|k| k.to_string())
                 .collect();
-            let fields_removed: Vec<String> = b_fields.keys()
+            let fields_removed: Vec<String> = b_fields
+                .keys()
                 .filter(|k| !a_fields.contains_key(*k))
                 .map(|k| k.to_string())
                 .collect();
@@ -547,7 +572,11 @@ fn diff_types(before: &[TypeEntry], after: &[TypeEntry]) -> SectionDiff<TypeDelt
 fn diff_functions(before: &[FunctionEntry], after: &[FunctionEntry]) -> SectionDiff<FunctionDelta> {
     // Key: (package, receiver, name)
     fn fkey(f: &FunctionEntry) -> (String, String, String) {
-        (f.package.clone(), f.receiver.clone().unwrap_or_default(), f.name.clone())
+        (
+            f.package.clone(),
+            f.receiver.clone().unwrap_or_default(),
+            f.name.clone(),
+        )
     }
 
     let before_map: BTreeMap<_, &FunctionEntry> = before.iter().map(|f| (fkey(f), f)).collect();
@@ -606,10 +635,14 @@ fn diff_functions(before: &[FunctionEntry], after: &[FunctionEntry]) -> SectionD
 }
 
 fn diff_constants(before: &[ConstantEntry], after: &[ConstantEntry]) -> SectionDiff<ConstantDelta> {
-    let before_map: BTreeMap<(&str, &str), &ConstantEntry> =
-        before.iter().map(|c| ((c.package.as_str(), c.name.as_str()), c)).collect();
-    let after_map: BTreeMap<(&str, &str), &ConstantEntry> =
-        after.iter().map(|c| ((c.package.as_str(), c.name.as_str()), c)).collect();
+    let before_map: BTreeMap<(&str, &str), &ConstantEntry> = before
+        .iter()
+        .map(|c| ((c.package.as_str(), c.name.as_str()), c))
+        .collect();
+    let after_map: BTreeMap<(&str, &str), &ConstantEntry> = after
+        .iter()
+        .map(|c| ((c.package.as_str(), c.name.as_str()), c))
+        .collect();
 
     let mut result = SectionDiff::empty();
 
@@ -665,11 +698,18 @@ fn diff_constants(before: &[ConstantEntry], after: &[ConstantEntry]) -> SectionD
     result
 }
 
-fn diff_interfaces(before: &[InterfaceEntry], after: &[InterfaceEntry]) -> SectionDiff<InterfaceDelta> {
-    let before_map: BTreeMap<(&str, &str), &InterfaceEntry> =
-        before.iter().map(|i| ((i.package.as_str(), i.name.as_str()), i)).collect();
-    let after_map: BTreeMap<(&str, &str), &InterfaceEntry> =
-        after.iter().map(|i| ((i.package.as_str(), i.name.as_str()), i)).collect();
+fn diff_interfaces(
+    before: &[InterfaceEntry],
+    after: &[InterfaceEntry],
+) -> SectionDiff<InterfaceDelta> {
+    let before_map: BTreeMap<(&str, &str), &InterfaceEntry> = before
+        .iter()
+        .map(|i| ((i.package.as_str(), i.name.as_str()), i))
+        .collect();
+    let after_map: BTreeMap<(&str, &str), &InterfaceEntry> = after
+        .iter()
+        .map(|i| ((i.package.as_str(), i.name.as_str()), i))
+        .collect();
 
     let mut result = SectionDiff::empty();
 
@@ -708,10 +748,22 @@ fn diff_interfaces(before: &[InterfaceEntry], after: &[InterfaceEntry]) -> Secti
             let b_embeds: BTreeSet<&str> = b.embeds.iter().map(|e| e.as_str()).collect();
             let a_embeds: BTreeSet<&str> = a.embeds.iter().map(|e| e.as_str()).collect();
 
-            let methods_added: Vec<String> = a_methods.difference(&b_methods).map(|m| m.to_string()).collect();
-            let methods_removed: Vec<String> = b_methods.difference(&a_methods).map(|m| m.to_string()).collect();
-            let embeds_added: Vec<String> = a_embeds.difference(&b_embeds).map(|e| e.to_string()).collect();
-            let embeds_removed: Vec<String> = b_embeds.difference(&a_embeds).map(|e| e.to_string()).collect();
+            let methods_added: Vec<String> = a_methods
+                .difference(&b_methods)
+                .map(|m| m.to_string())
+                .collect();
+            let methods_removed: Vec<String> = b_methods
+                .difference(&a_methods)
+                .map(|m| m.to_string())
+                .collect();
+            let embeds_added: Vec<String> = a_embeds
+                .difference(&b_embeds)
+                .map(|e| e.to_string())
+                .collect();
+            let embeds_removed: Vec<String> = b_embeds
+                .difference(&a_embeds)
+                .map(|e| e.to_string())
+                .collect();
 
             if !methods_added.is_empty()
                 || !methods_removed.is_empty()
@@ -734,7 +786,10 @@ fn diff_interfaces(before: &[InterfaceEntry], after: &[InterfaceEntry]) -> Secti
     result
 }
 
-fn diff_arch_layers(before: &[ArchLayerEntry], after: &[ArchLayerEntry]) -> SectionDiff<ArchLayerDelta> {
+fn diff_arch_layers(
+    before: &[ArchLayerEntry],
+    after: &[ArchLayerEntry],
+) -> SectionDiff<ArchLayerDelta> {
     let before_map: BTreeMap<&str, &ArchLayerEntry> =
         before.iter().map(|l| (l.package_dir.as_str(), l)).collect();
     let after_map: BTreeMap<&str, &ArchLayerEntry> =
@@ -838,7 +893,8 @@ fn diff_stats(before: &SnapshotStats, after: &SnapshotStats) -> StatsDelta {
         exported_types: after.exported_types as i64 - before.exported_types as i64,
         exported_functions: after.exported_functions as i64 - before.exported_functions as i64,
         test_files: after.test_files as i64 - before.test_files as i64,
-        arch_layers_detected: after.arch_layers_detected as i64 - before.arch_layers_detected as i64,
+        arch_layers_detected: after.arch_layers_detected as i64
+            - before.arch_layers_detected as i64,
         contracts_detected: after.contracts_detected as i64 - before.contracts_detected as i64,
     }
 }
@@ -908,7 +964,12 @@ fn derive_inferences(sections: &DiffSections, stats: &StatsDelta) -> Vec<Inferen
         let modified = sections.arch_layers.modified.len();
         infs.push(Inference {
             category: "architecture-boundary".into(),
-            severity: if removed > 0 || modified > 0 { "warning" } else { "info" }.into(),
+            severity: if removed > 0 || modified > 0 {
+                "warning"
+            } else {
+                "info"
+            }
+            .into(),
             message: format!(
                 "Architecture layers changed: +{added} -{removed} ~{modified}. \
                  Run arch-guard to verify boundary compliance."
@@ -924,12 +985,16 @@ fn derive_inferences(sections: &DiffSections, stats: &StatsDelta) -> Vec<Inferen
                 severity: "warning".into(),
                 message: format!(
                     "Type {}.{} lost fields: {}. Struct literal consumers may break.",
-                    t.package, t.name, t.fields_removed.join(", ")
+                    t.package,
+                    t.name,
+                    t.fields_removed.join(", ")
                 ),
             });
         }
         if !t.fields_type_changed.is_empty() {
-            let changes: Vec<String> = t.fields_type_changed.iter()
+            let changes: Vec<String> = t
+                .fields_type_changed
+                .iter()
                 .map(|c| format!("{}: {} → {}", c.name, c.before, c.after))
                 .collect();
             infs.push(Inference {
@@ -937,7 +1002,9 @@ fn derive_inferences(sections: &DiffSections, stats: &StatsDelta) -> Vec<Inferen
                 severity: "warning".into(),
                 message: format!(
                     "Type {}.{} changed field types: {}.",
-                    t.package, t.name, changes.join(", ")
+                    t.package,
+                    t.name,
+                    changes.join(", ")
                 ),
             });
         }
@@ -946,7 +1013,11 @@ fn derive_inferences(sections: &DiffSections, stats: &StatsDelta) -> Vec<Inferen
     // Exported function signature changes
     for f in &sections.functions.modified {
         if let Some((ref before, ref after)) = f.signature_changed {
-            let recv = f.receiver.as_deref().map(|r| format!("({r}) ")).unwrap_or_default();
+            let recv = f
+                .receiver
+                .as_deref()
+                .map(|r| format!("({r}) "))
+                .unwrap_or_default();
             infs.push(Inference {
                 category: "api-change".into(),
                 severity: "warning".into(),
@@ -996,8 +1067,14 @@ pub fn render_human(diff: &SnapshotDiff, verbose: bool) -> String {
     let mut out = String::new();
 
     out.push_str("Snapshot Diff\n");
-    out.push_str(&format!("  Before: {} (raccoon {})\n", diff.before.generated_at, diff.before.raccoon_version));
-    out.push_str(&format!("  After:  {} (raccoon {})\n", diff.after.generated_at, diff.after.raccoon_version));
+    out.push_str(&format!(
+        "  Before: {} (raccoon {})\n",
+        diff.before.generated_at, diff.before.raccoon_version
+    ));
+    out.push_str(&format!(
+        "  After:  {} (raccoon {})\n",
+        diff.after.generated_at, diff.after.raccoon_version
+    ));
     out.push('\n');
 
     if !diff.has_changes {
@@ -1015,7 +1092,11 @@ pub fn render_human(diff: &SnapshotDiff, verbose: bool) -> String {
     render_stat_line(&mut out, "Imports", diff.stats_delta.total_imports);
     render_stat_line(&mut out, "Lines", diff.stats_delta.total_lines);
     render_stat_line(&mut out, "Test files", diff.stats_delta.test_files);
-    render_stat_line(&mut out, "Arch layers", diff.stats_delta.arch_layers_detected);
+    render_stat_line(
+        &mut out,
+        "Arch layers",
+        diff.stats_delta.arch_layers_detected,
+    );
     render_stat_line(&mut out, "Contracts", diff.stats_delta.contracts_detected);
     out.push('\n');
 
@@ -1072,21 +1153,36 @@ pub fn render_human(diff: &SnapshotDiff, verbose: bool) -> String {
                 out.push_str(&format!("      - field {f}\n"));
             }
             for c in &t.fields_type_changed {
-                out.push_str(&format!("      ~ field {}: {} → {}\n", c.name, c.before, c.after));
+                out.push_str(&format!(
+                    "      ~ field {}: {} → {}\n",
+                    c.name, c.before, c.after
+                ));
             }
         }
 
         // Functions
         for f in &diff.sections.functions.added {
-            let recv = f.receiver.as_deref().map(|r| format!("({r}) ")).unwrap_or_default();
+            let recv = f
+                .receiver
+                .as_deref()
+                .map(|r| format!("({r}) "))
+                .unwrap_or_default();
             out.push_str(&format!("  + func {recv}{}\n", f.name));
         }
         for f in &diff.sections.functions.removed {
-            let recv = f.receiver.as_deref().map(|r| format!("({r}) ")).unwrap_or_default();
+            let recv = f
+                .receiver
+                .as_deref()
+                .map(|r| format!("({r}) "))
+                .unwrap_or_default();
             out.push_str(&format!("  - func {recv}{}\n", f.name));
         }
         for f in &diff.sections.functions.modified {
-            let recv = f.receiver.as_deref().map(|r| format!("({r}) ")).unwrap_or_default();
+            let recv = f
+                .receiver
+                .as_deref()
+                .map(|r| format!("({r}) "))
+                .unwrap_or_default();
             out.push_str(&format!("  ~ func {recv}{}\n", f.name));
             if let Some((ref bs, ref a_s)) = f.signature_changed {
                 out.push_str(&format!("      sig: {bs} → {a_s}\n"));
@@ -1106,8 +1202,12 @@ pub fn render_human(diff: &SnapshotDiff, verbose: bool) -> String {
 
         // Interfaces
         for i in &diff.sections.interfaces.added {
-            out.push_str(&format!("  + interface {}.{} ({} methods)\n",
-                i.package, i.name, i.methods_added.len()));
+            out.push_str(&format!(
+                "  + interface {}.{} ({} methods)\n",
+                i.package,
+                i.name,
+                i.methods_added.len()
+            ));
         }
         for i in &diff.sections.interfaces.removed {
             out.push_str(&format!("  - interface {}.{}\n", i.package, i.name));
@@ -1249,7 +1349,8 @@ func NewConfigSet(id string) ConfigSet {
 	return ConfigSet{SetID: id}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/application/ports/configctl.go"),
@@ -1262,7 +1363,8 @@ type ConfigctlGateway interface {
 	GetConfig(ctx context.Context, id string) (string, error)
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/adapters/nats/publisher.go"),
@@ -1276,7 +1378,8 @@ func NewEventPublisher(conn string) *EventPublisher {
 	return &EventPublisher{conn: conn}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         root
     }
@@ -1310,7 +1413,8 @@ func NewConfigSet(id string, label string) ConfigSet {
 	return ConfigSet{SetID: id, Label: label}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Modified: interface gains a method
         fs::write(
@@ -1325,7 +1429,8 @@ type ConfigctlGateway interface {
 	DeleteConfig(ctx context.Context, id string) error
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Unchanged
         fs::write(
@@ -1340,7 +1445,8 @@ func NewEventPublisher(conn string) *EventPublisher {
 	return &EventPublisher{conn: conn}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // New package with a new contract type
         fs::write(
@@ -1356,7 +1462,8 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
 	return ScoreComputedEvent{ScoreID: id, Value: val}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         root
     }
@@ -1408,7 +1515,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         assert!(d.has_changes);
 
         // ConfigSet should have a field added (Label)
-        let cs_mod = d.sections.types.modified.iter()
+        let cs_mod = d
+            .sections
+            .types
+            .modified
+            .iter()
             .find(|t| t.name == "ConfigSet")
             .expect("ConfigSet should be modified");
         assert!(cs_mod.fields_added.contains(&"Label".to_string()));
@@ -1424,7 +1535,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let d = diff(&before, &after).unwrap();
 
         // ConfigVersion.CreatedAt changed from time.Time to int64
-        let cv_mod = d.sections.types.modified.iter()
+        let cv_mod = d
+            .sections
+            .types
+            .modified
+            .iter()
             .find(|t| t.name == "ConfigVersion")
             .expect("ConfigVersion should be modified");
         assert!(!cv_mod.fields_type_changed.is_empty());
@@ -1444,7 +1559,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let added_dirs: Vec<&str> = d.sections.packages.added.iter()
+        let added_dirs: Vec<&str> = d
+            .sections
+            .packages
+            .added
+            .iter()
             .map(|p| p.dir.as_str())
             .collect();
         assert!(added_dirs.iter().any(|d| d.contains("scoring")));
@@ -1458,7 +1577,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let added_contracts: Vec<&str> = d.sections.contracts.added.iter()
+        let added_contracts: Vec<&str> = d
+            .sections
+            .contracts
+            .added
+            .iter()
             .map(|c| c.name.as_str())
             .collect();
         assert!(added_contracts.contains(&"ScoreComputedEvent"));
@@ -1472,7 +1595,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let gw = d.sections.interfaces.modified.iter()
+        let gw = d
+            .sections
+            .interfaces
+            .modified
+            .iter()
             .find(|i| i.name == "ConfigctlGateway")
             .expect("ConfigctlGateway should be modified");
         assert!(gw.methods_added.contains(&"DeleteConfig".to_string()));
@@ -1486,7 +1613,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let ncs = d.sections.functions.modified.iter()
+        let ncs = d
+            .sections
+            .functions
+            .modified
+            .iter()
             .find(|f| f.name == "NewConfigSet")
             .expect("NewConfigSet should be modified");
         assert!(ncs.signature_changed.is_some());
@@ -1500,7 +1631,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let added_fns: Vec<&str> = d.sections.functions.added.iter()
+        let added_fns: Vec<&str> = d
+            .sections
+            .functions
+            .added
+            .iter()
             .map(|f| f.name.as_str())
             .collect();
         assert!(added_fns.contains(&"NewScoreComputedEvent"));
@@ -1514,7 +1649,11 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let added_layers: Vec<&str> = d.sections.arch_layers.added.iter()
+        let added_layers: Vec<&str> = d
+            .sections
+            .arch_layers
+            .added
+            .iter()
             .map(|l| l.package_dir.as_str())
             .collect();
         assert!(added_layers.iter().any(|d| d.contains("scoring")));
@@ -1545,7 +1684,9 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let contract_inf = d.inferences.iter()
+        let contract_inf = d
+            .inferences
+            .iter()
             .find(|i| i.category == "contract-surface");
         assert!(contract_inf.is_some());
     }
@@ -1558,7 +1699,9 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let iface_inf = d.inferences.iter()
+        let iface_inf = d
+            .inferences
+            .iter()
             .find(|i| i.category == "interface-expansion");
         assert!(iface_inf.is_some());
         assert!(iface_inf.unwrap().message.contains("DeleteConfig"));
@@ -1572,8 +1715,7 @@ func NewScoreComputedEvent(id string, val float64) ScoreComputedEvent {
         let after = snap(create_fixture_v2(&tmp2));
 
         let d = diff(&before, &after).unwrap();
-        let type_inf = d.inferences.iter()
-            .find(|i| i.category == "type-migration");
+        let type_inf = d.inferences.iter().find(|i| i.category == "type-migration");
         assert!(type_inf.is_some());
         assert!(type_inf.unwrap().message.contains("CreatedAt"));
     }

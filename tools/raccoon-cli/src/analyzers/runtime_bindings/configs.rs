@@ -241,7 +241,9 @@ fn extract_bindings_from_yaml(
                     .trim()
                     .trim_matches('"')
                     .to_string();
-            } else if !trimmed.starts_with('-') && !trimmed.starts_with("topic:") && !trimmed.is_empty()
+            } else if !trimmed.starts_with('-')
+                && !trimmed.starts_with("topic:")
+                && !trimmed.is_empty()
                 && !trimmed.starts_with('#')
             {
                 // End of bindings section
@@ -396,7 +398,7 @@ Content-Type: application/json
 }
 
 ### List configs
-GET http://localhost:8080/configctl/configs
+GET http://localhost:8080/configctl/config-versions
 "#,
         )
         .unwrap();

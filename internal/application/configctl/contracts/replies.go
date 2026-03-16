@@ -1,5 +1,7 @@
 package contracts
 
+import sharedruntime "internal/application/runtimecontracts"
+
 type CreateDraftReply struct {
 	Config ConfigVersionDetail `json:"config"`
 }
@@ -18,6 +20,7 @@ type ListConfigsReply struct {
 
 type ListActiveIngestionBindingsReply struct {
 	Bindings []ActiveIngestionBindingRecord `json:"bindings"`
+	Runtimes []sharedruntime.RuntimeRecord  `json:"runtimes,omitempty"`
 }
 
 type ValidationDiagnostic struct {

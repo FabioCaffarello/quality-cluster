@@ -7,18 +7,23 @@ import (
 	"internal/interfaces/http/webserver"
 )
 
-func Runtime(getActive handlersGetValidatorRuntimeUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase) []webserver.Route {
-	return RuntimeWithValidationResults(getActive, listActiveIngestionBindings, nil)
+func Runtime(getActive handlersGetValidatorRuntimeUseCase, listActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase) []webserver.Route {
+	return RuntimeWithValidationResults(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, nil)
 }
 
-func RuntimeWithValidationResults(getActive handlersGetValidatorRuntimeUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase, listValidationResults handlersListValidationResultsUseCase) []webserver.Route {
-	handler := handlers.NewRuntimeWebHandler(getActive, listActiveIngestionBindings, listValidationResults)
+func RuntimeWithValidationResults(getActive handlersGetValidatorRuntimeUseCase, listActiveRuntimeProjections handlersListActiveRuntimeProjectionsUseCase, listActiveIngestionBindings handlersListActiveIngestionBindingsUseCase, listValidationResults handlersListValidationResultsUseCase) []webserver.Route {
+	handler := handlers.NewRuntimeWebHandler(getActive, listActiveRuntimeProjections, listActiveIngestionBindings, listValidationResults)
 
 	return []webserver.Route{
 		{
 			Method:  http.MethodGet,
 			Path:    "/runtime/validator/active",
 			Handler: handler.GetActiveValidatorRuntime,
+		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/runtime/configctl/projections",
+			Handler: handler.ListActiveRuntimeProjections,
 		},
 		{
 			Method:  http.MethodGet,

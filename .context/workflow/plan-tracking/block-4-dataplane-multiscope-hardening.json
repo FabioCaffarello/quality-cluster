@@ -1,0 +1,91 @@
+{
+  "decisions": [
+    {
+      "title": "Block 4 targets dataplane multiscope parity, not generic smoke parallelism",
+      "description": "The remaining gap is in consumer and emulator bootstrap/runtime behavior. Configctl and validator already support multiscope runtime state; Block 4 will harden the dataplane to match that reality while keeping raccoon-cli as the proof engine.",
+      "phase": "P",
+      "alternatives": [
+        "Extend smoke identity again without changing runtime behavior",
+        "Introduce new ad hoc runtime APIs just for smoke"
+      ],
+      "status": "accepted",
+      "id": "dec-1773672354617",
+      "decidedAt": "2026-03-16T14:45:54.617Z"
+    },
+    {
+      "title": "Preserve global/default as operator baseline while removing it as the only supported bootstrap path",
+      "description": "Consumer and emulator configs can keep global/default as a simple local default, but the dataplane must no longer require a single fixed scope to function correctly. The plan should evolve bootstrap/runtime behavior without breaking baseline local workflows.",
+      "phase": "P",
+      "alternatives": [
+        "Replace the operator default entirely",
+        "Keep global/default as a hard runtime requirement"
+      ],
+      "status": "accepted",
+      "id": "dec-1773672354698",
+      "decidedAt": "2026-03-16T14:45:54.698Z"
+    },
+    {
+      "title": "Use the existing runtime ingestion bindings endpoint as the aggregate bootstrap seam",
+      "description": "The bootstrap seam for Block 4 does not require a new HTTP API. ListActiveIngestionBindings already supports empty scope queries, so runtimebootstrap can expose an explicit aggregate bootstrap path while preserving the current scope-specific path for troubleshooting and staged rollout.",
+      "phase": "E",
+      "alternatives": [
+        "Create a new aggregate-only endpoint on server/configctl",
+        "Immediately replace all scope-specific bootstrap flows"
+      ],
+      "status": "accepted",
+      "id": "dec-1773672525005",
+      "decidedAt": "2026-03-16T14:48:45.005Z"
+    },
+    {
+      "title": "Consumer and emulator now default to aggregate bootstrap at startup",
+      "description": "The dataplane now uses the aggregate runtime bootstrap seam by default at startup. Consumer and emulator no longer depend on a single configured scope for initial binding discovery, while the scope-specific bootstrap path remains available inside runtimebootstrap for troubleshooting and staged rollout.",
+      "phase": "E",
+      "alternatives": [
+        "Keep startup on scope-specific bootstrap and postpone the wiring change",
+        "Replace the scope-specific bootstrap path entirely"
+      ],
+      "status": "accepted",
+      "id": "dec-1773672786029",
+      "decidedAt": "2026-03-16T14:53:06.029Z"
+    },
+    {
+      "title": "Use aggregate bootstrap polling for continuous dataplane refresh in Block 4",
+      "description": "Consumer and emulator now refresh the aggregate bootstrap continuously and only react when the binding-set signature changes. This keeps the refresh path aligned with the existing runtimebootstrap seam and avoids introducing new config event consumers before the dataplane runtime model is fully hardened.",
+      "phase": "E",
+      "alternatives": [
+        "Add dedicated NATS config event consumers for consumer/emulator in this cut",
+        "Keep dataplane on startup-only aggregate bootstrap and postpone refresh"
+      ],
+      "status": "accepted",
+      "id": "dec-1773673402894",
+      "decidedAt": "2026-03-16T15:03:22.894Z"
+    },
+    {
+      "title": "Block 4 closes with aggregate bootstrap plus polling refresh as the canonical dataplane model",
+      "description": "This iteration closes the main multiscope parity gap by moving consumer and emulator to aggregate bootstrap and signature-driven refresh. Event-driven reconciliation remains a possible future refinement, but it is no longer required to remove the single-scope dataplane dependency.",
+      "phase": "V",
+      "alternatives": [
+        "Delay closure until NATS event-driven reconciliation exists",
+        "Keep startup-only aggregate bootstrap without continuous refresh"
+      ],
+      "status": "accepted",
+      "id": "dec-1773673562814",
+      "decidedAt": "2026-03-16T15:06:02.814Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:45:54.700Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:06:02.743Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T15:06:02.749Z"
+    }
+  },
+  "progress": 100
+}

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 
+	actorcommon "internal/actors/common"
+	adapternats "internal/adapters/nats"
 	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
 	"internal/shared/problem"
@@ -18,10 +20,11 @@ type bootstrapLoaderFunc func(context.Context, *slog.Logger, settings.AppConfig,
 type runtimeProducerFactory func(ConsumerRuntimeConfig) actor.Producer
 
 type supervisorConfig struct {
-	appConfig       settings.AppConfig
-	registry        dataplaneapp.Registry
-	loadBootstrap   bootstrapLoaderFunc
-	newRuntimeActor runtimeProducerFactory
+	appConfig         settings.AppConfig
+	registry          dataplaneapp.Registry
+	configctlRegistry adapternats.ConfigctlRegistry
+	loadBootstrap     bootstrapLoaderFunc
+	newRuntimeActor   runtimeProducerFactory
 }
 
 type Supervisor struct {
@@ -33,10 +36,11 @@ type Supervisor struct {
 
 func NewSupervisor(appConfig settings.AppConfig) actor.Producer {
 	return newSupervisorProducer(supervisorConfig{
-		appConfig:       appConfig,
-		registry:        dataplaneapp.DefaultRegistry(),
-		loadBootstrap:   runtimebootstrap.WaitForConfiguredActiveIngestionBootstrap,
-		newRuntimeActor: NewConsumerRuntimeActor,
+		appConfig:         appConfig,
+		registry:          dataplaneapp.DefaultRegistry(),
+		configctlRegistry: adapternats.DefaultConfigctlRegistry(),
+		loadBootstrap:     runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet,
+		newRuntimeActor:   NewConsumerRuntimeActor,
 	})
 }
 
@@ -73,8 +77,9 @@ func (s *Supervisor) Receive(c *actor.Context) {
 	switch msg := c.Message().(type) {
 	case actor.Started:
 		c.SpawnChild(newBootstrapActor(bootstrapActorConfig{
-			appConfig:     s.cfg.appConfig,
-			loadBootstrap: s.cfg.loadBootstrap,
+			appConfig:          s.cfg.appConfig,
+			loadBootstrap:      s.cfg.loadBootstrap,
+			runtimeChangedSpec: s.cfg.configctlRegistry.ConsumerRuntimeChanged,
 		}), "bootstrap")
 	case activeIngestionBootstrapLoadedMessage:
 		s.startRuntime(c, msg.Bootstrap)
@@ -82,12 +87,20 @@ func (s *Supervisor) Receive(c *actor.Context) {
 		s.logger.Error("bootstrap consumer runtime", "error", msg.Prob)
 		c.Engine().Poison(c.PID())
 	case consumerRuntimeReadyMessage:
+		if msg.Generation != s.state.Generation {
+			s.logger.Info("ignore stale consumer runtime ready", "generation", msg.Generation, "current_generation", s.state.Generation)
+			return
+		}
 		s.state.Generation = msg.Generation
 		s.state.Ready = true
 		s.state.Topics = msg.Topology.TopicNames()
 		s.state.Bindings = msg.Topology.BindingCount()
 		s.logger.Info("consumer runtime ready", "generation", msg.Generation, "topics", s.state.Topics, "bindings", s.state.Bindings)
 	case consumerRuntimeFailedMessage:
+		if msg.Generation != s.state.Generation {
+			s.logger.Info("ignore stale consumer runtime failure", "generation", msg.Generation, "current_generation", s.state.Generation, "error", msg.Err)
+			return
+		}
 		s.state.Ready = false
 		s.logger.Error("consumer runtime failed", "generation", msg.Generation, "error", msg.Err)
 		c.Engine().Poison(c.PID())
@@ -95,6 +108,9 @@ func (s *Supervisor) Receive(c *actor.Context) {
 		c.Respond(queryConsumerSupervisorStateResult{State: s.state})
 	case actor.Stopped:
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		s.logger.Warn("consumer supervisor: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

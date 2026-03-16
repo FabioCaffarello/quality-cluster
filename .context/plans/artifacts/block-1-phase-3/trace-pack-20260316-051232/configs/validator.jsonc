@@ -1,0 +1,12 @@
+{
+  // validator consumes runtime updates from configctl and canonical data-plane messages from JetStream.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  }
+}

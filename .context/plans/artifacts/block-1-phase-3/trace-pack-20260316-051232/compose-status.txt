@@ -1,0 +1,8 @@
+NAME                  IMAGE                           COMMAND                  SERVICE     CREATED              STATUS                        PORTS
+compose-configctl-1   quality-service/configctl:dev   "/usr/local/bin/serv…"   configctl   About a minute ago   Up About a minute (healthy)   
+compose-consumer-1    quality-service/consumer:dev    "/usr/local/bin/serv…"   consumer    About a minute ago   Up About a minute (healthy)   
+compose-emulator-1    quality-service/emulator:dev    "/usr/local/bin/serv…"   emulator    About a minute ago   Up About a minute (healthy)   
+compose-kafka-1       bitnamilegacy/kafka:3.9.0       "/opt/bitnami/script…"   kafka       About a minute ago   Up About a minute (healthy)   127.0.0.1:19092->19092/tcp
+compose-nats-1        nats:2.10.18-alpine             "docker-entrypoint.s…"   nats        7 minutes ago        Up 6 minutes (healthy)        127.0.0.1:4222->4222/tcp, 127.0.0.1:8222->8222/tcp
+compose-server-1      quality-service/server:dev      "/usr/local/bin/serv…"   server      About a minute ago   Up About a minute (healthy)   127.0.0.1:8080->8080/tcp
+compose-validator-1   quality-service/validator:dev   "/usr/local/bin/serv…"   validator   About a minute ago   Up About a minute (healthy)   

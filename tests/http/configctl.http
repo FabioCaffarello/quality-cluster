@@ -72,7 +72,7 @@ X-Correlation-ID: {{correlationId}}
 ###
 
 ### Get active config version detail for the default scope
-GET {{baseUrl}}/configctl/active-config?scope_kind=global&scope_key=default
+GET {{baseUrl}}/configctl/configs/active?scope_kind=global&scope_key=default
 Accept: application/json
 X-Correlation-ID: {{correlationId}}
 

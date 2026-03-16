@@ -18,8 +18,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::codeintel;
 use crate::analyzers::impact_map;
+use crate::codeintel;
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -53,7 +53,8 @@ pub fn analyze(project_root: &Path, changed_files: &[String]) -> TddReport {
         after_commands,
         needs_infra,
         scope_note: "Impact is computed from static AST analysis and file-pattern matching. \
-            No call graph or runtime tracing is available.".into(),
+            No call graph or runtime tracing is available."
+            .into(),
     }
 }
 
@@ -207,21 +208,30 @@ const AREA_DEFS: &[AreaDef] = &[
     AreaDef {
         name: "validator-logic",
         description: "validator — validation rules and results",
-        patterns: &["internal/actors/scopes/validator/", "internal/application/validatorresults/"],
+        patterns: &[
+            "internal/actors/scopes/validator/",
+            "internal/application/validatorresults/",
+        ],
         dimensions: &["contracts", "runtime-bindings"],
         scenarios: &["happy-path", "invalid-payload"],
     },
     AreaDef {
         name: "consumer-pipeline",
         description: "consumer — kafka-to-jetstream bridging",
-        patterns: &["internal/actors/scopes/consumer/", "internal/application/dataplane/"],
+        patterns: &[
+            "internal/actors/scopes/consumer/",
+            "internal/application/dataplane/",
+        ],
         dimensions: &["topology", "runtime-bindings"],
         scenarios: &["happy-path"],
     },
     AreaDef {
         name: "config-lifecycle",
         description: "configctl — config draft/validate/compile/activate",
-        patterns: &["internal/actors/scopes/configctl/", "internal/application/configctl/"],
+        patterns: &[
+            "internal/actors/scopes/configctl/",
+            "internal/application/configctl/",
+        ],
         dimensions: &["contracts"],
         scenarios: &["config-lifecycle"],
     },
@@ -291,10 +301,7 @@ fn build_affected_areas(changed_files: &[String]) -> Vec<AffectedArea> {
     for file in changed_files {
         for area_def in AREA_DEFS {
             if area_def.patterns.iter().any(|p| file.contains(p)) {
-                areas
-                    .entry(area_def.name)
-                    .or_default()
-                    .push(file.clone());
+                areas.entry(area_def.name).or_default().push(file.clone());
             }
         }
     }
@@ -312,10 +319,7 @@ fn build_affected_areas(changed_files: &[String]) -> Vec<AffectedArea> {
         .collect()
 }
 
-fn find_nearby_tests(
-    index: &codeintel::ProjectIndex,
-    changed_files: &[String],
-) -> Vec<NearbyTest> {
+fn find_nearby_tests(index: &codeintel::ProjectIndex, changed_files: &[String]) -> Vec<NearbyTest> {
     let mut tests = Vec::new();
     let mut seen_test_files: BTreeSet<String> = BTreeSet::new();
 
@@ -567,10 +571,18 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
     if report.changed_files.is_empty() {
         writeln!(out, "No changed files detected.\n").unwrap();
         writeln!(out, "Usage: raccoon-cli tdd <file1> [file2] ...").unwrap();
-        writeln!(out, "   or: make changes first, then run `raccoon-cli tdd` to auto-detect.\n").unwrap();
+        writeln!(
+            out,
+            "   or: make changes first, then run `raccoon-cli tdd` to auto-detect.\n"
+        )
+        .unwrap();
         writeln!(out, "Generic TDD cycle:").unwrap();
         writeln!(out, "  1. Run `make check` to confirm known-good baseline").unwrap();
-        writeln!(out, "  2. Write/update test or scenario for your intended change").unwrap();
+        writeln!(
+            out,
+            "  2. Write/update test or scenario for your intended change"
+        )
+        .unwrap();
         writeln!(out, "  3. Implement the change").unwrap();
         writeln!(out, "  4. Run `make verify` to prove safety").unwrap();
         return out;
@@ -585,9 +597,18 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
 
     // Impact summary
     if !report.file_impacts.is_empty() {
-        let has_symbols = report.file_impacts.iter().any(|fi| !fi.exported_symbols.is_empty());
-        let has_contracts = report.file_impacts.iter().any(|fi| !fi.contract_items.is_empty());
-        let has_deps = report.file_impacts.iter().any(|fi| !fi.direct_dependents.is_empty());
+        let has_symbols = report
+            .file_impacts
+            .iter()
+            .any(|fi| !fi.exported_symbols.is_empty());
+        let has_contracts = report
+            .file_impacts
+            .iter()
+            .any(|fi| !fi.contract_items.is_empty());
+        let has_deps = report
+            .file_impacts
+            .iter()
+            .any(|fi| !fi.direct_dependents.is_empty());
 
         if has_symbols || has_contracts || has_deps {
             writeln!(out, "Structural impact:").unwrap();
@@ -607,12 +628,21 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
                 writeln!(out, "  {}{}:", fi.file, pkg_label).unwrap();
 
                 if !fi.exported_symbols.is_empty() {
-                    let limit = if verbose { fi.exported_symbols.len() } else { 5 };
+                    let limit = if verbose {
+                        fi.exported_symbols.len()
+                    } else {
+                        5
+                    };
                     writeln!(
                         out,
                         "    exported symbols ({}): {}{}",
                         fi.exported_symbols.len(),
-                        fi.exported_symbols.iter().take(limit).cloned().collect::<Vec<_>>().join(", "),
+                        fi.exported_symbols
+                            .iter()
+                            .take(limit)
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join(", "),
                         if !verbose && fi.exported_symbols.len() > 5 {
                             format!(" ... +{} more", fi.exported_symbols.len() - 5)
                         } else {
@@ -654,7 +684,11 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
 
     // Affected areas
     if report.affected_areas.is_empty() {
-        writeln!(out, "No sensitive areas affected — standard TDD cycle applies:").unwrap();
+        writeln!(
+            out,
+            "No sensitive areas affected — standard TDD cycle applies:"
+        )
+        .unwrap();
         writeln!(out, "  1. Run `make check` before coding").unwrap();
         writeln!(out, "  2. Write/update tests").unwrap();
         writeln!(out, "  3. Implement changes").unwrap();
@@ -675,9 +709,19 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
 
     // Existing tests
     if !report.existing_tests.is_empty() {
-        writeln!(out, "Existing tests nearby ({}):", report.existing_tests.len()).unwrap();
+        writeln!(
+            out,
+            "Existing tests nearby ({}):",
+            report.existing_tests.len()
+        )
+        .unwrap();
         for t in &report.existing_tests {
-            writeln!(out, "  {} (package: {}, area: {})", t.test_file, t.package, t.for_area).unwrap();
+            writeln!(
+                out,
+                "  {} (package: {}, area: {})",
+                t.test_file, t.package, t.for_area
+            )
+            .unwrap();
         }
         writeln!(out).unwrap();
     }
@@ -724,14 +768,27 @@ pub fn render_human(report: &TddReport, verbose: bool) -> String {
     if report.needs_infra {
         writeln!(out, "NOTE: Runtime scenarios require a running cluster.").unwrap();
         writeln!(out, "  Start with: make up-dataplane").unwrap();
-        writeln!(out, "  Recommended gate: raccoon-cli quality-gate --profile {}", report.recommended_profile).unwrap();
+        writeln!(
+            out,
+            "  Recommended gate: raccoon-cli quality-gate --profile {}",
+            report.recommended_profile
+        )
+        .unwrap();
         writeln!(out).unwrap();
     }
 
     // Discipline reminder
     writeln!(out, "Discipline:").unwrap();
-    writeln!(out, "  - Without a passing baseline, you can't know your change is safe").unwrap();
-    writeln!(out, "  - Without a test for the new behavior, success is a guess").unwrap();
+    writeln!(
+        out,
+        "  - Without a passing baseline, you can't know your change is safe"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  - Without a test for the new behavior, success is a guess"
+    )
+    .unwrap();
     writeln!(out, "  - `make verify` is the canonical proof command").unwrap();
 
     out
@@ -770,7 +827,8 @@ func NewConfigSet(id string) ConfigSet {
 	return ConfigSet{SetID: id}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/domain/configctl/config_test.go"),
@@ -785,7 +843,8 @@ func TestNewConfigSet(t *testing.T) {
 	}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Application ports (contracts)
         fs::create_dir_all(root.join("internal/application/ports")).unwrap();
@@ -800,7 +859,8 @@ type ConfigctlGateway interface {
 	GetConfig(ctx context.Context, id string) (string, error)
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Application configctl (with test)
         fs::create_dir_all(root.join("internal/application/configctl/contracts")).unwrap();
@@ -813,7 +873,8 @@ type CreateDraftCommand struct {
 	Name  string
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/application/configctl/create_draft.go"),
@@ -827,7 +888,8 @@ func CreateDraft(id string) domain.ConfigSet {
 	return domain.NewConfigSet(id)
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // NATS adapter (no tests — weak coverage)
         fs::create_dir_all(root.join("internal/adapters/nats")).unwrap();
@@ -843,7 +905,8 @@ func Encode(s domain.ConfigSet) ([]byte, error) {
 	return nil, nil
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Actors — configctl supervisor
         fs::create_dir_all(root.join("internal/actors/scopes/configctl")).unwrap();
@@ -865,7 +928,8 @@ func New() Supervisor {
 	return Supervisor{sets: []domain.ConfigSet{s}}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Validator logic (no tests — weak coverage)
         fs::create_dir_all(root.join("internal/actors/scopes/validator")).unwrap();
@@ -881,7 +945,8 @@ func New() Supervisor {
 	return Supervisor{running: true}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // HTTP handlers (no tests)
         fs::create_dir_all(root.join("internal/interfaces/http/handlers")).unwrap();
@@ -891,21 +956,24 @@ func New() Supervisor {
 
 func HandleConfig() {}
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Config files
         fs::create_dir_all(root.join("deploy/configs")).unwrap();
         fs::write(
             root.join("deploy/configs/consumer.jsonc"),
             r#"{ "service": "consumer" }"#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Compose
         fs::create_dir_all(root.join("deploy/compose")).unwrap();
         fs::write(
             root.join("deploy/compose/docker-compose.yaml"),
             "services: {}",
-        ).unwrap();
+        )
+        .unwrap();
 
         root
     }
@@ -918,9 +986,15 @@ func HandleConfig() {}
         let root = create_test_project(&tmp);
         let report = analyze(root, &["internal/domain/configctl/config.go".into()]);
 
-        assert!(!report.existing_tests.is_empty(), "should find config_test.go");
         assert!(
-            report.existing_tests.iter().any(|t| t.test_file.contains("config_test.go")),
+            !report.existing_tests.is_empty(),
+            "should find config_test.go"
+        );
+        assert!(
+            report
+                .existing_tests
+                .iter()
+                .any(|t| t.test_file.contains("config_test.go")),
             "should find config_test.go nearby, got: {:?}",
             report.existing_tests
         );
@@ -947,7 +1021,10 @@ func HandleConfig() {}
 
         assert!(!report.file_impacts.is_empty());
         let impact = &report.file_impacts[0];
-        assert!(!impact.exported_symbols.is_empty(), "domain file exports ConfigSet etc");
+        assert!(
+            !impact.exported_symbols.is_empty(),
+            "domain file exports ConfigSet etc"
+        );
     }
 
     #[test]
@@ -968,7 +1045,11 @@ func HandleConfig() {}
         let report = analyze(root, &["internal/adapters/nats/codec.go".into()]);
 
         assert!(
-            report.existing_tests.is_empty() || !report.existing_tests.iter().any(|t| t.for_area == "nats-adapters"),
+            report.existing_tests.is_empty()
+                || !report
+                    .existing_tests
+                    .iter()
+                    .any(|t| t.for_area == "nats-adapters"),
             "nats adapter has no test files"
         );
     }
@@ -980,7 +1061,10 @@ func HandleConfig() {}
         let report = analyze(root, &["internal/adapters/nats/codec.go".into()]);
 
         assert!(
-            report.coverage_gaps.iter().any(|g| g.area == "nats-adapters"),
+            report
+                .coverage_gaps
+                .iter()
+                .any(|g| g.area == "nats-adapters"),
             "should report coverage gap for nats-adapters, got: {:?}",
             report.coverage_gaps
         );
@@ -992,7 +1076,10 @@ func HandleConfig() {}
         let root = create_test_project(&tmp);
         let report = analyze(root, &["internal/adapters/nats/codec.go".into()]);
 
-        assert!(report.needs_infra, "nats adapter changes should recommend runtime scenarios");
+        assert!(
+            report.needs_infra,
+            "nats adapter changes should recommend runtime scenarios"
+        );
     }
 
     #[test]
@@ -1002,7 +1089,10 @@ func HandleConfig() {}
         let report = analyze(root, &["internal/adapters/nats/codec.go".into()]);
 
         assert!(
-            report.recommended_scenarios.iter().any(|s| s.name == "happy-path"),
+            report
+                .recommended_scenarios
+                .iter()
+                .any(|s| s.name == "happy-path"),
             "nats adapter should recommend happy-path scenario, got: {:?}",
             report.recommended_scenarios
         );
@@ -1014,10 +1104,16 @@ func HandleConfig() {}
     fn validator_recommends_invalid_payload_scenario() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &["internal/actors/scopes/validator/supervisor.go".into()]);
+        let report = analyze(
+            root,
+            &["internal/actors/scopes/validator/supervisor.go".into()],
+        );
 
         assert!(
-            report.recommended_scenarios.iter().any(|s| s.name == "invalid-payload"),
+            report
+                .recommended_scenarios
+                .iter()
+                .any(|s| s.name == "invalid-payload"),
             "validator changes should recommend invalid-payload scenario"
         );
     }
@@ -1026,10 +1122,16 @@ func HandleConfig() {}
     fn validator_recommends_happy_path_scenario() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &["internal/actors/scopes/validator/supervisor.go".into()]);
+        let report = analyze(
+            root,
+            &["internal/actors/scopes/validator/supervisor.go".into()],
+        );
 
         assert!(
-            report.recommended_scenarios.iter().any(|s| s.name == "happy-path"),
+            report
+                .recommended_scenarios
+                .iter()
+                .any(|s| s.name == "happy-path"),
             "validator changes should recommend happy-path scenario"
         );
     }
@@ -1040,10 +1142,16 @@ func HandleConfig() {}
     fn configctl_change_recommends_config_lifecycle_scenario() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &["internal/application/configctl/create_draft.go".into()]);
+        let report = analyze(
+            root,
+            &["internal/application/configctl/create_draft.go".into()],
+        );
 
         assert!(
-            report.recommended_scenarios.iter().any(|s| s.name == "config-lifecycle"),
+            report
+                .recommended_scenarios
+                .iter()
+                .any(|s| s.name == "config-lifecycle"),
             "configctl changes should recommend config-lifecycle scenario, got: {:?}",
             report.recommended_scenarios
         );
@@ -1055,18 +1163,27 @@ func HandleConfig() {}
     fn mixed_changes_aggregate_areas() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &[
-            "internal/domain/configctl/config.go".into(),
-            "internal/adapters/nats/codec.go".into(),
-        ]);
+        let report = analyze(
+            root,
+            &[
+                "internal/domain/configctl/config.go".into(),
+                "internal/adapters/nats/codec.go".into(),
+            ],
+        );
 
-        assert!(report.affected_areas.len() >= 2, "should affect both domain and nats-adapters");
+        assert!(
+            report.affected_areas.len() >= 2,
+            "should affect both domain and nats-adapters"
+        );
         assert!(
             report.affected_areas.iter().any(|a| a.name == "domain"),
             "should include domain area"
         );
         assert!(
-            report.affected_areas.iter().any(|a| a.name == "nats-adapters"),
+            report
+                .affected_areas
+                .iter()
+                .any(|a| a.name == "nats-adapters"),
             "should include nats-adapters area"
         );
     }
@@ -1075,19 +1192,28 @@ func HandleConfig() {}
     fn mixed_changes_merge_commands() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &[
-            "internal/domain/configctl/config.go".into(),
-            "internal/adapters/nats/codec.go".into(),
-        ]);
+        let report = analyze(
+            root,
+            &[
+                "internal/domain/configctl/config.go".into(),
+                "internal/adapters/nats/codec.go".into(),
+            ],
+        );
 
         // Should have arch-guard (from both) and contract-audit (from both)
         assert!(
-            report.before_commands.iter().any(|c| c.contains("arch-guard")),
+            report
+                .before_commands
+                .iter()
+                .any(|c| c.contains("arch-guard")),
             "should include arch-guard, got: {:?}",
             report.before_commands
         );
         assert!(
-            report.before_commands.iter().any(|c| c.contains("contract-audit")),
+            report
+                .before_commands
+                .iter()
+                .any(|c| c.contains("contract-audit")),
             "should include contract-audit"
         );
     }
@@ -1096,10 +1222,13 @@ func HandleConfig() {}
     fn mixed_changes_no_duplicate_commands() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &[
-            "internal/domain/configctl/config.go".into(),
-            "internal/adapters/nats/codec.go".into(),
-        ]);
+        let report = analyze(
+            root,
+            &[
+                "internal/domain/configctl/config.go".into(),
+                "internal/adapters/nats/codec.go".into(),
+            ],
+        );
 
         let mut seen = BTreeSet::new();
         for cmd in &report.before_commands {
@@ -1136,7 +1265,10 @@ func HandleConfig() {}
         let report = analyze(root, &["deploy/configs/consumer.jsonc".into()]);
 
         assert!(
-            report.affected_areas.iter().any(|a| a.name == "config-files"),
+            report
+                .affected_areas
+                .iter()
+                .any(|a| a.name == "config-files"),
             "should affect config-files area"
         );
     }
@@ -1148,7 +1280,10 @@ func HandleConfig() {}
         let report = analyze(root, &["deploy/compose/docker-compose.yaml".into()]);
 
         assert!(
-            report.recommended_scenarios.iter().any(|s| s.name == "readiness-probe"),
+            report
+                .recommended_scenarios
+                .iter()
+                .any(|s| s.name == "readiness-probe"),
             "compose changes should recommend readiness-probe scenario"
         );
     }
@@ -1230,7 +1365,10 @@ func HandleConfig() {}
     fn validator_change_recommends_deep_profile() {
         let tmp = TempDir::new().unwrap();
         let root = create_test_project(&tmp);
-        let report = analyze(root, &["internal/actors/scopes/validator/supervisor.go".into()]);
+        let report = analyze(
+            root,
+            &["internal/actors/scopes/validator/supervisor.go".into()],
+        );
 
         assert_eq!(report.recommended_profile, "deep");
     }
@@ -1243,7 +1381,10 @@ func HandleConfig() {}
         let root = create_test_project(&tmp);
         let report = analyze(root, &["internal/application/ports/configctl.go".into()]);
 
-        let has_contract = report.file_impacts.iter().any(|fi| !fi.contract_items.is_empty());
+        let has_contract = report
+            .file_impacts
+            .iter()
+            .any(|fi| !fi.contract_items.is_empty());
         assert!(has_contract, "port interface should show contract surface");
     }
 
@@ -1253,7 +1394,10 @@ func HandleConfig() {}
         let root = create_test_project(&tmp);
         let report = analyze(root, &["internal/domain/configctl/config.go".into()]);
 
-        let has_deps = report.file_impacts.iter().any(|fi| !fi.direct_dependents.is_empty());
+        let has_deps = report
+            .file_impacts
+            .iter()
+            .any(|fi| !fi.direct_dependents.is_empty());
         assert!(has_deps, "domain package should have dependents");
     }
 
@@ -1288,11 +1432,17 @@ func HandleConfig() {}
 
         // Domain requires architecture + contracts
         assert!(
-            report.before_commands.iter().any(|c| c.contains("arch-guard")),
+            report
+                .before_commands
+                .iter()
+                .any(|c| c.contains("arch-guard")),
             "domain changes require arch-guard"
         );
         assert!(
-            report.before_commands.iter().any(|c| c.contains("contract-audit")),
+            report
+                .before_commands
+                .iter()
+                .any(|c| c.contains("contract-audit")),
             "domain changes require contract-audit"
         );
     }

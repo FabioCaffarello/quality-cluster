@@ -121,7 +121,11 @@ fn extract_envelope_fields(source: &str) -> Vec<EnvelopeField> {
 
         for line in block.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("//") || trimmed == "struct {" || trimmed == "}" {
+            if trimmed.is_empty()
+                || trimmed.starts_with("//")
+                || trimmed == "struct {"
+                || trimmed == "}"
+            {
                 continue;
             }
 
@@ -222,11 +226,15 @@ fn extract_required_fields(source: &str) -> Vec<String> {
                     // Extract field names from validation checks
                     for line in body.lines() {
                         let trimmed = line.trim();
-                        if trimmed.contains("e.") && (trimmed.contains("== \"\"") || trimmed.contains(".IsZero()")) {
+                        if trimmed.contains("e.")
+                            && (trimmed.contains("== \"\"") || trimmed.contains(".IsZero()"))
+                        {
                             // Extract field name after "e."
                             if let Some(dot_pos) = trimmed.find("e.") {
                                 let after = &trimmed[dot_pos + 2..];
-                                let field_end = after.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(after.len());
+                                let field_end = after
+                                    .find(|c: char| !c.is_alphanumeric() && c != '_')
+                                    .unwrap_or(after.len());
                                 let field = &after[..field_end];
                                 if !field.is_empty() {
                                     required.push(field.to_string());
@@ -242,7 +250,8 @@ fn extract_required_fields(source: &str) -> Vec<String> {
                             let after_field = &trimmed[field_pos + "Field:".len()..];
                             if let Some(start) = after_field.find('"') {
                                 if let Some(end) = after_field[start + 1..].find('"') {
-                                    required.push(after_field[start + 1..start + 1 + end].to_string());
+                                    required
+                                        .push(after_field[start + 1..start + 1 + end].to_string());
                                 }
                             }
                         }
@@ -456,7 +465,10 @@ func decodeEvent[T any](spec EventSpec, data []byte) (envelope.Envelope[T], erro
         assert!(!enc.is_empty());
         assert!(!dec.is_empty());
 
-        let enc_ctrl = enc.iter().find(|c| c.function == "encodeControlRequest").unwrap();
+        let enc_ctrl = enc
+            .iter()
+            .find(|c| c.function == "encodeControlRequest")
+            .unwrap();
         assert_eq!(enc_ctrl.expected_kind, "command");
 
         let enc_event = enc.iter().find(|c| c.function == "encodeEvent").unwrap();
@@ -465,7 +477,11 @@ func decodeEvent[T any](spec EventSpec, data []byte) (envelope.Envelope[T], erro
 
     #[test]
     fn codec_format_detected() {
-        let format = if SAMPLE_CODEC.contains("cbor.Marshal") { "cbor" } else { "json" };
+        let format = if SAMPLE_CODEC.contains("cbor.Marshal") {
+            "cbor"
+        } else {
+            "json"
+        };
         assert_eq!(format, "cbor");
     }
 }

@@ -52,7 +52,15 @@ pub fn analyze(project_root: &Path, targets: &[String]) -> BriefingReport {
     // If any target looks like a symbol (PascalCase, no path separators), trace it.
     let symbol_summaries = collect_symbol_summaries(project_root, targets);
 
-    build_report(targets, &impact, &tdd_report, arch_findings, contract_findings, symbol_summaries, None)
+    build_report(
+        targets,
+        &impact,
+        &tdd_report,
+        arch_findings,
+        contract_findings,
+        symbol_summaries,
+        None,
+    )
 }
 
 /// Generate a briefing with optional LSP enrichment.
@@ -78,7 +86,15 @@ pub fn analyze_with_lsp(
         None
     };
 
-    build_report(targets, &impact, &tdd_report, arch_findings, contract_findings, symbol_summaries, lsp_note)
+    build_report(
+        targets,
+        &impact,
+        &tdd_report,
+        arch_findings,
+        contract_findings,
+        symbol_summaries,
+        lsp_note,
+    )
 }
 
 // ── Report types ───────────────────────────────────────────────────────────
@@ -102,7 +118,16 @@ impl BriefingReport {
             targets: vec![],
             facts: vec![],
             inferences: vec![],
-            recommendations: vec!["Provide targets: file paths, package dirs, or symbol names.".into()].into_iter().map(|m| BriefingItem { category: "usage".into(), message: m, location: None }).collect(),
+            recommendations: vec![
+                "Provide targets: file paths, package dirs, or symbol names.".into(),
+            ]
+            .into_iter()
+            .map(|m| BriefingItem {
+                category: "usage".into(),
+                message: m,
+                location: None,
+            })
+            .collect(),
             checks_to_run: vec![],
             sensitive_areas: vec![],
             scope_note: "No targets provided.".into(),
@@ -149,7 +174,12 @@ fn build_report(
 
         // Exported symbols count
         if !imp.exported_symbols.is_empty() {
-            let names: Vec<&str> = imp.exported_symbols.iter().take(5).map(|s| s.name.as_str()).collect();
+            let names: Vec<&str> = imp
+                .exported_symbols
+                .iter()
+                .take(5)
+                .map(|s| s.name.as_str())
+                .collect();
             let suffix = if imp.exported_symbols.len() > 5 {
                 format!(" (+{} more)", imp.exported_symbols.len() - 5)
             } else {
@@ -164,7 +194,12 @@ fn build_report(
 
         // Direct dependents
         if !imp.direct_dependents.is_empty() {
-            let dep_names: Vec<&str> = imp.direct_dependents.iter().take(5).map(|d| d.package_dir.as_str()).collect();
+            let dep_names: Vec<&str> = imp
+                .direct_dependents
+                .iter()
+                .take(5)
+                .map(|d| d.package_dir.as_str())
+                .collect();
             let suffix = if imp.direct_dependents.len() > 5 {
                 format!(" (+{} more)", imp.direct_dependents.len() - 5)
             } else {
@@ -172,7 +207,13 @@ fn build_report(
             };
             facts.push(BriefingItem {
                 category: "dependents".into(),
-                message: format!("{} has {} direct dependents: {}{}", imp.target, imp.direct_dependents.len(), dep_names.join(", "), suffix),
+                message: format!(
+                    "{} has {} direct dependents: {}{}",
+                    imp.target,
+                    imp.direct_dependents.len(),
+                    dep_names.join(", "),
+                    suffix
+                ),
                 location: None,
             });
         }
@@ -262,7 +303,10 @@ fn build_report(
     if tdd_report.recommended_profile != "fast" {
         recommendations.push(BriefingItem {
             category: "quality-gate".into(),
-            message: format!("Use profile '{}' (elevated due to scope)", tdd_report.recommended_profile),
+            message: format!(
+                "Use profile '{}' (elevated due to scope)",
+                tdd_report.recommended_profile
+            ),
             location: None,
         });
     }
@@ -287,7 +331,11 @@ fn build_report(
     let scope_note = format!(
         "Briefing from static analysis (AST + file patterns). {}. \
          No call graph, type resolution, or runtime tracing unless --lsp is used.",
-        if lsp_note.is_some() { "LSP enrichment active" } else { "No LSP enrichment" }
+        if lsp_note.is_some() {
+            "LSP enrichment active"
+        } else {
+            "No LSP enrichment"
+        }
     );
 
     // Deduplicate inferences
@@ -512,7 +560,11 @@ pub fn render_human(report: &BriefingReport, verbose: bool) -> String {
     if report.targets.is_empty() {
         writeln!(out, "No targets provided.\n").unwrap();
         writeln!(out, "Usage: raccoon-cli briefing <target> [target2] ...").unwrap();
-        writeln!(out, "  Targets: file paths, package dirs, or symbol names (PascalCase).\n").unwrap();
+        writeln!(
+            out,
+            "  Targets: file paths, package dirs, or symbol names (PascalCase).\n"
+        )
+        .unwrap();
         return out;
     }
 
@@ -524,13 +576,23 @@ pub fn render_human(report: &BriefingReport, verbose: bool) -> String {
         let limit = if verbose { report.facts.len() } else { 15 };
         for item in report.facts.iter().take(limit) {
             if let Some(ref loc) = item.location {
-                writeln!(out, "  [fact][{}] {} ({})", item.category, item.message, loc).unwrap();
+                writeln!(
+                    out,
+                    "  [fact][{}] {} ({})",
+                    item.category, item.message, loc
+                )
+                .unwrap();
             } else {
                 writeln!(out, "  [fact][{}] {}", item.category, item.message).unwrap();
             }
         }
         if !verbose && report.facts.len() > 15 {
-            writeln!(out, "  ... +{} more (use --verbose)", report.facts.len() - 15).unwrap();
+            writeln!(
+                out,
+                "  ... +{} more (use --verbose)",
+                report.facts.len() - 15
+            )
+            .unwrap();
         }
         writeln!(out).unwrap();
     }
@@ -543,7 +605,12 @@ pub fn render_human(report: &BriefingReport, verbose: bool) -> String {
             writeln!(out, "  [inferred][{}] {}", item.category, item.message).unwrap();
         }
         if !verbose && report.inferences.len() > 10 {
-            writeln!(out, "  ... +{} more (use --verbose)", report.inferences.len() - 10).unwrap();
+            writeln!(
+                out,
+                "  ... +{} more (use --verbose)",
+                report.inferences.len() - 10
+            )
+            .unwrap();
         }
         writeln!(out).unwrap();
     }
@@ -553,9 +620,19 @@ pub fn render_human(report: &BriefingReport, verbose: bool) -> String {
         writeln!(out, "Recommendations:").unwrap();
         for item in &report.recommendations {
             if let Some(ref loc) = item.location {
-                writeln!(out, "  [recommendation][{}] {} ({})", item.category, item.message, loc).unwrap();
+                writeln!(
+                    out,
+                    "  [recommendation][{}] {} ({})",
+                    item.category, item.message, loc
+                )
+                .unwrap();
             } else {
-                writeln!(out, "  [recommendation][{}] {}", item.category, item.message).unwrap();
+                writeln!(
+                    out,
+                    "  [recommendation][{}] {}",
+                    item.category, item.message
+                )
+                .unwrap();
             }
         }
         writeln!(out).unwrap();
@@ -563,7 +640,12 @@ pub fn render_human(report: &BriefingReport, verbose: bool) -> String {
 
     // Sensitive areas
     if !report.sensitive_areas.is_empty() {
-        writeln!(out, "Sensitive areas: {}\n", report.sensitive_areas.join(", ")).unwrap();
+        writeln!(
+            out,
+            "Sensitive areas: {}\n",
+            report.sensitive_areas.join(", ")
+        )
+        .unwrap();
     }
 
     // Checks to run
@@ -654,10 +736,7 @@ type ConfigctlGateway interface {
     fn briefing_for_file_target() {
         let dir = TempDir::new().unwrap();
         make_go_project(dir.path());
-        let report = analyze(
-            dir.path(),
-            &["internal/domain/configctl/config.go".into()],
-        );
+        let report = analyze(dir.path(), &["internal/domain/configctl/config.go".into()]);
         assert_eq!(report.targets.len(), 1);
         // Should have at least some facts (package resolution, exported symbols)
         assert!(!report.facts.is_empty(), "file target should produce facts");
@@ -681,10 +760,7 @@ type ConfigctlGateway interface {
     fn briefing_for_package_target() {
         let dir = TempDir::new().unwrap();
         make_go_project(dir.path());
-        let report = analyze(
-            dir.path(),
-            &["internal/domain/configctl".into()],
-        );
+        let report = analyze(dir.path(), &["internal/domain/configctl".into()]);
         assert_eq!(report.targets.len(), 1);
     }
 
@@ -715,10 +791,7 @@ type ConfigctlGateway interface {
     fn briefing_json_roundtrip() {
         let dir = TempDir::new().unwrap();
         make_go_project(dir.path());
-        let report = analyze(
-            dir.path(),
-            &["internal/domain/configctl/config.go".into()],
-        );
+        let report = analyze(dir.path(), &["internal/domain/configctl/config.go".into()]);
         let json = render_json(&report).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["targets"].is_array());
@@ -732,10 +805,7 @@ type ConfigctlGateway interface {
     fn human_output_contains_sections() {
         let dir = TempDir::new().unwrap();
         make_go_project(dir.path());
-        let report = analyze(
-            dir.path(),
-            &["internal/domain/configctl/config.go".into()],
-        );
+        let report = analyze(dir.path(), &["internal/domain/configctl/config.go".into()]);
         let human = render_human(&report, false);
         assert!(human.contains("=== Briefing ==="));
         assert!(human.contains("Targets:"));
@@ -765,9 +835,21 @@ type ConfigctlGateway interface {
     #[test]
     fn dedup_removes_duplicates() {
         let mut items = vec![
-            BriefingItem { category: "a".into(), message: "same".into(), location: None },
-            BriefingItem { category: "a".into(), message: "same".into(), location: Some("loc".into()) },
-            BriefingItem { category: "a".into(), message: "different".into(), location: None },
+            BriefingItem {
+                category: "a".into(),
+                message: "same".into(),
+                location: None,
+            },
+            BriefingItem {
+                category: "a".into(),
+                message: "same".into(),
+                location: Some("loc".into()),
+            },
+            BriefingItem {
+                category: "a".into(),
+                message: "different".into(),
+                location: None,
+            },
         ];
         dedup_items(&mut items);
         assert_eq!(items.len(), 2);
@@ -777,10 +859,7 @@ type ConfigctlGateway interface {
     fn verbose_shows_more_facts() {
         let dir = TempDir::new().unwrap();
         make_go_project(dir.path());
-        let report = analyze(
-            dir.path(),
-            &["internal/domain/configctl/config.go".into()],
-        );
+        let report = analyze(dir.path(), &["internal/domain/configctl/config.go".into()]);
         let terse = render_human(&report, false);
         let verbose = render_human(&report, true);
         // verbose should be at least as long

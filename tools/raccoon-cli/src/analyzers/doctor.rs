@@ -23,8 +23,14 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
 
     // Check for expected directories
     let dir_reasons: &[(&str, &str)] = &[
-        ("internal", "topology-doctor and contract-audit scan internal/ for Go source artifacts"),
-        ("deploy", "topology-doctor reads configs and compose from deploy/"),
+        (
+            "internal",
+            "topology-doctor and contract-audit scan internal/ for Go source artifacts",
+        ),
+        (
+            "deploy",
+            "topology-doctor reads configs and compose from deploy/",
+        ),
         ("tests", "test infrastructure lives in tests/"),
         ("tools", "raccoon-cli and other tooling live in tools/"),
     ];
@@ -69,12 +75,7 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
             .map(|entries| {
                 entries
                     .filter_map(|e| e.ok())
-                    .any(|e| {
-                        e.path()
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-                            == Some("jsonc")
-                    })
+                    .any(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("jsonc"))
             })
             .unwrap_or(false);
         if has_jsonc {
@@ -87,7 +88,9 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
                     "deploy/configs/ exists but contains no .jsonc files",
                 )
                 .with_why("topology-doctor reads .jsonc configs to validate transport consistency")
-                .with_help("add service configs (consumer.jsonc, emulator.jsonc, validator.jsonc)")],
+                .with_help(
+                    "add service configs (consumer.jsonc, emulator.jsonc, validator.jsonc)",
+                )],
             ));
         }
     } else {
@@ -119,16 +122,17 @@ mod tests {
     #[test]
     fn error_message_is_actionable() {
         let report = analyze(std::path::Path::new("/nonexistent")).unwrap();
-        let check = report.checks.iter().find(|c| c.name == "project-root").unwrap();
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "project-root")
+            .unwrap();
         let finding = &check.findings[0];
         assert!(
             finding.why.is_some(),
             "doctor error should explain why it matters"
         );
-        assert!(
-            finding.help.is_some(),
-            "doctor error should suggest a fix"
-        );
+        assert!(finding.help.is_some(), "doctor error should suggest a fix");
     }
 
     #[test]
@@ -142,7 +146,10 @@ mod tests {
 
         let report = analyze(dir.path()).unwrap();
         let compose_check = report.checks.iter().find(|c| c.name == "compose-file");
-        assert!(compose_check.is_some(), "doctor should check for compose file");
+        assert!(
+            compose_check.is_some(),
+            "doctor should check for compose file"
+        );
     }
 
     #[test]
@@ -155,8 +162,15 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("tools")).unwrap();
 
         let report = analyze(dir.path()).unwrap();
-        let config_check = report.checks.iter().find(|c| c.name == "config-files").unwrap();
-        assert!(config_check.findings.iter().any(|f| f.message.contains("no .jsonc")));
+        let config_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "config-files")
+            .unwrap();
+        assert!(config_check
+            .findings
+            .iter()
+            .any(|f| f.message.contains("no .jsonc")));
     }
 
     #[test]
@@ -198,21 +212,17 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("deploy/compose")).unwrap();
         std::fs::create_dir_all(dir.path().join("tests")).unwrap();
         std::fs::create_dir_all(dir.path().join("tools")).unwrap();
-        std::fs::write(
-            dir.path().join("deploy/configs/consumer.jsonc"),
-            "{}",
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("deploy/compose/docker-compose.yaml"),
-            "",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("deploy/configs/consumer.jsonc"), "{}").unwrap();
+        std::fs::write(dir.path().join("deploy/compose/docker-compose.yaml"), "").unwrap();
 
         let report = analyze(dir.path()).unwrap();
         let names: Vec<&str> = report.checks.iter().map(|c| c.name.as_str()).collect();
         let unique: std::collections::HashSet<&str> = names.iter().copied().collect();
-        assert_eq!(names.len(), unique.len(), "all check names must be unique: {names:?}");
+        assert_eq!(
+            names.len(),
+            unique.len(),
+            "all check names must be unique: {names:?}"
+        );
     }
 
     #[test]

@@ -110,6 +110,7 @@ func TestLifecycleUseCasesValidateCompileActivateDeactivateAndQuery(t *testing.T
 	get := NewGetConfigUseCase(repository)
 	getActive := NewGetActiveConfigUseCase(repository)
 	listIngestionBindings := NewListActiveIngestionBindingsUseCase(repository)
+	listRuntimeProjections := NewListActiveRuntimeProjectionsUseCase(repository)
 	list := NewListConfigsUseCase(repository)
 
 	now := time.Unix(100, 0).UTC()
@@ -179,6 +180,29 @@ func TestLifecycleUseCasesValidateCompileActivateDeactivateAndQuery(t *testing.T
 	}
 	if ingestionBindingsReply.Bindings[0].Runtime.Config.DefinitionChecksum == "" {
 		t.Fatalf("expected runtime definition checksum, got %+v", ingestionBindingsReply.Bindings[0].Runtime)
+	}
+	if len(ingestionBindingsReply.Runtimes) != 1 {
+		t.Fatalf("expected one compact runtime summary, got %+v", ingestionBindingsReply.Runtimes)
+	}
+	if ingestionBindingsReply.Runtimes[0].Config.VersionID != created.Config.ID {
+		t.Fatalf("expected compact runtime version id %q, got %+v", created.Config.ID, ingestionBindingsReply.Runtimes[0])
+	}
+
+	runtimeProjectionsReply, prob := listRuntimeProjections.Execute(context.Background(), contracts.ListActiveRuntimeProjectionsQuery{})
+	if prob != nil {
+		t.Fatalf("list active runtime projections: %v", prob)
+	}
+	if len(runtimeProjectionsReply.Runtimes) != 1 {
+		t.Fatalf("expected one active runtime projection, got %d", len(runtimeProjectionsReply.Runtimes))
+	}
+	if runtimeProjectionsReply.Runtimes[0].VersionID != created.Config.ID {
+		t.Fatalf("expected runtime projection version id %q, got %+v", created.Config.ID, runtimeProjectionsReply.Runtimes[0])
+	}
+	if runtimeProjectionsReply.Runtimes[0].DefinitionChecksum != ingestionBindingsReply.Runtimes[0].Config.DefinitionChecksum {
+		t.Fatalf("expected ingestion runtime summary and runtime projection to agree on checksum, got projection=%q bootstrap=%q", runtimeProjectionsReply.Runtimes[0].DefinitionChecksum, ingestionBindingsReply.Runtimes[0].Config.DefinitionChecksum)
+	}
+	if runtimeProjectionsReply.Runtimes[0].Artifact.ID != ingestionBindingsReply.Runtimes[0].Artifact.ID {
+		t.Fatalf("expected ingestion runtime summary and runtime projection to agree on artifact id, got projection=%q bootstrap=%q", runtimeProjectionsReply.Runtimes[0].Artifact.ID, ingestionBindingsReply.Runtimes[0].Artifact.ID)
 	}
 
 	activeReply, prob := getActive.Execute(context.Background(), contracts.GetActiveConfigQuery{})
@@ -270,6 +294,17 @@ func TestListActiveIngestionBindingsUseCaseRequiresCompleteScopeFilter(t *testin
 	t.Parallel()
 
 	_, prob := NewListActiveIngestionBindingsUseCase(newTestRepository()).Execute(context.Background(), contracts.ListActiveIngestionBindingsQuery{
+		ScopeKind: "tenant",
+	})
+	if prob == nil || prob.Code != problem.InvalidArgument {
+		t.Fatalf("expected invalid argument problem, got %v", prob)
+	}
+}
+
+func TestListActiveRuntimeProjectionsUseCaseRequiresCompleteScopeFilter(t *testing.T) {
+	t.Parallel()
+
+	_, prob := NewListActiveRuntimeProjectionsUseCase(newTestRepository()).Execute(context.Background(), contracts.ListActiveRuntimeProjectionsQuery{
 		ScopeKind: "tenant",
 	})
 	if prob == nil || prob.Code != problem.InvalidArgument {

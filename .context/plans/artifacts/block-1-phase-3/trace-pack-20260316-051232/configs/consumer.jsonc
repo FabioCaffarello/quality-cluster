@@ -1,0 +1,25 @@
+{
+  // consumer bootstraps from the server runtime view and republishes canonical data-plane messages to JetStream.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  },
+  "kafka": {
+    "enabled": true,
+    "brokers": ["kafka:9092"],
+    "client_id": "quality-service-consumer",
+    "consumer_group": "quality-service-consumer-v1",
+    "dial_timeout": "10s"
+  },
+  "bootstrap": {
+    "base_url": "http://server:8080",
+    "scope_kind": "global",
+    "scope_key": "default",
+    "timeout": "5s"
+  }
+}

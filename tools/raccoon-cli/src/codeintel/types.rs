@@ -96,18 +96,14 @@ pub struct InterfaceEmbed {
 #[serde(rename_all = "snake_case")]
 pub enum TypeKind {
     /// `type Foo struct { ... }`
-    Struct {
-        fields: Vec<StructField>,
-    },
+    Struct { fields: Vec<StructField> },
     /// `type Foo interface { ... }`
     Interface {
         methods: Vec<InterfaceMethod>,
         embeds: Vec<InterfaceEmbed>,
     },
     /// `type Foo = Bar` or `type Foo Bar`
-    Alias {
-        underlying: String,
-    },
+    Alias { underlying: String },
 }
 
 /// A Go type definition.

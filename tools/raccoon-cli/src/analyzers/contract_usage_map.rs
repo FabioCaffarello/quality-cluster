@@ -156,7 +156,12 @@ const CONTRACT_FAMILIES: &[ContractFamily] = &[
     },
     ContractFamily {
         name: "Runtime Contracts",
-        marker_types: &["RuntimeRecord", "ScopeRecord", "ConfigRecord", "ArtifactRecord"],
+        marker_types: &[
+            "RuntimeRecord",
+            "ScopeRecord",
+            "ConfigRecord",
+            "ArtifactRecord",
+        ],
         marker_packages: &["application/runtimecontracts"],
     },
     ContractFamily {
@@ -314,10 +319,7 @@ pub fn analyze(project_root: &Path) -> ContractUsageMapReport {
 }
 
 /// Analyze contract usage with LSP enrichment.
-pub fn analyze_with_lsp(
-    project_root: &Path,
-    bridge: &mut GoplsBridge,
-) -> ContractUsageMapReport {
+pub fn analyze_with_lsp(project_root: &Path, bridge: &mut GoplsBridge) -> ContractUsageMapReport {
     let index = codeintel::build_index(project_root);
     let mut report = analyze_with_index(&index, project_root);
 
@@ -328,7 +330,9 @@ pub fn analyze_with_lsp(
 
         for lsp_ref in &enriched.lsp_references {
             let pkg = file_to_package(&lsp_ref.location.file);
-            let already_tracked = contract.propagation_sites.iter()
+            let already_tracked = contract
+                .propagation_sites
+                .iter()
                 .chain(contract.consumption_sites.iter())
                 .chain(contract.construction_sites.iter())
                 .any(|s| s.file == lsp_ref.location.file && s.line == lsp_ref.location.line);
@@ -401,7 +405,15 @@ fn analyze_with_index(index: &ProjectIndex, project_root: &Path) -> ContractUsag
     // 2. For each contract, trace usage across the codebase
     let mut contracts: Vec<ContractEntry> = Vec::new();
     for (name, family, def_file, def_line, def_pkg) in &contract_types {
-        let entry = trace_contract_usage(index, project_root, name, family, def_file, *def_line, def_pkg);
+        let entry = trace_contract_usage(
+            index,
+            project_root,
+            name,
+            family,
+            def_file,
+            *def_line,
+            def_pkg,
+        );
         contracts.push(entry);
     }
 
@@ -431,9 +443,7 @@ fn analyze_with_index(index: &ProjectIndex, project_root: &Path) -> ContractUsag
 }
 
 /// Discover all contract types by matching against known families.
-fn discover_contracts(
-    index: &ProjectIndex,
-) -> Vec<(String, String, String, usize, String)> {
+fn discover_contracts(index: &ProjectIndex) -> Vec<(String, String, String, usize, String)> {
     let mut results = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
 
@@ -491,27 +501,49 @@ fn classify_type(type_name: &str, file_dir: &str) -> Option<&'static str> {
 /// Heuristic: type names that look like contracts (commands, queries, records, events, etc.)
 fn is_contract_like_name(name: &str) -> bool {
     let suffixes = [
-        "Command", "Query", "Reply", "Record", "Event", "Message",
-        "Spec", "Registry", "Binding", "Route", "Scope",
-        "Projection", "Artifact", "Config", "Runtime",
-        "Envelope", "Problem", "Metadata", "Violation",
-        "Status", "Diagnostic", "Issue",
+        "Command",
+        "Query",
+        "Reply",
+        "Record",
+        "Event",
+        "Message",
+        "Spec",
+        "Registry",
+        "Binding",
+        "Route",
+        "Scope",
+        "Projection",
+        "Artifact",
+        "Config",
+        "Runtime",
+        "Envelope",
+        "Problem",
+        "Metadata",
+        "Violation",
+        "Status",
+        "Diagnostic",
+        "Issue",
     ];
 
     // Types that are exact matches to important names
     let exact_matches = [
-        "Envelope", "Problem", "Metadata", "Event",
-        "Activation", "Binding", "Field", "Rule",
-        "Message", "Kind",
+        "Envelope",
+        "Problem",
+        "Metadata",
+        "Event",
+        "Activation",
+        "Binding",
+        "Field",
+        "Rule",
+        "Message",
+        "Kind",
     ];
 
     if exact_matches.contains(&name) {
         return true;
     }
 
-    suffixes.iter().any(|s| name.ends_with(s))
-        || name.contains("Spec")
-        || name.contains("Registry")
+    suffixes.iter().any(|s| name.ends_with(s)) || name.contains("Spec") || name.contains("Registry")
 }
 
 /// Trace all usage sites of a contract type.
@@ -541,7 +573,9 @@ fn trace_contract_usage(
         for func in &file.functions {
             let returns_type = func_returns_type(func, type_name);
             let takes_type = func_takes_type(func, type_name);
-            let is_method_on_type = func.receiver.as_ref()
+            let is_method_on_type = func
+                .receiver
+                .as_ref()
                 .map(|r| r.type_name.contains(type_name))
                 .unwrap_or(false);
 
@@ -620,9 +654,7 @@ fn trace_contract_usage(
             }
 
             // Validation: methods named Validate, Normalize, or functions checking the type
-            if is_method_on_type
-                && (func.name == "Validate" || func.name == "Normalize")
-            {
+            if is_method_on_type && (func.name == "Validate" || func.name == "Normalize") {
                 validation_sites.push(UsagePoint {
                     file: file.path.clone(),
                     line: func.location.line,
@@ -696,8 +728,7 @@ fn trace_contract_usage(
 
         // 3. Check constants that reference the type (e.g., event name constants)
         for constant in &file.constants {
-            if constant.type_hint.as_deref() == Some(type_name)
-                || constant.name.contains(type_name)
+            if constant.type_hint.as_deref() == Some(type_name) || constant.name.contains(type_name)
             {
                 propagation_sites.push(UsagePoint {
                     file: file.path.clone(),
@@ -739,7 +770,9 @@ fn compute_breadth(entry: &ContractEntry) -> UsageBreadth {
     if let Some(ref def) = entry.definition {
         packages.insert(package_layer(&def.file));
     }
-    for site in entry.construction_sites.iter()
+    for site in entry
+        .construction_sites
+        .iter()
         .chain(entry.propagation_sites.iter())
         .chain(entry.consumption_sites.iter())
         .chain(entry.validation_sites.iter())
@@ -765,7 +798,15 @@ fn compute_breadth(entry: &ContractEntry) -> UsageBreadth {
 
 /// Extract the architectural layer from a file path.
 fn package_layer(file: &str) -> String {
-    let layers = ["domain", "application", "adapters", "actors", "interfaces", "shared", "cmd"];
+    let layers = [
+        "domain",
+        "application",
+        "adapters",
+        "actors",
+        "interfaces",
+        "shared",
+        "cmd",
+    ];
     for layer in layers {
         let prefix = format!("internal/{layer}");
         if file.contains(&prefix) {
@@ -796,7 +837,9 @@ fn build_family_summaries(contracts: &[ContractEntry]) -> Vec<FamilySummary> {
                 if let Some(ref def) = e.definition {
                     all_packages.insert(def.package.clone());
                 }
-                for site in e.construction_sites.iter()
+                for site in e
+                    .construction_sites
+                    .iter()
                     .chain(e.propagation_sites.iter())
                     .chain(e.consumption_sites.iter())
                     .chain(e.validation_sites.iter())
@@ -882,7 +925,9 @@ fn identify_sensitive_areas(
     let cross_boundary: Vec<String> = contracts
         .iter()
         .filter(|c| {
-            let layers: BTreeSet<String> = c.construction_sites.iter()
+            let layers: BTreeSet<String> = c
+                .construction_sites
+                .iter()
                 .chain(c.propagation_sites.iter())
                 .chain(c.consumption_sites.iter())
                 .map(|s| package_layer(&s.file))
@@ -894,8 +939,9 @@ fn identify_sensitive_areas(
 
     if !cross_boundary.is_empty() {
         areas.push(SensitiveArea {
-            description: "Contracts crossing domain/infrastructure boundary — changes propagate widely"
-                .to_string(),
+            description:
+                "Contracts crossing domain/infrastructure boundary — changes propagate widely"
+                    .to_string(),
             contracts_involved: cross_boundary,
             provenance: Provenance::Observed,
         });
@@ -1054,12 +1100,7 @@ pub fn render_human(report: &ContractUsageMapReport, verbose: bool) -> String {
     if !report.sensitive_areas.is_empty() {
         writeln!(out, "--- Sensitive Areas ---").unwrap();
         for area in &report.sensitive_areas {
-            writeln!(
-                out,
-                "  [{}] {}",
-                area.provenance, area.description
-            )
-            .unwrap();
+            writeln!(out, "  [{}] {}", area.provenance, area.description).unwrap();
             if verbose || area.contracts_involved.len() <= 5 {
                 for c in &area.contracts_involved {
                     writeln!(out, "    - {c}").unwrap();
@@ -1147,12 +1188,7 @@ pub fn render_human(report: &ContractUsageMapReport, verbose: bool) -> String {
             }
 
             if !contract.validation_sites.is_empty() {
-                writeln!(
-                    out,
-                    "    Validation ({}):",
-                    contract.validation_sites.len()
-                )
-                .unwrap();
+                writeln!(out, "    Validation ({}):", contract.validation_sites.len()).unwrap();
                 for site in &contract.validation_sites {
                     writeln!(
                         out,
@@ -1189,12 +1225,7 @@ pub fn render_human(report: &ContractUsageMapReport, verbose: bool) -> String {
                     + c.propagation_sites.len()
                     + c.consumption_sites.len()
                     + c.validation_sites.len();
-                writeln!(
-                    out,
-                    "    {} [{}] — {} usage sites",
-                    c.name, c.family, total
-                )
-                .unwrap();
+                writeln!(out, "    {} [{}] — {} usage sites", c.name, c.family, total).unwrap();
             }
         }
     }
@@ -1248,7 +1279,10 @@ mod tests {
                             tag: None,
                             embedded: false,
                             visibility: Visibility::Exported,
-                            location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 10 },
+                            location: Location {
+                                file: "internal/shared/envelope/envelope.go".to_string(),
+                                line: 10,
+                            },
                         },
                         StructField {
                             name: "Payload".to_string(),
@@ -1256,25 +1290,46 @@ mod tests {
                             tag: None,
                             embedded: false,
                             visibility: Visibility::Exported,
-                            location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 11 },
+                            location: Location {
+                                file: "internal/shared/envelope/envelope.go".to_string(),
+                                line: 11,
+                            },
                         },
                     ],
                 },
                 visibility: Visibility::Exported,
-                location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 5 },
+                location: Location {
+                    file: "internal/shared/envelope/envelope.go".to_string(),
+                    line: 5,
+                },
             }],
             functions: vec![
                 GoFunc {
                     name: "New".to_string(),
                     receiver: None,
                     params: vec![
-                        Param { name: "kind".to_string(), type_expr: "Kind".to_string() },
-                        Param { name: "typ".to_string(), type_expr: "string".to_string() },
-                        Param { name: "payload".to_string(), type_expr: "T".to_string() },
+                        Param {
+                            name: "kind".to_string(),
+                            type_expr: "Kind".to_string(),
+                        },
+                        Param {
+                            name: "typ".to_string(),
+                            type_expr: "string".to_string(),
+                        },
+                        Param {
+                            name: "payload".to_string(),
+                            type_expr: "T".to_string(),
+                        },
                     ],
-                    returns: vec![Param { name: String::new(), type_expr: "Envelope[T]".to_string() }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "Envelope[T]".to_string(),
+                    }],
                     visibility: Visibility::Exported,
-                    location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 20 },
+                    location: Location {
+                        file: "internal/shared/envelope/envelope.go".to_string(),
+                        line: 20,
+                    },
                 },
                 GoFunc {
                     name: "WithCorrelationID".to_string(),
@@ -1283,10 +1338,19 @@ mod tests {
                         type_name: "Envelope[T]".to_string(),
                         pointer: false,
                     }),
-                    params: vec![Param { name: "id".to_string(), type_expr: "string".to_string() }],
-                    returns: vec![Param { name: String::new(), type_expr: "Envelope[T]".to_string() }],
+                    params: vec![Param {
+                        name: "id".to_string(),
+                        type_expr: "string".to_string(),
+                    }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "Envelope[T]".to_string(),
+                    }],
                     visibility: Visibility::Exported,
-                    location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 30 },
+                    location: Location {
+                        file: "internal/shared/envelope/envelope.go".to_string(),
+                        line: 30,
+                    },
                 },
                 GoFunc {
                     name: "Validate".to_string(),
@@ -1296,9 +1360,15 @@ mod tests {
                         pointer: false,
                     }),
                     params: Vec::new(),
-                    returns: vec![Param { name: String::new(), type_expr: "*Problem".to_string() }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "*Problem".to_string(),
+                    }],
                     visibility: Visibility::Exported,
-                    location: Location { file: "internal/shared/envelope/envelope.go".to_string(), line: 40 },
+                    location: Location {
+                        file: "internal/shared/envelope/envelope.go".to_string(),
+                        line: 40,
+                    },
                 },
             ],
             constants: Vec::new(),
@@ -1319,23 +1389,47 @@ mod tests {
                     name: "encodeControlRequest".to_string(),
                     receiver: None,
                     params: vec![
-                        Param { name: "spec".to_string(), type_expr: "ControlSpec".to_string() },
-                        Param { name: "payload".to_string(), type_expr: "T".to_string() },
+                        Param {
+                            name: "spec".to_string(),
+                            type_expr: "ControlSpec".to_string(),
+                        },
+                        Param {
+                            name: "payload".to_string(),
+                            type_expr: "T".to_string(),
+                        },
                     ],
-                    returns: vec![Param { name: String::new(), type_expr: "Envelope[T]".to_string() }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "Envelope[T]".to_string(),
+                    }],
                     visibility: Visibility::Unexported,
-                    location: Location { file: "internal/adapters/nats/codec.go".to_string(), line: 13 },
+                    location: Location {
+                        file: "internal/adapters/nats/codec.go".to_string(),
+                        line: 13,
+                    },
                 },
                 GoFunc {
                     name: "decodeControlRequest".to_string(),
                     receiver: None,
                     params: vec![
-                        Param { name: "spec".to_string(), type_expr: "ControlSpec".to_string() },
-                        Param { name: "data".to_string(), type_expr: "[]byte".to_string() },
+                        Param {
+                            name: "spec".to_string(),
+                            type_expr: "ControlSpec".to_string(),
+                        },
+                        Param {
+                            name: "data".to_string(),
+                            type_expr: "[]byte".to_string(),
+                        },
                     ],
-                    returns: vec![Param { name: String::new(), type_expr: "Envelope[T]".to_string() }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "Envelope[T]".to_string(),
+                    }],
                     visibility: Visibility::Unexported,
-                    location: Location { file: "internal/adapters/nats/codec.go".to_string(), line: 32 },
+                    location: Location {
+                        file: "internal/adapters/nats/codec.go".to_string(),
+                        line: 32,
+                    },
                 },
             ],
             constants: Vec::new(),
@@ -1353,19 +1447,24 @@ mod tests {
             types: vec![GoType {
                 name: "CreateDraftCommand".to_string(),
                 kind: TypeKind::Struct {
-                    fields: vec![
-                        StructField {
-                            name: "Name".to_string(),
-                            type_expr: "string".to_string(),
-                            tag: None,
-                            embedded: false,
-                            visibility: Visibility::Exported,
-                            location: Location { file: "internal/application/configctl/contracts/commands.go".to_string(), line: 5 },
+                    fields: vec![StructField {
+                        name: "Name".to_string(),
+                        type_expr: "string".to_string(),
+                        tag: None,
+                        embedded: false,
+                        visibility: Visibility::Exported,
+                        location: Location {
+                            file: "internal/application/configctl/contracts/commands.go"
+                                .to_string(),
+                            line: 5,
                         },
-                    ],
+                    }],
                 },
                 visibility: Visibility::Exported,
-                location: Location { file: "internal/application/configctl/contracts/commands.go".to_string(), line: 3 },
+                location: Location {
+                    file: "internal/application/configctl/contracts/commands.go".to_string(),
+                    line: 3,
+                },
             }],
             functions: vec![
                 GoFunc {
@@ -1376,9 +1475,15 @@ mod tests {
                         pointer: false,
                     }),
                     params: Vec::new(),
-                    returns: vec![Param { name: String::new(), type_expr: "*Problem".to_string() }],
+                    returns: vec![Param {
+                        name: String::new(),
+                        type_expr: "*Problem".to_string(),
+                    }],
                     visibility: Visibility::Exported,
-                    location: Location { file: "internal/application/configctl/contracts/commands.go".to_string(), line: 10 },
+                    location: Location {
+                        file: "internal/application/configctl/contracts/commands.go".to_string(),
+                        line: 10,
+                    },
                 },
                 GoFunc {
                     name: "Normalize".to_string(),
@@ -1390,7 +1495,10 @@ mod tests {
                     params: Vec::new(),
                     returns: Vec::new(),
                     visibility: Visibility::Exported,
-                    location: Location { file: "internal/application/configctl/contracts/commands.go".to_string(), line: 15 },
+                    location: Location {
+                        file: "internal/application/configctl/contracts/commands.go".to_string(),
+                        line: 15,
+                    },
                 },
             ],
             constants: Vec::new(),
@@ -1413,9 +1521,15 @@ mod tests {
                     name: "cmd".to_string(),
                     type_expr: "CreateDraftCommand".to_string(),
                 }],
-                returns: vec![Param { name: String::new(), type_expr: "CreateDraftReply".to_string() }],
+                returns: vec![Param {
+                    name: String::new(),
+                    type_expr: "CreateDraftReply".to_string(),
+                }],
                 visibility: Visibility::Unexported,
-                location: Location { file: "internal/actors/scopes/configctl/control_router.go".to_string(), line: 50 },
+                location: Location {
+                    file: "internal/actors/scopes/configctl/control_router.go".to_string(),
+                    line: 50,
+                },
             }],
             constants: Vec::new(),
             variables: Vec::new(),
@@ -1436,12 +1550,21 @@ mod tests {
         let envelope = envelope.unwrap();
 
         assert_eq!(envelope.family, "Envelope");
-        assert!(!envelope.construction_sites.is_empty(), "Should have construction sites");
-        assert!(!envelope.validation_sites.is_empty(), "Should have validation sites");
+        assert!(
+            !envelope.construction_sites.is_empty(),
+            "Should have construction sites"
+        );
+        assert!(
+            !envelope.validation_sites.is_empty(),
+            "Should have validation sites"
+        );
 
         // Envelope is used across shared and adapters layers
         assert!(
-            matches!(envelope.usage_breadth, UsageBreadth::WellDistributed | UsageBreadth::Moderate),
+            matches!(
+                envelope.usage_breadth,
+                UsageBreadth::WellDistributed | UsageBreadth::Moderate
+            ),
             "Envelope should be well-distributed or moderate, got: {}",
             envelope.usage_breadth
         );
@@ -1454,7 +1577,10 @@ mod tests {
         let index = make_index(vec![command_file(), handler_file()]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let cmd = report.contracts.iter().find(|c| c.name == "CreateDraftCommand");
+        let cmd = report
+            .contracts
+            .iter()
+            .find(|c| c.name == "CreateDraftCommand");
         assert!(cmd.is_some(), "CreateDraftCommand should be discovered");
         let cmd = cmd.unwrap();
 
@@ -1473,10 +1599,16 @@ mod tests {
         let index = make_index(vec![command_file(), handler_file()]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let cmd = report.contracts.iter().find(|c| c.name == "CreateDraftCommand").unwrap();
+        let cmd = report
+            .contracts
+            .iter()
+            .find(|c| c.name == "CreateDraftCommand")
+            .unwrap();
 
         assert!(
-            cmd.consumption_sites.iter().any(|s| s.kind.contains("handler")),
+            cmd.consumption_sites
+                .iter()
+                .any(|s| s.kind.contains("handler")),
             "Should have handler consumption site, sites: {:?}",
             cmd.consumption_sites
         );
@@ -1501,7 +1633,8 @@ mod tests {
                         embedded: false,
                         visibility: Visibility::Exported,
                         location: Location {
-                            file: "internal/application/validatorruntime/contracts/runtime.go".to_string(),
+                            file: "internal/application/validatorruntime/contracts/runtime.go"
+                                .to_string(),
                             line: 5,
                         },
                     }],
@@ -1522,12 +1655,18 @@ mod tests {
         let index = make_index(vec![isolated]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let query = report.contracts.iter().find(|c| c.name == "GetActiveRuntimeQuery");
+        let query = report
+            .contracts
+            .iter()
+            .find(|c| c.name == "GetActiveRuntimeQuery");
         assert!(query.is_some());
         let query = query.unwrap();
 
         assert!(
-            matches!(query.usage_breadth, UsageBreadth::Orphan | UsageBreadth::Limited),
+            matches!(
+                query.usage_breadth,
+                UsageBreadth::Orphan | UsageBreadth::Limited
+            ),
             "Isolated contract should be orphan or limited, got: {}",
             query.usage_breadth
         );
@@ -1560,7 +1699,11 @@ mod tests {
         let index = make_index(vec![orphan]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let event = report.contracts.iter().find(|c| c.name == "ConfigArchivedEvent").unwrap();
+        let event = report
+            .contracts
+            .iter()
+            .find(|c| c.name == "ConfigArchivedEvent")
+            .unwrap();
         assert_eq!(event.usage_breadth, UsageBreadth::Orphan);
     }
 
@@ -1599,7 +1742,10 @@ mod tests {
                 name: "CreateArchive".to_string(),
                 receiver: None,
                 params: Vec::new(),
-                returns: vec![Param { name: String::new(), type_expr: "ArchiveConfigCommand".to_string() }],
+                returns: vec![Param {
+                    name: String::new(),
+                    type_expr: "ArchiveConfigCommand".to_string(),
+                }],
                 visibility: Visibility::Unexported,
                 location: Location {
                     file: "internal/actors/scopes/configctl/handler.go".to_string(),
@@ -1615,16 +1761,19 @@ mod tests {
         let index = make_index(vec![no_validate, handler]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let unvalidated = report.sensitive_areas.iter()
+        let unvalidated = report
+            .sensitive_areas
+            .iter()
             .find(|a| a.description.contains("without observed validation"));
         assert!(
             unvalidated.is_some(),
             "Should flag unvalidated command. Areas: {:?}",
             report.sensitive_areas
         );
-        assert!(
-            unvalidated.unwrap().contracts_involved.contains(&"ArchiveConfigCommand".to_string())
-        );
+        assert!(unvalidated
+            .unwrap()
+            .contracts_involved
+            .contains(&"ArchiveConfigCommand".to_string()));
     }
 
     // ── Family summaries ─────────────────────────────────────────────
@@ -1645,7 +1794,12 @@ mod tests {
 
     #[test]
     fn statistics_are_consistent() {
-        let index = make_index(vec![envelope_file(), command_file(), handler_file(), codec_file()]);
+        let index = make_index(vec![
+            envelope_file(),
+            command_file(),
+            handler_file(),
+            codec_file(),
+        ]);
         let report = analyze_with_index(&index, Path::new("."));
 
         let s = &report.statistics;
@@ -1751,9 +1905,16 @@ mod tests {
         let index = make_index(vec![envelope_file()]);
         let report = analyze_with_index(&index, Path::new("."));
 
-        let envelope = report.contracts.iter().find(|c| c.name == "Envelope").unwrap();
+        let envelope = report
+            .contracts
+            .iter()
+            .find(|c| c.name == "Envelope")
+            .unwrap();
         assert!(
-            envelope.construction_sites.iter().any(|s| s.kind.contains("builder")),
+            envelope
+                .construction_sites
+                .iter()
+                .any(|s| s.kind.contains("builder")),
             "WithCorrelationID should be classified as builder. Sites: {:?}",
             envelope.construction_sites
         );
@@ -1763,7 +1924,10 @@ mod tests {
 
     #[test]
     fn breadth_display() {
-        assert_eq!(UsageBreadth::WellDistributed.to_string(), "well-distributed");
+        assert_eq!(
+            UsageBreadth::WellDistributed.to_string(),
+            "well-distributed"
+        );
         assert_eq!(UsageBreadth::Moderate.to_string(), "moderate");
         assert_eq!(UsageBreadth::Limited.to_string(), "limited");
         assert_eq!(UsageBreadth::Orphan.to_string(), "orphan");
@@ -1831,7 +1995,9 @@ mod tests {
         let report = analyze_with_index(&index, Path::new("."));
 
         // BindingRecord should appear once (first seen wins)
-        let bindings: Vec<&ContractEntry> = report.contracts.iter()
+        let bindings: Vec<&ContractEntry> = report
+            .contracts
+            .iter()
             .filter(|c| c.name == "BindingRecord")
             .collect();
         assert_eq!(bindings.len(), 1, "Duplicate names should be deduplicated");

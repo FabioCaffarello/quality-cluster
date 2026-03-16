@@ -7,6 +7,7 @@ use std::path::Path;
 pub struct ComposeService {
     #[allow(dead_code)]
     pub name: String,
+    pub image: Option<String>,
     pub depends_on: Vec<String>,
     pub profiles: Vec<String>,
     pub ports: Vec<String>,
@@ -51,7 +52,11 @@ pub fn parse_compose(path: &Path) -> Result<ComposeTopology> {
             while i < lines.len() {
                 let next = lines[i].trim();
                 let ni = lines[i].len() - lines[i].trim_start().len();
-                if !next.is_empty() && !next.starts_with('#') && ni <= anchor_indent && !next.starts_with(' ') {
+                if !next.is_empty()
+                    && !next.starts_with('#')
+                    && ni <= anchor_indent
+                    && !next.starts_with(' ')
+                {
                     break;
                 }
                 i += 1;
@@ -140,6 +145,19 @@ pub fn parse_compose(path: &Path) -> Result<ComposeTopology> {
                                 let svc = topo.services.get_mut(svc_name.as_str()).unwrap();
                                 parse_inline_list(key, rest, svc);
                                 current_section = None;
+                            }
+                        }
+
+                        i += 1;
+                        continue;
+                    }
+                    "image" => {
+                        if let Some(rest) = trimmed.split_once(':').map(|(_, value)| value.trim()) {
+                            let svc_name = current_service.as_ref().unwrap();
+                            let svc = topo.services.get_mut(svc_name.as_str()).unwrap();
+                            let image = rest.trim_matches('"').trim_matches('\'');
+                            if !image.is_empty() {
+                                svc.image = Some(image.to_string());
                             }
                         }
 
@@ -274,6 +292,10 @@ mod tests {
         assert!(consumer.depends_on.contains(&"kafka".to_string()));
         assert!(consumer.profiles.contains(&"dataplane".to_string()));
         assert!(consumer.profiles.contains(&"all".to_string()));
+        assert_eq!(
+            consumer.image.as_deref(),
+            Some("quality-service/consumer:dev")
+        );
     }
 
     #[test]
@@ -456,6 +478,29 @@ services:
         let topo = parse_compose(&path).unwrap();
         let kafka = &topo.services["kafka"];
         assert_eq!(kafka.internal_port.as_deref(), Some("9092"));
+    }
+
+    #[test]
+    fn parse_compose_extracts_image_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_compose(
+            dir.path(),
+            r#"services:
+  kafka:
+    image: bitnamilegacy/kafka:3.9.0
+  nats:
+    image: "nats:2.10.18-alpine"
+"#,
+        );
+        let topo = parse_compose(&path).unwrap();
+        assert_eq!(
+            topo.services["kafka"].image.as_deref(),
+            Some("bitnamilegacy/kafka:3.9.0")
+        );
+        assert_eq!(
+            topo.services["nats"].image.as_deref(),
+            Some("nats:2.10.18-alpine")
+        );
     }
 
     #[test]

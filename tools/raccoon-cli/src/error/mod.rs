@@ -48,7 +48,8 @@ mod tests {
 
     #[test]
     fn display_json_error() {
-        let json_err: serde_json::Error = serde_json::from_str::<serde_json::Value>("{bad}").unwrap_err();
+        let json_err: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>("{bad}").unwrap_err();
         let cli_err = CliError::Json(json_err);
         let msg = cli_err.to_string();
         assert!(msg.starts_with("json error:"), "got: {msg}");

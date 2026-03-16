@@ -58,9 +58,10 @@ pub fn check_with_lsp(
         .lsp_references
         .into_iter()
         .filter(|lr| {
-            !report.affected_references.iter().any(|r| {
-                r.file == lr.location.file && r.line == lr.location.line
-            })
+            !report
+                .affected_references
+                .iter()
+                .any(|r| r.file == lr.location.file && r.line == lr.location.line)
         })
         .collect();
 
@@ -88,10 +89,8 @@ pub fn check_with_lsp(
         &report.contract_surface,
     );
     report.recommended_gate_profile = recommend_gate_profile(&report.risk_assessment);
-    report.suggested_smoke_scenarios = suggest_smoke_scenarios(
-        &report.sensitive_areas,
-        &report.contract_surface,
-    );
+    report.suggested_smoke_scenarios =
+        suggest_smoke_scenarios(&report.sensitive_areas, &report.contract_surface);
 
     // Update scope note.
     match &report.lsp_enrichment.as_ref().unwrap().status {
@@ -105,7 +104,8 @@ pub fn check_with_lsp(
         }
         LspStatus::NoResults => {
             report.scope_note = "Analysis is based on structural AST indexing. gopls was \
-                available but returned no additional references.".to_string();
+                available but returned no additional references."
+                .to_string();
         }
         LspStatus::Unavailable { reason } => {
             report.scope_note = format!(
@@ -550,10 +550,16 @@ fn detect_sensitive_areas(
 
     for file in &all_files {
         if file.contains("domain/") {
-            area_files.entry("domain").or_default().insert(file.to_string());
+            area_files
+                .entry("domain")
+                .or_default()
+                .insert(file.to_string());
         }
         if file.contains("ports") {
-            area_files.entry("ports").or_default().insert(file.to_string());
+            area_files
+                .entry("ports")
+                .or_default()
+                .insert(file.to_string());
         }
         if file.contains("contracts") || file.contains("events") {
             area_files
@@ -562,10 +568,16 @@ fn detect_sensitive_areas(
                 .insert(file.to_string());
         }
         if file.contains("adapters/") {
-            area_files.entry("adapters").or_default().insert(file.to_string());
+            area_files
+                .entry("adapters")
+                .or_default()
+                .insert(file.to_string());
         }
         if file.contains("actors/") {
-            area_files.entry("actors").or_default().insert(file.to_string());
+            area_files
+                .entry("actors")
+                .or_default()
+                .insert(file.to_string());
         }
         if file.contains("interfaces/http") {
             area_files
@@ -573,9 +585,11 @@ fn detect_sensitive_areas(
                 .or_default()
                 .insert(file.to_string());
         }
-        if file.contains("application/") && !file.contains("contracts") && !file.contains("ports")
-        {
-            area_files.entry("application").or_default().insert(file.to_string());
+        if file.contains("application/") && !file.contains("contracts") && !file.contains("ports") {
+            area_files
+                .entry("application")
+                .or_default()
+                .insert(file.to_string());
         }
     }
 
@@ -666,8 +680,7 @@ fn find_contract_surface(
                                 kind: "interface_method".into(),
                                 file: m.location.file.clone(),
                                 line: m.location.line,
-                                why: "symbol appears in contract interface method signature"
-                                    .into(),
+                                why: "symbol appears in contract interface method signature".into(),
                                 basis: "observed".into(),
                             });
                         }
@@ -709,7 +722,12 @@ fn find_conflicts(index: &ProjectIndex, new_name: &str) -> Vec<Conflict> {
             if f.name == new_name {
                 conflicts.push(Conflict {
                     name: f.name.clone(),
-                    kind: if f.receiver.is_some() { "method" } else { "func" }.into(),
+                    kind: if f.receiver.is_some() {
+                        "method"
+                    } else {
+                        "func"
+                    }
+                    .into(),
                     package: pkg.clone(),
                     file: f.location.file.clone(),
                     line: f.location.line,
@@ -814,7 +832,8 @@ fn assess_risk(
         if has_message {
             reasons.push(RiskReason {
                 factor: "message_type".into(),
-                detail: "symbol is a message type — renaming may break serialization compatibility".into(),
+                detail: "symbol is a message type — renaming may break serialization compatibility"
+                    .into(),
                 basis: "observed".into(),
             });
             max_level = max_level.max(RiskLevel::Critical);
@@ -937,7 +956,10 @@ fn build_recommended_checks(
         cmds.insert("raccoon-cli arch-guard".into());
     }
 
-    if area_names.contains("ports") || area_names.contains("contracts/events") || !contracts.is_empty() {
+    if area_names.contains("ports")
+        || area_names.contains("contracts/events")
+        || !contracts.is_empty()
+    {
         cmds.insert("raccoon-cli contract-audit".into());
     }
 
@@ -1015,7 +1037,11 @@ pub fn render_human(report: &RenameSafetyReport, verbose: bool) -> String {
             .unwrap();
             writeln!(out, "Possible reasons:").unwrap();
             writeln!(out, "  - The name is misspelled").unwrap();
-            writeln!(out, "  - It is defined inside a function body (not indexed)").unwrap();
+            writeln!(
+                out,
+                "  - It is defined inside a function body (not indexed)"
+            )
+            .unwrap();
             writeln!(out, "  - It is a field name or local variable").unwrap();
             writeln!(out, "  - It exists in vendor/ or generated code (excluded)").unwrap();
             writeln!(out).unwrap();
@@ -1046,7 +1072,12 @@ pub fn render_human(report: &RenameSafetyReport, verbose: bool) -> String {
     writeln!(out).unwrap();
 
     // Definitions
-    writeln!(out, "Definitions ({}): [observed]", report.definitions.len()).unwrap();
+    writeln!(
+        out,
+        "Definitions ({}): [observed]",
+        report.definitions.len()
+    )
+    .unwrap();
     for def in &report.definitions {
         writeln!(
             out,
@@ -1074,11 +1105,7 @@ pub fn render_human(report: &RenameSafetyReport, verbose: bool) -> String {
     if report.affected_references.is_empty() {
         writeln!(out, "Affected references: none found [observed]").unwrap();
         if report.lsp_enrichment.is_none() {
-            writeln!(
-                out,
-                "  (use --lsp to find call sites in function bodies)"
-            )
-            .unwrap();
+            writeln!(out, "  (use --lsp to find call sites in function bodies)").unwrap();
         }
     } else {
         writeln!(
@@ -1093,7 +1120,12 @@ pub fn render_human(report: &RenameSafetyReport, verbose: bool) -> String {
             20
         };
         for r in report.affected_references.iter().take(limit) {
-            writeln!(out, "  {} in {} at {}:{}", r.kind, r.context, r.file, r.line).unwrap();
+            writeln!(
+                out,
+                "  {} in {} at {}:{}",
+                r.kind, r.context, r.file, r.line
+            )
+            .unwrap();
         }
         if !verbose && report.affected_references.len() > 20 {
             writeln!(
@@ -1287,23 +1319,17 @@ fn visibility_label(vis: Visibility) -> String {
 
 fn type_details(kind: &TypeKind) -> Vec<String> {
     match kind {
-        TypeKind::Struct { fields } => {
-            fields
-                .iter()
-                .map(|f| {
-                    let tag_info = f
-                        .tag
-                        .as_ref()
-                        .map(|t| format!(" {t}"))
-                        .unwrap_or_default();
-                    if f.embedded {
-                        format!("embed: {}{}", f.type_expr, tag_info)
-                    } else {
-                        format!("field: {} {}{}", f.name, f.type_expr, tag_info)
-                    }
-                })
-                .collect()
-        }
+        TypeKind::Struct { fields } => fields
+            .iter()
+            .map(|f| {
+                let tag_info = f.tag.as_ref().map(|t| format!(" {t}")).unwrap_or_default();
+                if f.embedded {
+                    format!("embed: {}{}", f.type_expr, tag_info)
+                } else {
+                    format!("field: {} {}{}", f.name, f.type_expr, tag_info)
+                }
+            })
+            .collect(),
         TypeKind::Interface { methods, embeds } => {
             let mut details: Vec<String> = embeds
                 .iter()
@@ -1979,7 +2005,10 @@ func HandleGetConfig(id string) string {
         assert_eq!(report.status, ResolutionStatus::Resolved);
         assert!(!report.definitions.is_empty());
 
-        let lsp = report.lsp_enrichment.as_ref().expect("should have lsp_enrichment");
+        let lsp = report
+            .lsp_enrichment
+            .as_ref()
+            .expect("should have lsp_enrichment");
         assert!(matches!(lsp.status, LspStatus::Unavailable { .. }));
         assert!(lsp.additional_references.is_empty());
 

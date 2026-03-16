@@ -6,6 +6,7 @@ import (
 	adapterkafka "internal/adapters/kafka"
 	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
+	configdomain "internal/domain/configctl"
 	"internal/shared/problem"
 )
 
@@ -15,6 +16,10 @@ type activeIngestionBootstrapLoadedMessage struct {
 
 type activeIngestionBootstrapFailedMessage struct {
 	Prob *problem.Problem
+}
+
+type refreshActiveIngestionBootstrapMessage struct {
+	Event configdomain.IngestionRuntimeChangedEvent
 }
 
 type consumerRuntimeReadyMessage struct {

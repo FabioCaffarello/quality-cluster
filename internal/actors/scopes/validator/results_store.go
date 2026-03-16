@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	actorcommon "internal/actors/common"
 	validatorresultscontracts "internal/application/validatorresults/contracts"
 	"internal/shared/problem"
 
@@ -60,6 +61,9 @@ func (a *ValidationResultsStoreActor) Receive(c *actor.Context) {
 			},
 		})
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validator results store: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

@@ -152,19 +152,33 @@ const SENSITIVE_AREAS: &[SensitiveArea] = &[
     SensitiveArea {
         name: "validator-logic",
         description: "validator scope — validation rules and results",
-        patterns: &["internal/actors/scopes/validator/", "internal/application/validatorresults/"],
-        required_dimensions: &["contracts", "runtime-bindings", "scenario:happy-path", "scenario:invalid-payload"],
+        patterns: &[
+            "internal/actors/scopes/validator/",
+            "internal/application/validatorresults/",
+        ],
+        required_dimensions: &[
+            "contracts",
+            "runtime-bindings",
+            "scenario:happy-path",
+            "scenario:invalid-payload",
+        ],
     },
     SensitiveArea {
         name: "consumer-pipeline",
         description: "consumer scope — kafka-to-jetstream bridging",
-        patterns: &["internal/actors/scopes/consumer/", "internal/application/dataplane/"],
+        patterns: &[
+            "internal/actors/scopes/consumer/",
+            "internal/application/dataplane/",
+        ],
         required_dimensions: &["topology", "runtime-bindings", "scenario:happy-path"],
     },
     SensitiveArea {
         name: "config-lifecycle",
         description: "configctl scope — config draft/validate/compile/activate",
-        patterns: &["internal/actors/scopes/configctl/", "internal/application/configctl/"],
+        patterns: &[
+            "internal/actors/scopes/configctl/",
+            "internal/application/configctl/",
+        ],
         required_dimensions: &["contracts", "scenario:config-lifecycle"],
     },
 ];
@@ -187,13 +201,23 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
         ),
     ));
     for dim in DIMENSIONS {
-        let infra_tag = if dim.requires_infra { " [requires infra]" } else { "" };
+        let infra_tag = if dim.requires_infra {
+            " [requires infra]"
+        } else {
+            ""
+        };
         inventory_findings.push(Finding::info(
             "dimension-inventory",
-            format!("  {}: {} — `{}`{}", dim.name, dim.description, dim.command, infra_tag),
+            format!(
+                "  {}: {} — `{}`{}",
+                dim.name, dim.description, dim.command, infra_tag
+            ),
         ));
     }
-    report.add(CheckResult::from_findings("dimension-inventory", inventory_findings));
+    report.add(CheckResult::from_findings(
+        "dimension-inventory",
+        inventory_findings,
+    ));
 
     // Check 2: Sensitive area coverage
     let mut coverage_ok = true;
@@ -204,15 +228,23 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
         if !area_exists {
             area_findings.push(Finding::info(
                 &format!("coverage:{}", area.name),
-                format!("{} — area not found in project (patterns: {})", area.description, area.patterns.join(", ")),
+                format!(
+                    "{} — area not found in project (patterns: {})",
+                    area.description,
+                    area.patterns.join(", ")
+                ),
             ));
-            report.add(CheckResult::from_findings(&format!("coverage:{}", area.name), area_findings));
+            report.add(CheckResult::from_findings(
+                &format!("coverage:{}", area.name),
+                area_findings,
+            ));
             continue;
         }
 
         let covered: Vec<&str> = area.required_dimensions.iter().copied().collect();
         let dim_names: Vec<&str> = DIMENSIONS.iter().map(|d| d.name).collect();
-        let missing: Vec<&str> = covered.iter()
+        let missing: Vec<&str> = covered
+            .iter()
             .filter(|d| !dim_names.contains(d))
             .copied()
             .collect();
@@ -229,16 +261,18 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
             ));
         } else {
             coverage_ok = false;
-            area_findings.push(Finding::error(
-                &format!("coverage:{}", area.name),
-                format!(
-                    "{} — missing coverage dimensions: {}",
-                    area.description,
-                    missing.join(", ")
-                ),
-            )
-            .with_why("sensitive areas without full quality coverage allow unsafe changes")
-            .with_help("implement the missing dimension or add a scenario covering this area"));
+            area_findings.push(
+                Finding::error(
+                    &format!("coverage:{}", area.name),
+                    format!(
+                        "{} — missing coverage dimensions: {}",
+                        area.description,
+                        missing.join(", ")
+                    ),
+                )
+                .with_why("sensitive areas without full quality coverage allow unsafe changes")
+                .with_help("implement the missing dimension or add a scenario covering this area"),
+            );
         }
 
         // Show which commands validate this area
@@ -251,19 +285,21 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
             }
         }
 
-        report.add(CheckResult::from_findings(&format!("coverage:{}", area.name), area_findings));
+        report.add(CheckResult::from_findings(
+            &format!("coverage:{}", area.name),
+            area_findings,
+        ));
     }
 
     // Check 3: Go test coverage scan
     let go_test_areas = scan_go_tests(project_root);
     let mut go_findings = Vec::new();
     if go_test_areas.is_empty() {
-        go_findings.push(Finding::warning(
-            "go-test-coverage",
-            "no Go test files found",
-        )
-        .with_why("Go unit tests are the first line of defense for business logic")
-        .with_help("add _test.go files alongside your Go source"));
+        go_findings.push(
+            Finding::warning("go-test-coverage", "no Go test files found")
+                .with_why("Go unit tests are the first line of defense for business logic")
+                .with_help("add _test.go files alongside your Go source"),
+        );
     } else {
         go_findings.push(Finding::info(
             "go-test-coverage",
@@ -280,7 +316,8 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
 
     // Check 4: Coverage summary
     let total_areas = SENSITIVE_AREAS.len();
-    let existing_areas = SENSITIVE_AREAS.iter()
+    let existing_areas = SENSITIVE_AREAS
+        .iter()
         .filter(|a| a.patterns.iter().any(|p| project_root.join(p).exists()))
         .count();
     let mut summary_findings = Vec::new();
@@ -288,7 +325,9 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
         "coverage-summary",
         format!(
             "{}/{} sensitive areas present in project, {} quality dimensions available",
-            existing_areas, total_areas, DIMENSIONS.len()
+            existing_areas,
+            total_areas,
+            DIMENSIONS.len()
         ),
     ));
     if coverage_ok {
@@ -297,7 +336,10 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
             "all present sensitive areas have full dimension coverage",
         ));
     }
-    report.add(CheckResult::from_findings("coverage-summary", summary_findings));
+    report.add(CheckResult::from_findings(
+        "coverage-summary",
+        summary_findings,
+    ));
 
     Ok(report)
 }
@@ -340,9 +382,14 @@ pub fn relevant_checks_for_path(path: &str) -> Vec<(&'static str, Vec<&'static s
     let mut result = Vec::new();
     for area in SENSITIVE_AREAS {
         if area.patterns.iter().any(|p| path.contains(p)) {
-            let commands: Vec<&str> = area.required_dimensions.iter()
+            let commands: Vec<&str> = area
+                .required_dimensions
+                .iter()
                 .filter_map(|dim_name| {
-                    DIMENSIONS.iter().find(|d| d.name == *dim_name).map(|d| d.command)
+                    DIMENSIONS
+                        .iter()
+                        .find(|d| d.name == *dim_name)
+                        .map(|d| d.command)
                 })
                 .collect();
             result.push((area.name, commands));
@@ -486,16 +533,23 @@ mod tests {
 
     #[test]
     fn tdd_guidance_for_validator_changes() {
-        let guidance = tdd_guidance(&["internal/actors/scopes/validator/supervisor.go".to_string()]);
+        let guidance =
+            tdd_guidance(&["internal/actors/scopes/validator/supervisor.go".to_string()]);
         assert!(guidance.affected_areas.contains(&"validator-logic"));
-        assert!(guidance.needs_infra, "validator changes should recommend runtime scenarios");
+        assert!(
+            guidance.needs_infra,
+            "validator changes should recommend runtime scenarios"
+        );
     }
 
     #[test]
     fn tdd_guidance_includes_make_verify() {
         let guidance = tdd_guidance(&["internal/domain/configctl/config.go".to_string()]);
         assert!(
-            guidance.after_commands.iter().any(|c| c.contains("verify") || c.contains("quality-gate")),
+            guidance
+                .after_commands
+                .iter()
+                .any(|c| c.contains("verify") || c.contains("quality-gate")),
             "should always include canonical verification"
         );
     }
@@ -538,22 +592,38 @@ mod tests {
     #[test]
     fn all_dimensions_have_commands() {
         for dim in DIMENSIONS {
-            assert!(!dim.command.is_empty(), "dimension '{}' has no command", dim.name);
-            assert!(dim.command.contains("raccoon-cli"), "dimension '{}' command should reference raccoon-cli", dim.name);
+            assert!(
+                !dim.command.is_empty(),
+                "dimension '{}' has no command",
+                dim.name
+            );
+            assert!(
+                dim.command.contains("raccoon-cli"),
+                "dimension '{}' command should reference raccoon-cli",
+                dim.name
+            );
         }
     }
 
     #[test]
     fn all_sensitive_areas_have_patterns() {
         for area in SENSITIVE_AREAS {
-            assert!(!area.patterns.is_empty(), "area '{}' has no patterns", area.name);
+            assert!(
+                !area.patterns.is_empty(),
+                "area '{}' has no patterns",
+                area.name
+            );
         }
     }
 
     #[test]
     fn all_sensitive_areas_have_required_dimensions() {
         for area in SENSITIVE_AREAS {
-            assert!(!area.required_dimensions.is_empty(), "area '{}' has no required dimensions", area.name);
+            assert!(
+                !area.required_dimensions.is_empty(),
+                "area '{}' has no required dimensions",
+                area.name
+            );
         }
     }
 
@@ -583,18 +653,23 @@ mod tests {
 
     #[test]
     fn tdd_guidance_for_config_lifecycle_changes() {
-        let guidance = tdd_guidance(&["internal/application/configctl/create_draft.go".to_string()]);
+        let guidance =
+            tdd_guidance(&["internal/application/configctl/create_draft.go".to_string()]);
         assert!(guidance.affected_areas.contains(&"config-lifecycle"));
         // Should recommend scenario:config-lifecycle
         assert!(
-            guidance.before_commands.iter().any(|c| c.contains("config-lifecycle")),
+            guidance
+                .before_commands
+                .iter()
+                .any(|c| c.contains("config-lifecycle")),
             "config lifecycle changes should recommend config-lifecycle scenario"
         );
     }
 
     #[test]
     fn tdd_guidance_for_consumer_pipeline() {
-        let guidance = tdd_guidance(&["internal/actors/scopes/consumer/topic_router.go".to_string()]);
+        let guidance =
+            tdd_guidance(&["internal/actors/scopes/consumer/topic_router.go".to_string()]);
         assert!(guidance.affected_areas.contains(&"consumer-pipeline"));
         assert!(guidance.needs_infra);
     }

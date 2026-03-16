@@ -215,7 +215,12 @@ fn extract_types(lines: &[&str], file: &str) -> Vec<GoType> {
 
 /// Try to parse a type declaration starting at `lines[*i]`.
 /// Advances `*i` past the declaration on success.
-fn try_parse_type_decl(lines: &[&str], i: &mut usize, file: &str, in_block: bool) -> Option<GoType> {
+fn try_parse_type_decl(
+    lines: &[&str],
+    i: &mut usize,
+    file: &str,
+    in_block: bool,
+) -> Option<GoType> {
     let trimmed = lines[*i].trim();
     let line_num = *i + 1;
 
@@ -767,7 +772,12 @@ fn extract_constants(lines: &[&str], file: &str) -> Vec<GoConst> {
     constants
 }
 
-fn try_parse_const(line: &str, file: &str, line_num: usize, inherited_type: &Option<String>) -> Option<GoConst> {
+fn try_parse_const(
+    line: &str,
+    file: &str,
+    line_num: usize,
+    inherited_type: &Option<String>,
+) -> Option<GoConst> {
     let trimmed = line.trim();
     if trimmed.is_empty() || trimmed.starts_with("//") {
         return None;
@@ -1001,7 +1011,10 @@ import (
         let file = parse_file("main.go", src);
         assert_eq!(file.imports.len(), 1);
         assert_eq!(file.imports[0].alias.as_deref(), Some("configdomain"));
-        assert_eq!(file.imports[0].path, "quality-service/internal/domain/configctl");
+        assert_eq!(
+            file.imports[0].path,
+            "quality-service/internal/domain/configctl"
+        );
     }
 
     #[test]
@@ -1253,7 +1266,10 @@ type DomainEvent interface {
         let file = parse_file("main.go", src);
         assert_eq!(file.constants[0].name, "EventActivated");
         assert_eq!(file.constants[0].type_hint.as_deref(), Some("events.Name"));
-        assert_eq!(file.constants[0].value.as_deref(), Some("\"config.activated\""));
+        assert_eq!(
+            file.constants[0].value.as_deref(),
+            Some("\"config.activated\"")
+        );
     }
 
     #[test]
@@ -1269,7 +1285,10 @@ const (
         let file = parse_file("main.go", src);
         assert_eq!(file.constants.len(), 3);
         assert_eq!(file.constants[0].name, "LifecycleDraft");
-        assert_eq!(file.constants[0].type_hint.as_deref(), Some("VersionLifecycle"));
+        assert_eq!(
+            file.constants[0].type_hint.as_deref(),
+            Some("VersionLifecycle")
+        );
         assert_eq!(file.constants[2].name, "LifecycleCompiled");
     }
 
@@ -1307,7 +1326,10 @@ const (
         let src = "package main\n\nvar defaultTimeout time.Duration = 30 * time.Second\n";
         let file = parse_file("main.go", src);
         assert_eq!(file.variables[0].name, "defaultTimeout");
-        assert_eq!(file.variables[0].type_hint.as_deref(), Some("time.Duration"));
+        assert_eq!(
+            file.variables[0].type_hint.as_deref(),
+            Some("time.Duration")
+        );
     }
 
     #[test]
@@ -1557,8 +1579,14 @@ type ConfigctlGateway interface {
 
     #[test]
     fn classify_external_imports() {
-        assert_eq!(classify_import("github.com/nats-io/nats.go"), ImportKind::External);
-        assert_eq!(classify_import("github.com/anthdm/hollywood"), ImportKind::External);
+        assert_eq!(
+            classify_import("github.com/nats-io/nats.go"),
+            ImportKind::External
+        );
+        assert_eq!(
+            classify_import("github.com/anthdm/hollywood"),
+            ImportKind::External
+        );
     }
 
     #[test]

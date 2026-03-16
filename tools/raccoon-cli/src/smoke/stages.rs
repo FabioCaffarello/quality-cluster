@@ -1,20 +1,21 @@
-use crate::models::{CheckResult, Finding};
 use super::api::ApiClient;
 use super::compose;
 use super::SmokeConfig;
+use crate::models::{CheckResult, Finding};
+use serde_json::Value;
 use std::thread;
 use std::time::{Duration, Instant};
 
 /// Synthetic config content for the smoke test.
-pub fn smoke_config_content() -> serde_json::Value {
+pub fn smoke_config_content(config: &SmokeConfig) -> serde_json::Value {
     serde_json::json!({
         "metadata": {
             "name": "Smoke Test",
-            "description": "raccoon-cli runtime smoke test config"
+            "description": format!("raccoon-cli runtime smoke test config ({})", config.run_id)
         },
         "bindings": [
             {
-                "name": "smoke_events",
+                "name": config.binding_name,
                 "topic": "smoke.events.created"
             }
         ],
@@ -42,15 +43,20 @@ pub fn smoke_config_content() -> serde_json::Value {
 
 /// Stage 1: Bootstrap — verify compose services are running.
 pub fn bootstrap(config: &SmokeConfig) -> CheckResult {
+    bootstrap_required(config, compose::REQUIRED_SERVICES, "make up-dataplane")
+}
+
+pub fn bootstrap_required(
+    config: &SmokeConfig,
+    required_services: &[&str],
+    help_command: &str,
+) -> CheckResult {
     if !config.compose_file.exists() {
         return CheckResult::from_findings(
             "bootstrap",
             vec![Finding::error(
                 "bootstrap",
-                format!(
-                    "compose file not found: {}",
-                    config.compose_file.display()
-                ),
+                format!("compose file not found: {}", config.compose_file.display()),
             )],
         );
     }
@@ -58,19 +64,19 @@ pub fn bootstrap(config: &SmokeConfig) -> CheckResult {
     let running = match compose::running_services(&config.compose_file) {
         Ok(r) => r,
         Err(e) => {
-            return CheckResult::from_findings(
-                "bootstrap",
-                vec![Finding::error("bootstrap", e)],
-            );
+            return CheckResult::from_findings("bootstrap", vec![Finding::error("bootstrap", e)]);
         }
     };
 
-    let missing = compose::missing_services(&running);
+    let missing = compose::missing_required_services(&running, required_services);
     if missing.is_empty() {
         let mut result = CheckResult::pass("bootstrap");
         result.findings.push(Finding::info(
             "bootstrap",
-            format!("{} services running", running.len()),
+            format!(
+                "required services available: {}",
+                required_services.join(", ")
+            ),
         ));
         result
     } else {
@@ -79,7 +85,7 @@ pub fn bootstrap(config: &SmokeConfig) -> CheckResult {
             vec![Finding::error(
                 "bootstrap",
                 format!(
-                    "missing services: {}. Run `make up-dataplane` first.",
+                    "missing services: {}. Run `{help_command}` first.",
                     missing.join(", ")
                 ),
             )],
@@ -89,7 +95,7 @@ pub fn bootstrap(config: &SmokeConfig) -> CheckResult {
 
 /// Stage 2: Readiness — poll healthz and readyz until both return 200.
 pub fn readiness(config: &SmokeConfig) -> CheckResult {
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
     let deadline = Instant::now() + Duration::from_secs(config.readiness_timeout_secs);
     let interval = Duration::from_millis(config.poll_interval_ms);
 
@@ -114,10 +120,9 @@ pub fn readiness(config: &SmokeConfig) -> CheckResult {
         match client.readyz() {
             Ok(200) => {
                 let mut result = CheckResult::pass("readiness");
-                result.findings.push(Finding::info(
-                    "readiness",
-                    "healthz=200, readyz=200",
-                ));
+                result
+                    .findings
+                    .push(Finding::info("readiness", "healthz=200, readyz=200"));
                 return result;
             }
             Ok(code) => {
@@ -147,21 +152,28 @@ pub fn readiness(config: &SmokeConfig) -> CheckResult {
 
 /// Stage 3: Inject — create config, validate, compile, activate.
 pub fn inject(config: &SmokeConfig) -> CheckResult {
-    let client = ApiClient::new(&config.base_url);
-    let content = smoke_config_content();
+    let client = ApiClient::new(&config.base_url, &config.run_id);
+    let content = smoke_config_content(config);
 
     // Create draft
-    let draft_resp = match client.create_draft("raccoon-smoke", &content) {
+    let draft_resp = match client.create_draft(&config.config_key, &content) {
         Ok(v) => v,
         Err(e) => {
             return CheckResult::from_findings(
                 "inject",
-                vec![Finding::error("inject", format!("create draft failed: {e}"))],
+                vec![Finding::error(
+                    "inject",
+                    format!("create draft failed: {e}"),
+                )],
             );
         }
     };
 
-    let config_id = match draft_resp.get("id").and_then(|v| v.as_str()) {
+    let config_id = match draft_resp
+        .get("config")
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+    {
         Some(id) => id.to_string(),
         None => {
             return CheckResult::from_findings(
@@ -169,7 +181,7 @@ pub fn inject(config: &SmokeConfig) -> CheckResult {
                 vec![Finding::error(
                     "inject",
                     format!(
-                        "create draft response missing 'id' field: {}",
+                        "create draft response missing 'config.id' field: {}",
                         serde_json::to_string(&draft_resp).unwrap_or_default()
                     ),
                 )],
@@ -194,7 +206,7 @@ pub fn inject(config: &SmokeConfig) -> CheckResult {
     }
 
     // Activate
-    if let Err(e) = client.activate_config(&config_id) {
+    if let Err(e) = client.activate_config(&config_id, &config.scope_kind, &config.scope_key) {
         return CheckResult::from_findings(
             "inject",
             vec![Finding::error("inject", format!("activate failed: {e}"))],
@@ -204,31 +216,48 @@ pub fn inject(config: &SmokeConfig) -> CheckResult {
     let mut result = CheckResult::pass("inject");
     result.findings.push(Finding::info(
         "inject",
-        format!("config {config_id} created, validated, compiled, activated"),
+        format!(
+            "config {config_id} created, validated, compiled, activated in {}:{}",
+            config.scope_kind, config.scope_key
+        ),
     ));
     result
 }
 
 /// Stage 4: Route — verify ingestion bindings are projected.
 pub fn route(config: &SmokeConfig) -> CheckResult {
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
     let deadline = Instant::now() + Duration::from_secs(10);
     let interval = Duration::from_millis(config.poll_interval_ms);
 
     while Instant::now() < deadline {
-        match client.ingestion_bindings() {
+        match client.ingestion_bindings(&config.scope_kind, &config.scope_key) {
             Ok(resp) => {
                 let bindings = resp
                     .get("bindings")
                     .and_then(|b| b.as_array())
-                    .map(|a| a.len())
+                    .map(|entries| {
+                        entries
+                            .iter()
+                            .filter(|entry| {
+                                entry
+                                    .get("binding")
+                                    .and_then(|binding| binding.get("name"))
+                                    .and_then(|v| v.as_str())
+                                    == Some(config.binding_name.as_str())
+                            })
+                            .count()
+                    })
                     .unwrap_or(0);
 
                 if bindings > 0 {
                     let mut result = CheckResult::pass("route");
                     result.findings.push(Finding::info(
                         "route",
-                        format!("{bindings} active ingestion binding(s) found"),
+                        format!(
+                            "{bindings} active ingestion binding(s) found for {}:{}",
+                            config.scope_kind, config.scope_key
+                        ),
                     ));
                     return result;
                 }
@@ -250,12 +279,12 @@ pub fn route(config: &SmokeConfig) -> CheckResult {
 /// Stage 5: Consume — wait for validation results to appear.
 /// The emulator publishes synthetic data every ~5s, so we wait up to results_timeout_secs.
 pub fn consume(config: &SmokeConfig) -> CheckResult {
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
     let deadline = Instant::now() + Duration::from_secs(config.results_timeout_secs);
     let interval = Duration::from_millis(config.poll_interval_ms);
 
     while Instant::now() < deadline {
-        match client.validation_results(10) {
+        match client.validation_results(&config.scope_kind, &config.scope_key, 10) {
             Ok(resp) => {
                 let count = resp
                     .get("results")
@@ -279,24 +308,28 @@ pub fn consume(config: &SmokeConfig) -> CheckResult {
         thread::sleep(interval);
     }
 
-    CheckResult::from_findings(
+    let mut findings = vec![Finding::error(
         "consume",
-        vec![Finding::error(
-            "consume",
-            format!(
-                "no validation results within {}s. Data pipeline may be stuck.",
-                config.results_timeout_secs
-            ),
-        )],
-    )
+        format!(
+            "no validation results within {}s. Data pipeline may be stuck.",
+            config.results_timeout_secs
+        ),
+    )];
+    findings.extend(diagnose_pipeline_gap(&client, config));
+    findings.push(Finding::info(
+        "consume",
+        "inspect consumer/emulator logs and run `raccoon-cli trace-pack` to confirm CONFIGCTL_EVENTS refresh durables and JetStream state",
+    ));
+
+    CheckResult::from_findings("consume", findings)
 }
 
 /// Stage 6: Validate — check that results include both passed and failed entries.
 /// The emulator produces one valid and one invalid sample per binding per cycle.
 pub fn validate(config: &SmokeConfig) -> CheckResult {
-    let client = ApiClient::new(&config.base_url);
+    let client = ApiClient::new(&config.base_url, &config.run_id);
 
-    let resp = match client.validation_results(20) {
+    let resp = match client.validation_results(&config.scope_kind, &config.scope_key, 20) {
         Ok(v) => v,
         Err(e) => {
             return CheckResult::from_findings(
@@ -370,6 +403,97 @@ pub fn validate(config: &SmokeConfig) -> CheckResult {
     CheckResult::from_findings("validate", findings)
 }
 
+fn diagnose_pipeline_gap(client: &ApiClient, config: &SmokeConfig) -> Vec<Finding> {
+    let mut findings = Vec::new();
+
+    match client.ingestion_bindings(&config.scope_kind, &config.scope_key) {
+        Ok(resp) => {
+            let binding_count = matching_binding_count(&resp, &config.binding_name);
+            if binding_count > 0 {
+                findings.push(Finding::info(
+                    "consume",
+                    format!(
+                        "configctl projects {binding_count} active binding(s) for '{}' in {}:{}",
+                        config.binding_name, config.scope_kind, config.scope_key
+                    ),
+                ));
+            } else {
+                findings.push(Finding::warning(
+                    "consume",
+                    format!(
+                        "configctl projection does not show active binding '{}' in {}:{}",
+                        config.binding_name, config.scope_kind, config.scope_key
+                    ),
+                ));
+            }
+        }
+        Err(e) => findings.push(Finding::warning(
+            "consume",
+            format!("failed to inspect active ingestion bindings during diagnosis: {e}"),
+        )),
+    }
+
+    match client.validator_runtime(&config.scope_kind, &config.scope_key) {
+        Ok(resp) => match runtime_diagnostic(&resp) {
+            Some(message) => findings.push(Finding::info("consume", message)),
+            None => findings.push(Finding::warning(
+                "consume",
+                format!(
+                    "validator runtime endpoint returned no loaded runtime for {}:{}",
+                    config.scope_kind, config.scope_key
+                ),
+            )),
+        },
+        Err(e) => findings.push(Finding::warning(
+            "consume",
+            format!("failed to inspect validator runtime during diagnosis: {e}"),
+        )),
+    }
+
+    findings
+}
+
+fn matching_binding_count(resp: &Value, binding_name: &str) -> usize {
+    resp.get("bindings")
+        .and_then(|b| b.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .get("binding")
+                        .and_then(|binding| binding.get("name"))
+                        .and_then(|v| v.as_str())
+                        == Some(binding_name)
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn runtime_diagnostic(resp: &Value) -> Option<String> {
+    let runtime = resp.get("runtime")?;
+    let version_id = runtime
+        .get("config")
+        .and_then(|config| config.get("version_id"))
+        .and_then(|v| v.as_str())
+        .or_else(|| runtime.get("config_version_id").and_then(|v| v.as_str()));
+    let loaded_at = runtime.get("loaded_at").and_then(|v| v.as_str());
+
+    match (version_id, loaded_at) {
+        (Some(version_id), Some(loaded_at)) => Some(format!(
+            "validator runtime is loaded for config version {version_id} (loaded_at {loaded_at})"
+        )),
+        (Some(version_id), None) => Some(format!(
+            "validator runtime is loaded for config version {version_id}"
+        )),
+        (None, Some(loaded_at)) => Some(format!(
+            "validator runtime is present and was loaded at {loaded_at}"
+        )),
+        (None, None) => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,7 +501,8 @@ mod tests {
 
     #[test]
     fn smoke_config_content_has_required_structure() {
-        let content = smoke_config_content();
+        let config = SmokeConfig::new(std::path::Path::new("/tmp"), None);
+        let content = smoke_config_content(&config);
         assert!(content.get("metadata").is_some());
         assert!(content.get("bindings").unwrap().as_array().unwrap().len() > 0);
         assert!(content.get("fields").unwrap().as_array().unwrap().len() > 0);
@@ -389,7 +514,19 @@ mod tests {
         let config = SmokeConfig::new(std::path::Path::new("/nonexistent"), None);
         let result = bootstrap(&config);
         assert_eq!(result.status, CheckStatus::Fail);
-        assert!(result.findings[0].message.contains("compose file not found"));
+        assert!(result.findings[0]
+            .message
+            .contains("compose file not found"));
+    }
+
+    #[test]
+    fn bootstrap_required_fails_when_compose_file_missing() {
+        let config = SmokeConfig::new(std::path::Path::new("/nonexistent"), None);
+        let result = bootstrap_required(&config, &["nats", "configctl", "server"], "make up-core");
+        assert_eq!(result.status, CheckStatus::Fail);
+        assert!(result.findings[0]
+            .message
+            .contains("compose file not found"));
     }
 
     #[test]
@@ -437,5 +574,43 @@ mod tests {
         config.base_url = "http://127.0.0.1:19999".to_string();
         let result = validate(&config);
         assert_eq!(result.status, CheckStatus::Fail);
+    }
+
+    #[test]
+    fn matching_binding_count_finds_named_binding() {
+        let resp = serde_json::json!({
+            "bindings": [
+                { "binding": { "name": "orders" } },
+                { "binding": { "name": "orders" } },
+                { "binding": { "name": "payments" } }
+            ]
+        });
+        assert_eq!(matching_binding_count(&resp, "orders"), 2);
+        assert_eq!(matching_binding_count(&resp, "payments"), 1);
+        assert_eq!(matching_binding_count(&resp, "missing"), 0);
+    }
+
+    #[test]
+    fn runtime_diagnostic_reads_version_and_loaded_at() {
+        let resp = serde_json::json!({
+            "runtime": {
+                "config": { "version_id": "cfg-123" },
+                "loaded_at": "2026-03-16T15:00:00Z"
+            }
+        });
+        let diagnostic = runtime_diagnostic(&resp).expect("expected runtime diagnostic");
+        assert!(diagnostic.contains("cfg-123"));
+        assert!(diagnostic.contains("loaded_at"));
+    }
+
+    #[test]
+    fn runtime_diagnostic_supports_flat_version_field() {
+        let resp = serde_json::json!({
+            "runtime": {
+                "config_version_id": "cfg-456"
+            }
+        });
+        let diagnostic = runtime_diagnostic(&resp).expect("expected runtime diagnostic");
+        assert!(diagnostic.contains("cfg-456"));
     }
 }

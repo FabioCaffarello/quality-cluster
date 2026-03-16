@@ -1,0 +1,27 @@
+{
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T18:21:19.776Z"
+    },
+    "phase-2": {
+      "status": "in_progress",
+      "updatedAt": "2026-03-16T18:21:19.783Z"
+    }
+  },
+  "progress": 33,
+  "decisions": [
+    {
+      "title": "Tooling now treats configctl projections as canonical runtime evidence",
+      "description": "The first execution slice of Block 2 exposes configctl runtime projections as a stable HTTP seam and threads that contract into scenario-smoke and trace-pack. `config-lifecycle` now verifies both the lifecycle-facing active config record and the canonical configctl runtime projection, while trace-pack persists `configctl-runtime-projections.json` alongside ingestion and validator views for local inspection.",
+      "phase": "E",
+      "alternatives": [
+        "Keep configctl runtime truth implicit and rely only on `/configctl/configs/active` plus `/runtime/validator/active`",
+        "Add a separate smoke stage for projections before wiring trace-pack evidence"
+      ],
+      "status": "accepted",
+      "id": "dec-1773685288006",
+      "decidedAt": "2026-03-16T18:21:28.006Z"
+    }
+  ]
+}

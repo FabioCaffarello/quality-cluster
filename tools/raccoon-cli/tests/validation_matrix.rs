@@ -98,10 +98,7 @@ fn json_flag_after_subcommand_is_rejected() {
     // Should either succeed (global flag accepted) or fail with clap error
     let code = result.status.code().unwrap_or(-1);
     // If clap accepts it, we get exit 1 (check fail). If not, exit 2 (clap error).
-    assert!(
-        code == 1 || code == 2,
-        "expected exit 1 or 2, got {code}"
-    );
+    assert!(code == 1 || code == 2, "expected exit 1 or 2, got {code}");
 }
 
 #[test]
@@ -199,7 +196,13 @@ fn exit_1_on_failed_checks_contract_audit() {
 #[test]
 fn exit_1_on_failed_quality_gate_fast() {
     raccoon()
-        .args(["--project-root", "/nonexistent", "quality-gate", "--profile", "fast"])
+        .args([
+            "--project-root",
+            "/nonexistent",
+            "quality-gate",
+            "--profile",
+            "fast",
+        ])
         .assert()
         .code(1);
 }
@@ -207,7 +210,13 @@ fn exit_1_on_failed_quality_gate_fast() {
 #[test]
 fn exit_1_on_failed_quality_gate_ci() {
     raccoon()
-        .args(["--project-root", "/nonexistent", "quality-gate", "--profile", "ci"])
+        .args([
+            "--project-root",
+            "/nonexistent",
+            "quality-gate",
+            "--profile",
+            "ci",
+        ])
         .assert()
         .code(1);
 }
@@ -222,11 +231,7 @@ fn exit_1_runtime_smoke_absent_environment() {
 
 #[test]
 fn exit_code_2_on_clap_error() {
-    raccoon()
-        .arg("--unknown-flag")
-        .assert()
-        .failure()
-        .code(2);
+    raccoon().arg("--unknown-flag").assert().failure().code(2);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -273,7 +278,13 @@ fn contract_audit_human_output_has_title() {
 #[test]
 fn quality_gate_human_output_shows_profile() {
     raccoon()
-        .args(["--project-root", "/nonexistent", "quality-gate", "--profile", "ci"])
+        .args([
+            "--project-root",
+            "/nonexistent",
+            "quality-gate",
+            "--profile",
+            "ci",
+        ])
         .assert()
         .stdout(predicate::str::contains("profile: ci"));
 }
@@ -287,10 +298,19 @@ fn quality_gate_human_output_has_step_listing() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(stdout.contains(" doctor "), "must list doctor step");
-    assert!(stdout.contains("topology-doctor"), "must list topology-doctor step");
-    assert!(stdout.contains("contract-audit"), "must list contract-audit step");
+    assert!(
+        stdout.contains("topology-doctor"),
+        "must list topology-doctor step"
+    );
+    assert!(
+        stdout.contains("contract-audit"),
+        "must list contract-audit step"
+    );
     assert!(stdout.contains("arch-guard"), "must list arch-guard step");
-    assert!(stdout.contains("runtime-smoke"), "must list runtime-smoke step");
+    assert!(
+        stdout.contains("runtime-smoke"),
+        "must list runtime-smoke step"
+    );
 }
 
 #[test]
@@ -302,8 +322,14 @@ fn quality_gate_human_output_shows_step_status_icons() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Failed steps get [x], skipped get [-]
-    assert!(stdout.contains("[x]"), "must have [x] icon for failed steps");
-    assert!(stdout.contains("[-]"), "must have [-] icon for skipped steps");
+    assert!(
+        stdout.contains("[x]"),
+        "must have [x] icon for failed steps"
+    );
+    assert!(
+        stdout.contains("[-]"),
+        "must have [-] icon for skipped steps"
+    );
 }
 
 #[test]
@@ -461,7 +487,12 @@ fn doctor_json_statuses_are_lowercase() {
 #[test]
 fn topology_doctor_json_has_required_fields() {
     let output = raccoon()
-        .args(["--json", "--project-root", "/nonexistent", "topology-doctor"])
+        .args([
+            "--json",
+            "--project-root",
+            "/nonexistent",
+            "topology-doctor",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -516,7 +547,14 @@ fn runtime_smoke_json_has_all_six_stages() {
     let names: Vec<&str> = checks.iter().map(|c| c["name"].as_str().unwrap()).collect();
     assert_eq!(
         names,
-        vec!["bootstrap", "readiness", "inject", "route", "consume", "validate"]
+        vec![
+            "bootstrap",
+            "readiness",
+            "inject",
+            "route",
+            "consume",
+            "validate"
+        ]
     );
 }
 
@@ -585,12 +623,7 @@ fn quality_gate_ci_json_has_ci_profile() {
 #[test]
 fn quality_gate_json_steps_have_required_fields() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -599,32 +632,77 @@ fn quality_gate_json_steps_have_required_fields() {
     for step in parsed["steps"].as_array().unwrap() {
         assert!(step["name"].is_string(), "step must have 'name'");
         assert!(step["status"].is_string(), "step must have 'status'");
-        assert!(step["duration_ms"].is_number(), "step must have 'duration_ms'");
-        assert!(step["check_count"].is_number(), "step must have 'check_count'");
-        assert!(step["error_count"].is_number(), "step must have 'error_count'");
-        assert!(step["warning_count"].is_number(), "step must have 'warning_count'");
+        assert!(
+            step["duration_ms"].is_number(),
+            "step must have 'duration_ms'"
+        );
+        assert!(
+            step["check_count"].is_number(),
+            "step must have 'check_count'"
+        );
+        assert!(
+            step["error_count"].is_number(),
+            "step must have 'error_count'"
+        );
+        assert!(
+            step["warning_count"].is_number(),
+            "step must have 'warning_count'"
+        );
         assert!(step["report"].is_object(), "step must have 'report'");
-        assert!(step["report"]["title"].is_string(), "step report must have 'title'");
-        assert!(step["report"]["checks"].is_array(), "step report must have 'checks'");
+        assert!(
+            step["report"]["title"].is_string(),
+            "step report must have 'title'"
+        );
+        assert!(
+            step["report"]["checks"].is_array(),
+            "step report must have 'checks'"
+        );
         // skip_reason present only for skipped steps
         if step["status"] == "skip" {
-            assert!(step["skip_reason"].is_string(), "skipped step must have 'skip_reason'");
+            assert!(
+                step["skip_reason"].is_string(),
+                "skipped step must have 'skip_reason'"
+            );
         } else {
-            assert!(step.get("skip_reason").is_none(), "non-skipped step must not have 'skip_reason'");
+            assert!(
+                step.get("skip_reason").is_none(),
+                "non-skipped step must not have 'skip_reason'"
+            );
         }
         // is_execution_error omitted when false
         if step.get("is_execution_error").is_some() {
-            assert_eq!(step["is_execution_error"], true, "is_execution_error should only appear when true");
+            assert_eq!(
+                step["is_execution_error"], true,
+                "is_execution_error should only appear when true"
+            );
         }
     }
     // summary object
     assert!(parsed["summary"].is_object(), "must have 'summary'");
-    assert!(parsed["summary"]["passed"].is_number(), "summary must have 'passed'");
-    assert!(parsed["summary"]["failed"].is_number(), "summary must have 'failed'");
-    assert!(parsed["summary"]["skipped"].is_number(), "summary must have 'skipped'");
-    assert!(parsed["summary"]["total_checks"].is_number(), "summary must have 'total_checks'");
-    assert!(parsed["summary"]["total_errors"].is_number(), "summary must have 'total_errors'");
-    assert!(parsed["summary"]["total_warnings"].is_number(), "summary must have 'total_warnings'");
+    assert!(
+        parsed["summary"]["passed"].is_number(),
+        "summary must have 'passed'"
+    );
+    assert!(
+        parsed["summary"]["failed"].is_number(),
+        "summary must have 'failed'"
+    );
+    assert!(
+        parsed["summary"]["skipped"].is_number(),
+        "summary must have 'skipped'"
+    );
+    assert!(
+        parsed["summary"]["total_checks"].is_number(),
+        "summary must have 'total_checks'"
+    );
+    assert!(
+        parsed["summary"]["total_errors"].is_number(),
+        "summary must have 'total_errors'"
+    );
+    assert!(
+        parsed["summary"]["total_warnings"].is_number(),
+        "summary must have 'total_warnings'"
+    );
 }
 
 #[test]
@@ -665,7 +743,10 @@ fn json_output_to_stdout_nothing_to_stderr_on_check_failure() {
 
     // stderr should be empty (check failures go to JSON, not stderr)
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.is_empty(), "stderr should be empty on check failure, got: {stderr}");
+    assert!(
+        stderr.is_empty(),
+        "stderr should be empty on check failure, got: {stderr}"
+    );
 }
 
 #[test]
@@ -722,11 +803,19 @@ fn doctor_with_missing_directories_warns() {
     // Missing internal/, deploy/, tests/, tools/
 
     let output = raccoon()
-        .args(["-v", "--project-root", dir.path().to_str().unwrap(), "doctor"])
+        .args([
+            "-v",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "doctor",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("not found"), "should warn about missing directories");
+    assert!(
+        stdout.contains("not found"),
+        "should warn about missing directories"
+    );
 }
 
 #[test]
@@ -737,11 +826,19 @@ fn doctor_with_empty_configs_dir_warns() {
     std::fs::remove_file(dir.path().join("deploy/configs/consumer.jsonc")).unwrap();
 
     let output = raccoon()
-        .args(["-v", "--project-root", dir.path().to_str().unwrap(), "doctor"])
+        .args([
+            "-v",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "doctor",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("no .jsonc"), "should warn about missing .jsonc files");
+    assert!(
+        stdout.contains("no .jsonc"),
+        "should warn about missing .jsonc files"
+    );
 }
 
 #[test]
@@ -750,7 +847,11 @@ fn topology_doctor_on_empty_project_fails_gracefully() {
     std::fs::write(dir.path().join("go.work"), "go 1.23\n").unwrap();
 
     let result = raccoon()
-        .args(["--project-root", dir.path().to_str().unwrap(), "topology-doctor"])
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "topology-doctor",
+        ])
         .output()
         .unwrap();
     let code = result.status.code().unwrap_or(-1);
@@ -766,7 +867,11 @@ fn contract_audit_on_empty_project_fails_gracefully() {
     std::fs::write(dir.path().join("go.work"), "go 1.23\n").unwrap();
 
     let result = raccoon()
-        .args(["--project-root", dir.path().to_str().unwrap(), "contract-audit"])
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "contract-audit",
+        ])
         .output()
         .unwrap();
     let code = result.status.code().unwrap_or(-1);
@@ -778,7 +883,12 @@ fn contract_audit_on_empty_project_fails_gracefully() {
 
 #[test]
 fn all_commands_accept_nonexistent_root_without_crash() {
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-smoke"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-smoke",
+    ] {
         let result = raccoon()
             .args(["--project-root", "/nonexistent/path/to/project", cmd])
             .output()
@@ -955,12 +1065,7 @@ fn quality_gate_arch_guard_runs_as_real_step() {
 #[test]
 fn quality_gate_step_order_is_deterministic() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -974,7 +1079,15 @@ fn quality_gate_step_order_is_deterministic() {
         .collect();
     assert_eq!(
         names,
-        vec!["doctor", "topology-doctor", "contract-audit", "runtime-bindings", "arch-guard", "drift-detect", "runtime-smoke"]
+        vec![
+            "doctor",
+            "topology-doctor",
+            "contract-audit",
+            "runtime-bindings",
+            "arch-guard",
+            "drift-detect",
+            "runtime-smoke"
+        ]
     );
 }
 
@@ -995,7 +1108,10 @@ fn quality_gate_total_duration_is_reasonable() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
     let total_ms = parsed["total_duration_ms"].as_u64().unwrap();
-    assert!(total_ms < 30_000, "fast profile should complete in < 30s, took {total_ms}ms");
+    assert!(
+        total_ms < 30_000,
+        "fast profile should complete in < 30s, took {total_ms}ms"
+    );
 }
 
 #[test]
@@ -1028,12 +1144,7 @@ fn quality_gate_skipped_steps_have_zero_duration() {
 #[test]
 fn quality_gate_json_steps_have_check_count_and_skip_reason() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1052,12 +1163,7 @@ fn quality_gate_json_steps_have_check_count_and_skip_reason() {
 #[test]
 fn quality_gate_json_has_summary_counts() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1077,12 +1183,7 @@ fn quality_gate_json_has_summary_counts() {
 #[test]
 fn quality_gate_json_has_verdict() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1091,21 +1192,25 @@ fn quality_gate_json_has_verdict() {
     let verdict = &parsed["verdict"];
     assert!(verdict["action"].is_string(), "verdict must have action");
     assert!(verdict["message"].is_string(), "verdict must have message");
-    assert!(verdict["next_steps"].is_array(), "verdict must have next_steps");
-    assert_eq!(verdict["action"], "stop", "failing gate should have stop verdict");
-    assert!(!verdict["next_steps"].as_array().unwrap().is_empty(), "stop verdict should have next_steps");
+    assert!(
+        verdict["next_steps"].is_array(),
+        "verdict must have next_steps"
+    );
+    assert_eq!(
+        verdict["action"], "stop",
+        "failing gate should have stop verdict"
+    );
+    assert!(
+        !verdict["next_steps"].as_array().unwrap().is_empty(),
+        "stop verdict should have next_steps"
+    );
 }
 
 #[test]
 fn quality_gate_json_verdict_proceed_is_unreachable_on_nonexistent() {
     // On /nonexistent, verdict should always be "stop"
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1157,12 +1262,7 @@ fn quality_gate_fail_fast_flag_accepted() {
 #[test]
 fn quality_gate_runtime_bindings_step_present() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1240,8 +1340,12 @@ fn runtime_smoke_with_valid_compose_but_no_docker() {
         .output()
         .unwrap();
     let code = output.status.code().unwrap_or(-1);
-    // Should fail at bootstrap (docker not running or services not up), not crash
-    assert_eq!(code, 1, "should exit 1 (check failure), not crash");
+    // In isolated environments this usually fails at bootstrap, but on a machine
+    // with Docker and a healthy local stack it may pass. Either way it must not crash.
+    assert!(
+        code == 0 || code == 1,
+        "should exit 0 or 1 depending on local Docker availability, not crash"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1353,12 +1457,14 @@ fn runtime_smoke_bootstrap_error_mentions_make_up_dataplane() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // If docker compose fails, error should mention how to start services
-    // (either "make up-dataplane" or "compose file not found" or docker error)
+    // The failure should stay actionable whether the fixture stops at bootstrap
+    // or reaches readiness in an environment where Docker is available.
     assert!(
         stdout.contains("make up-dataplane")
             || stdout.contains("compose")
-            || stdout.contains("docker"),
+            || stdout.contains("docker")
+            || stdout.contains("healthz")
+            || stdout.contains("readyz"),
         "bootstrap error should be actionable"
     );
 }
@@ -1385,13 +1491,7 @@ fn quality_gate_failure_message_references_specific_failed_step() {
 #[test]
 fn json_and_verbose_together_produces_json() {
     let output = raccoon()
-        .args([
-            "--json",
-            "-v",
-            "--project-root",
-            "/nonexistent",
-            "doctor",
-        ])
+        .args(["--json", "-v", "--project-root", "/nonexistent", "doctor"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1407,7 +1507,12 @@ fn json_and_verbose_together_produces_json() {
 fn json_output_consistent_between_commands_schema() {
     // All standard commands (doctor, topology-doctor, contract-audit, runtime-smoke)
     // should produce the same top-level JSON schema
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-smoke"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-smoke",
+    ] {
         let output = raccoon()
             .args(["--json", "--project-root", "/nonexistent", cmd])
             .output()
@@ -1425,12 +1530,7 @@ fn json_output_consistent_between_commands_schema() {
 #[test]
 fn quality_gate_json_schema_differs_from_standard_commands() {
     let output = raccoon()
-        .args([
-            "--json",
-            "--project-root",
-            "/nonexistent",
-            "quality-gate",
-        ])
+        .args(["--json", "--project-root", "/nonexistent", "quality-gate"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1637,7 +1737,11 @@ fn topology_doctor_on_fixture_does_not_crash() {
     make_topology_fixture(&dir);
 
     let result = raccoon()
-        .args(["--project-root", dir.path().to_str().unwrap(), "topology-doctor"])
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "topology-doctor",
+        ])
         .output()
         .unwrap();
     let code = result.status.code().unwrap_or(-1);
@@ -1674,7 +1778,11 @@ fn contract_audit_on_fixture_does_not_crash() {
     make_topology_fixture(&dir);
 
     let result = raccoon()
-        .args(["--project-root", dir.path().to_str().unwrap(), "contract-audit"])
+        .args([
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "contract-audit",
+        ])
         .output()
         .unwrap();
     let code = result.status.code().unwrap_or(-1);
@@ -1690,7 +1798,12 @@ fn contract_audit_on_fixture_does_not_crash() {
 
 #[test]
 fn stderr_is_clean_for_all_commands_on_check_failure() {
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-smoke"] {
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-smoke",
+    ] {
         let output = raccoon()
             .args(["--project-root", "/nonexistent", cmd])
             .output()
@@ -1739,16 +1852,16 @@ fn all_subcommands_have_help() {
 
 #[test]
 fn help_lists_all_subcommands() {
-    let output = raccoon()
-        .arg("--help")
-        .output()
-        .unwrap();
+    let output = raccoon().arg("--help").output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    for cmd in &["doctor", "topology-doctor", "contract-audit", "runtime-smoke", "quality-gate"] {
-        assert!(
-            stdout.contains(cmd),
-            "main help should list '{cmd}'"
-        );
+    for cmd in &[
+        "doctor",
+        "topology-doctor",
+        "contract-audit",
+        "runtime-smoke",
+        "quality-gate",
+    ] {
+        assert!(stdout.contains(cmd), "main help should list '{cmd}'");
     }
 }
 
@@ -1840,7 +1953,12 @@ fn doctor_json_why_and_help_omitted_when_not_set() {
     make_project(&dir);
 
     let output = raccoon()
-        .args(["--json", "--project-root", dir.path().to_str().unwrap(), "doctor"])
+        .args([
+            "--json",
+            "--project-root",
+            dir.path().to_str().unwrap(),
+            "doctor",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);

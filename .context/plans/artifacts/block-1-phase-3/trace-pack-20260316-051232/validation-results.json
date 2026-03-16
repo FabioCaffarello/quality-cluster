@@ -1,0 +1,157 @@
+{
+  "results": [
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-6-invalid_missing_required",
+      "message_id": "kafka:smoke.events.created:0:5:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:37Z",
+      "status": "failed",
+      "violations": [
+        {
+          "field": "event_id",
+          "message": "field is required",
+          "operator": "required",
+          "rule": "event_id_required",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-5-valid",
+      "message_id": "kafka:smoke.events.created:0:4:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:36Z",
+      "status": "passed"
+    },
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-4-invalid_missing_required",
+      "message_id": "kafka:smoke.events.created:0:3:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:33Z",
+      "status": "failed",
+      "violations": [
+        {
+          "field": "event_id",
+          "message": "field is required",
+          "operator": "required",
+          "rule": "event_id_required",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-3-valid",
+      "message_id": "kafka:smoke.events.created:0:2:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:33Z",
+      "status": "passed"
+    },
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-2-invalid_missing_required",
+      "message_id": "kafka:smoke.events.created:0:1:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:33Z",
+      "status": "failed",
+      "violations": [
+        {
+          "field": "event_id",
+          "message": "field is required",
+          "operator": "required",
+          "rule": "event_id_required",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "binding": {
+        "name": "smoke_events",
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        },
+        "topic": "smoke.events.created"
+      },
+      "config": {
+        "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+        "key": "raccoon-smoke",
+        "set_id": "58e9088ef2ea68f848ac4fa1cc88944d",
+        "version": 1,
+        "version_id": "0e2189dea8f5331759707fba56cfae4a"
+      },
+      "correlation_id": "smoke_events-1-valid",
+      "message_id": "kafka:smoke.events.created:0:0:global:default:0e2189dea8f5331759707fba56cfae4a:smoke_events",
+      "processed_at": "2026-03-16T05:11:33Z",
+      "status": "passed"
+    }
+  ]
+}

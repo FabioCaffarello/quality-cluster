@@ -212,6 +212,48 @@ func TestConfigctlGatewayLifecycleMethods(t *testing.T) {
 	if len(ingestionReply.Bindings[0].Fields) != 1 {
 		t.Fatalf("expected bootstrap fields to round-trip, got %+v", ingestionReply.Bindings[0])
 	}
+
+	runtimeProjectionRequest := mustDecodeRequest[contracts.ListActiveRuntimeProjectionsQuery](t, registry.ListActiveRuntimeProjections, mustEncodeRequest(t, registry.ListActiveRuntimeProjections, contracts.ListActiveRuntimeProjectionsQuery{
+		ScopeKind: "tenant",
+		ScopeKey:  "br",
+	}))
+	replyBytes, err = encodeControlReply(
+		registry.ListActiveRuntimeProjections,
+		"configctl",
+		runtimeProjectionRequest,
+		contracts.ListActiveRuntimeProjectionsReply{
+			Runtimes: []contracts.RuntimeProjectionRecord{{
+				Scope:       contracts.ActivationScopeRecord{Kind: "tenant", Key: "br"},
+				ConfigSetID: "set-1",
+				ConfigKey:   "core",
+				VersionID:   "cfg-123",
+				Version:     1,
+				Artifact: contracts.CompilationArtifactRecord{
+					ID:            "artifact-1",
+					SchemaVersion: "runtime/v1",
+					Checksum:      "checksum-1",
+					StorageRef:    "memory://artifacts/core/v1",
+					RuntimeLoader: "validator:v1",
+				},
+			}},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("encode runtime projections reply: %v", err)
+	}
+
+	runtimeProjectionClient := &requestReplyClientSpy{reply: replyBytes}
+	runtimeProjectionReply, prob := NewConfigctlGateway(runtimeProjectionClient, "validator.bootstrap").ListActiveRuntimeProjections(context.Background(), contracts.ListActiveRuntimeProjectionsQuery{
+		ScopeKind: "tenant",
+		ScopeKey:  "br",
+	})
+	if prob != nil {
+		t.Fatalf("list active runtime projections: %v", prob)
+	}
+	if runtimeProjectionClient.subject != registry.ListActiveRuntimeProjections.Subject || len(runtimeProjectionReply.Runtimes) != 1 {
+		t.Fatalf("unexpected runtime projections gateway result")
+	}
 }
 
 func TestValidatorRuntimeGatewayGetActiveRuntime(t *testing.T) {

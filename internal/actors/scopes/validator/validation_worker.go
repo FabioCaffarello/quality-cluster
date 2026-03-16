@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	validatorresultsapp "internal/application/validatorresults"
 	"internal/shared/problem"
 
@@ -39,6 +40,9 @@ func (a *ValidationWorkerActor) Receive(c *actor.Context) {
 		})
 	case actor.Stopped:
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validation worker: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

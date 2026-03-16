@@ -36,6 +36,16 @@ type getActiveConfigResult struct {
 	Prob  *problem.Problem
 }
 
+type listActiveRuntimeProjectionsMessage struct {
+	Query         contracts.ListActiveRuntimeProjectionsQuery
+	CorrelationID string
+}
+
+type listActiveRuntimeProjectionsResult struct {
+	Reply contracts.ListActiveRuntimeProjectionsReply
+	Prob  *problem.Problem
+}
+
 type listConfigsMessage struct {
 	Query         contracts.ListConfigsQuery
 	CorrelationID string

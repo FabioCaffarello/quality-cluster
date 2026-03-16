@@ -146,9 +146,8 @@ fn extract_streams(content: &str, src: &mut RuntimeBindingSource) {
             continue;
         }
 
-        let is_stream_context = trimmed.contains("Name:")
-            || trimmed.contains("Stream")
-            || trimmed.contains("stream");
+        let is_stream_context =
+            trimmed.contains("Name:") || trimmed.contains("Stream") || trimmed.contains("stream");
 
         if !is_stream_context {
             continue;
@@ -238,7 +237,8 @@ fn scan_bootstrap_scopes(configs_dir: &Path, src: &mut RuntimeBindingSource) -> 
                     .get("scope_key")
                     .and_then(|v| v.as_str())
                     .unwrap_or("default");
-                src.bootstrap_scopes.push((kind.to_string(), key.to_string()));
+                src.bootstrap_scopes
+                    .push((kind.to_string(), key.to_string()));
             }
         }
     }
@@ -464,7 +464,9 @@ func DefaultDataPlaneRegistry() DataPlaneRegistry {
         extract_lifecycle_events(content, &mut src);
         assert!(src.lifecycle_events.contains("config.activated"));
         assert!(src.lifecycle_events.contains("config.deactivated"));
-        assert!(src.lifecycle_events.contains("config.ingestion_runtime_changed"));
+        assert!(src
+            .lifecycle_events
+            .contains("config.ingestion_runtime_changed"));
     }
 
     #[test]
@@ -497,7 +499,10 @@ func DefaultDataPlaneRegistry() DataPlaneRegistry {
 
         let mut src = RuntimeBindingSource::default();
         scan_bootstrap_scopes(dir.path(), &mut src).unwrap();
-        assert_eq!(src.bootstrap_scopes, vec![("global".into(), "default".into())]);
+        assert_eq!(
+            src.bootstrap_scopes,
+            vec![("global".into(), "default".into())]
+        );
     }
 
     #[test]
@@ -548,7 +553,11 @@ func DefaultRegistry() Registry {
 
         // Create validator files
         std::fs::write(validator.join("runtime_cache.go"), "package validator\n").unwrap();
-        std::fs::write(validator.join("validation_worker.go"), "package validator\n").unwrap();
+        std::fs::write(
+            validator.join("validation_worker.go"),
+            "package validator\n",
+        )
+        .unwrap();
 
         let result = scan_runtime_bindings(&internal).unwrap();
         assert_eq!(result.subject_prefix, "dataplane.ingestion.received");

@@ -476,8 +476,8 @@ fn extract_dev_doc_references(path: &Path) -> (HashSet<String>, HashSet<String>)
 
     // Common English words that follow "make" but aren't targets
     let make_stopwords: HashSet<&str> = [
-        "a", "an", "the", "it", "is", "to", "your", "sure", "changes",
-        "sense", "this", "that", "any", "no", "not", "use", "certain",
+        "a", "an", "the", "it", "is", "to", "your", "sure", "changes", "sense", "this", "that",
+        "any", "no", "not", "use", "certain",
     ]
     .iter()
     .copied()
@@ -522,7 +522,9 @@ fn extract_dev_doc_references(path: &Path) -> (HashSet<String>, HashSet<String>)
                 &after[..end]
             };
             // Strip trailing backticks or punctuation
-            let cmd_clean = cmd_start.trim_end_matches(|c: char| c == '`' || c == '\'' || c == '"' || c == ',' || c == '.');
+            let cmd_clean = cmd_start.trim_end_matches(|c: char| {
+                c == '`' || c == '\'' || c == '"' || c == ',' || c == '.'
+            });
             if !cmd_clean.is_empty() {
                 commands.insert(cmd_clean.to_string());
             }
@@ -559,10 +561,7 @@ fn check_config_compose_drift(evidence: &Evidence) -> CheckResult {
     let compose = match &evidence.compose {
         Some(c) => c,
         None => {
-            return CheckResult::skip(
-                "config-compose-drift",
-                "docker-compose.yaml not available",
-            )
+            return CheckResult::skip("config-compose-drift", "docker-compose.yaml not available")
         }
     };
 
@@ -676,9 +675,33 @@ fn check_config_source_drift(evidence: &Evidence) -> CheckResult {
         }
     }
 
+    for durable in [
+        "validator-runtime-cache-v1",
+        "consumer-runtime-refresh-v1",
+        "emulator-runtime-refresh-v1",
+    ] {
+        if let Some(stream) = source.durables.get(durable) {
+            if stream != "CONFIGCTL_EVENTS" {
+                findings.push(
+                    Finding::error(
+                        "runtime-refresh-stream-drift",
+                        format!(
+                            "durable '{durable}' targets stream '{stream}' instead of 'CONFIGCTL_EVENTS'"
+                        ),
+                    )
+                    .with_why("runtime lifecycle and event-driven refresh depend on CONFIGCTL_EVENTS; wrong stream silently breaks convergence")
+                    .with_help(format!("update durable '{durable}' to target CONFIGCTL_EVENTS")),
+                );
+            }
+        }
+    }
+
     // Check that subject prefixes in configs align with source subject patterns
     let dataplane_prefix = "dataplane.ingestion.received";
-    let has_dataplane_subjects = source.subjects.iter().any(|s| s.starts_with(dataplane_prefix));
+    let has_dataplane_subjects = source
+        .subjects
+        .iter()
+        .any(|s| s.starts_with(dataplane_prefix));
 
     if !has_dataplane_subjects && !source.streams.is_empty() {
         findings.push(
@@ -695,7 +718,10 @@ fn check_config_source_drift(evidence: &Evidence) -> CheckResult {
     for (stream_name, stream_subjects) in &source.streams {
         for pattern in stream_subjects {
             let prefix = pattern.trim_end_matches(".>");
-            let has_matching = source.subjects.iter().any(|s| s.starts_with(prefix) || s == pattern);
+            let has_matching = source
+                .subjects
+                .iter()
+                .any(|s| s.starts_with(prefix) || s == pattern);
             if !has_matching {
                 findings.push(
                     Finding::warning(
@@ -797,7 +823,10 @@ fn check_binding_topology_drift(evidence: &Evidence) -> CheckResult {
 
     // Check bootstrap infrastructure exists
     if !binding_names.is_empty() {
-        let has_bootstrap = source.subjects.iter().any(|s| s.contains("bootstrap") || s.contains("runtime"));
+        let has_bootstrap = source
+            .subjects
+            .iter()
+            .any(|s| s.contains("bootstrap") || s.contains("runtime"));
         if !has_bootstrap {
             findings.push(
                 Finding::info(
@@ -856,7 +885,14 @@ fn check_workflow_drift(evidence: &Evidence) -> CheckResult {
     }
 
     // Makefile workflow targets that should be documented
-    let workflow_targets = ["check", "verify", "check-deep", "smoke", "trace-pack", "results-inspect"];
+    let workflow_targets = [
+        "check",
+        "verify",
+        "check-deep",
+        "smoke",
+        "trace-pack",
+        "results-inspect",
+    ];
     for target in &workflow_targets {
         if evidence.makefile_targets.contains(*target)
             && !evidence.dev_doc_targets.contains(*target)
@@ -864,10 +900,14 @@ fn check_workflow_drift(evidence: &Evidence) -> CheckResult {
             findings.push(
                 Finding::warning(
                     "undocumented-target",
-                    format!("Makefile has workflow target '{target}' not referenced in DEVELOPMENT.md"),
+                    format!(
+                        "Makefile has workflow target '{target}' not referenced in DEVELOPMENT.md"
+                    ),
                 )
                 .with_why("developers won't discover this workflow step from the documentation")
-                .with_help(format!("add `make {target}` to the DEVELOPMENT.md workflow section")),
+                .with_help(format!(
+                    "add `make {target}` to the DEVELOPMENT.md workflow section"
+                )),
             );
         }
     }
@@ -911,7 +951,9 @@ fn check_contract_domain_drift(evidence: &Evidence) -> CheckResult {
                 "registry-event-orphan",
                 format!("registry spec for '{event}' has no matching domain event definition"),
             )
-            .with_why("transport is wired for an event that no domain code produces — spec may be stale")
+            .with_why(
+                "transport is wired for an event that no domain code produces — spec may be stale",
+            )
             .with_help("verify the domain event exists or remove the stale registry spec"),
         );
     }
@@ -924,7 +966,9 @@ fn check_compose_profile_drift(evidence: &Evidence) -> CheckResult {
 
     let compose = match &evidence.compose {
         Some(c) => c,
-        None => return CheckResult::skip("compose-profile-drift", "docker-compose.yaml not available"),
+        None => {
+            return CheckResult::skip("compose-profile-drift", "docker-compose.yaml not available")
+        }
     };
 
     // Collect all profiles
@@ -945,12 +989,12 @@ fn check_compose_profile_drift(evidence: &Evidence) -> CheckResult {
     for (name, svc) in &compose.services {
         if svc.profiles.is_empty() && !infra_services.contains(name.as_str()) {
             // This is not necessarily drift, but worth noting
-            findings.push(
-                Finding::info(
-                    "profile-unassigned",
-                    format!("compose service '{name}' has no profile assignment — runs in all profiles"),
+            findings.push(Finding::info(
+                "profile-unassigned",
+                format!(
+                    "compose service '{name}' has no profile assignment — runs in all profiles"
                 ),
-            );
+            ));
         }
     }
 
@@ -964,8 +1008,13 @@ fn check_compose_profile_drift(evidence: &Evidence) -> CheckResult {
                     "missing-profile",
                     format!("expected compose profile '{profile}' not found in any service"),
                 )
-                .with_why(format!("Makefile target 'up-{0}' uses --profile {0} which won't match any service", profile))
-                .with_help(format!("assign profile '{profile}' to relevant services in docker-compose.yaml")),
+                .with_why(format!(
+                    "Makefile target 'up-{0}' uses --profile {0} which won't match any service",
+                    profile
+                ))
+                .with_help(format!(
+                    "assign profile '{profile}' to relevant services in docker-compose.yaml"
+                )),
             );
         }
     }
@@ -988,6 +1037,7 @@ mod tests {
             kafka_client_id: Some("quality-service-consumer".into()),
             nats_url: Some("nats://nats:4222".into()),
             bootstrap_base_url: Some("http://server:8080".into()),
+            bootstrap_reconcile_interval: Some("30s".into()),
         }
     }
 
@@ -999,6 +1049,7 @@ mod tests {
             kafka_client_id: Some("quality-service-emulator".into()),
             nats_url: None,
             bootstrap_base_url: Some("http://server:8080".into()),
+            bootstrap_reconcile_interval: Some("30s".into()),
         }
     }
 
@@ -1010,6 +1061,7 @@ mod tests {
             kafka_client_id: None,
             nats_url: Some("nats://nats:4222".into()),
             bootstrap_base_url: None,
+            bootstrap_reconcile_interval: None,
         }
     }
 
@@ -1031,6 +1083,14 @@ mod tests {
         );
         durables.insert(
             "validator-runtime-cache-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
+        durables.insert(
+            "consumer-runtime-refresh-v1".into(),
+            "CONFIGCTL_EVENTS".into(),
+        );
+        durables.insert(
+            "emulator-runtime-refresh-v1".into(),
             "CONFIGCTL_EVENTS".into(),
         );
 
@@ -1056,6 +1116,7 @@ mod tests {
             "nats".into(),
             ComposeService {
                 name: "nats".into(),
+                image: Some("nats:2.10.18-alpine".into()),
                 depends_on: vec![],
                 profiles: vec!["core".into(), "all".into()],
                 ports: vec!["4222:4222".into()],
@@ -1066,6 +1127,7 @@ mod tests {
             "kafka".into(),
             ComposeService {
                 name: "kafka".into(),
+                image: Some("bitnamilegacy/kafka:3.9.0".into()),
                 depends_on: vec![],
                 profiles: vec!["dataplane".into(), "all".into()],
                 ports: vec![],
@@ -1076,6 +1138,7 @@ mod tests {
             "configctl".into(),
             ComposeService {
                 name: "configctl".into(),
+                image: Some("quality-service/configctl:dev".into()),
                 depends_on: vec!["nats".into()],
                 profiles: vec!["core".into(), "all".into()],
                 ports: vec![],
@@ -1086,6 +1149,7 @@ mod tests {
             "server".into(),
             ComposeService {
                 name: "server".into(),
+                image: Some("quality-service/server:dev".into()),
                 depends_on: vec!["nats".into(), "configctl".into()],
                 profiles: vec!["core".into(), "all".into()],
                 ports: vec!["8080:8080".into()],
@@ -1096,6 +1160,7 @@ mod tests {
             "consumer".into(),
             ComposeService {
                 name: "consumer".into(),
+                image: Some("quality-service/consumer:dev".into()),
                 depends_on: vec!["nats".into(), "server".into(), "kafka".into()],
                 profiles: vec!["dataplane".into(), "all".into()],
                 ports: vec![],
@@ -1106,6 +1171,7 @@ mod tests {
             "emulator".into(),
             ComposeService {
                 name: "emulator".into(),
+                image: Some("quality-service/emulator:dev".into()),
                 depends_on: vec![
                     "server".into(),
                     "kafka".into(),
@@ -1121,6 +1187,7 @@ mod tests {
             "validator".into(),
             ComposeService {
                 name: "validator".into(),
+                image: Some("quality-service/validator:dev".into()),
                 depends_on: vec!["nats".into(), "configctl".into()],
                 profiles: vec!["runtime".into(), "all".into()],
                 ports: vec![],
@@ -1281,14 +1348,9 @@ mod tests {
         consumer.depends_on.retain(|d| d != "nats");
 
         let result = check_config_compose_drift(&evidence);
-        assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.severity == Severity::Error
-                    && f.message.contains("nats")
-                    && f.message.contains("consumer")),
-        );
+        assert!(result.findings.iter().any(|f| f.severity == Severity::Error
+            && f.message.contains("nats")
+            && f.message.contains("consumer")),);
     }
 
     #[test]
@@ -1329,8 +1391,7 @@ mod tests {
         assert!(result
             .findings
             .iter()
-            .any(|f| f.severity == Severity::Error
-                && f.message.contains("DATA_PLANE_INGESTION")));
+            .any(|f| f.severity == Severity::Error && f.message.contains("DATA_PLANE_INGESTION")));
     }
 
     #[test]
@@ -1345,8 +1406,7 @@ mod tests {
         assert!(result
             .findings
             .iter()
-            .any(|f| f.severity == Severity::Error
-                && f.message.contains("NONEXISTENT_STREAM")));
+            .any(|f| f.severity == Severity::Error && f.message.contains("NONEXISTENT_STREAM")));
     }
 
     #[test]
@@ -1356,7 +1416,10 @@ mod tests {
         source.subjects.clear();
 
         let result = check_config_source_drift(&evidence);
-        assert!(result.findings.iter().any(|f| f.severity == Severity::Warning));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.severity == Severity::Warning));
     }
 
     // ── binding-topology-drift ──────────────────────────────────────
@@ -1391,8 +1454,7 @@ mod tests {
         assert!(result
             .findings
             .iter()
-            .any(|f| f.severity == Severity::Error
-                && f.message.contains("DATA_PLANE_INGESTION")));
+            .any(|f| f.severity == Severity::Error && f.message.contains("DATA_PLANE_INGESTION")));
     }
 
     #[test]
@@ -1442,8 +1504,7 @@ mod tests {
         assert!(result
             .findings
             .iter()
-            .any(|f| f.severity == Severity::Error
-                && f.message.contains("deploy-staging")));
+            .any(|f| f.severity == Severity::Error && f.message.contains("deploy-staging")));
     }
 
     #[test]
@@ -1743,11 +1804,7 @@ raccoon-cli -v contract-audit
             r#"{"kafka": {"brokers": ["kafka:9092"]}, "nats": {"url": "nats://nats:4222"}}"#,
         )
         .unwrap();
-        std::fs::write(
-            dir.path().join("Makefile"),
-            "check:\n\techo ok\n",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("Makefile"), "check:\n\techo ok\n").unwrap();
 
         let report = analyze(dir.path()).unwrap();
         assert_eq!(report.title, "drift-detect");
@@ -1787,10 +1844,9 @@ raccoon-cli -v contract-audit
     fn config_source_drift_detects_orphan_stream_subject() {
         let mut evidence = make_evidence();
         let source = evidence.source.as_mut().unwrap();
-        source.streams.insert(
-            "ORPHAN_STREAM".into(),
-            vec!["orphan.events.>".into()],
-        );
+        source
+            .streams
+            .insert("ORPHAN_STREAM".into(), vec!["orphan.events.>".into()]);
 
         let result = check_config_source_drift(&evidence);
         assert!(result

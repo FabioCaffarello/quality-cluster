@@ -131,9 +131,21 @@ pub struct GateReport {
 
 impl GateReport {
     pub fn step_counts(&self) -> (usize, usize, usize) {
-        let pass = self.steps.iter().filter(|s| s.status == StepStatus::Pass).count();
-        let fail = self.steps.iter().filter(|s| s.status == StepStatus::Fail).count();
-        let skip = self.steps.iter().filter(|s| s.status == StepStatus::Skip).count();
+        let pass = self
+            .steps
+            .iter()
+            .filter(|s| s.status == StepStatus::Pass)
+            .count();
+        let fail = self
+            .steps
+            .iter()
+            .filter(|s| s.status == StepStatus::Fail)
+            .count();
+        let skip = self
+            .steps
+            .iter()
+            .filter(|s| s.status == StepStatus::Skip)
+            .count();
         (pass, fail, skip)
     }
 }
@@ -340,10 +352,7 @@ fn run_step(name: &str, profile: &Profile, f: impl FnOnce() -> Result<Report>) -
             let mut report = Report::new(name);
             report.add(CheckResult::from_findings(
                 name,
-                vec![Finding::error(
-                    name,
-                    format!("execution error: {e}"),
-                )],
+                vec![Finding::error(name, format!("execution error: {e}"))],
             ));
             StepResult {
                 name: name.to_string(),
@@ -487,7 +496,11 @@ fn render_human(report: &GateReport, verbose: bool) -> String {
             out.push_str("  4. Run `make check-deep` for full operational proof (requires `make up-dataplane`)\n");
         }
     } else {
-        let error_word = if s.total_errors == 1 { "error" } else { "errors" };
+        let error_word = if s.total_errors == 1 {
+            "error"
+        } else {
+            "errors"
+        };
         out.push_str(&format!(
             "\n> Stop — {} {} must be fixed before proceeding.\n",
             s.total_errors, error_word,
@@ -496,10 +509,7 @@ fn render_human(report: &GateReport, verbose: bool) -> String {
         for step in &report.steps {
             if step.status == StepStatus::Fail {
                 let hint = step_remediation_hint(&step.name);
-                out.push_str(&format!(
-                    "  - Fix '{}': {}\n",
-                    step.name, hint,
-                ));
+                out.push_str(&format!("  - Fix '{}': {}\n", step.name, hint,));
             }
         }
         out.push_str("\nDiscipline: fix errors first, then re-run `make check` before coding.\n");
@@ -510,7 +520,10 @@ fn render_human(report: &GateReport, verbose: bool) -> String {
 
 /// Compute the structured verdict from step results.
 fn compute_verdict(steps: &[StepResult]) -> Verdict {
-    let failed: Vec<&StepResult> = steps.iter().filter(|s| s.status == StepStatus::Fail).collect();
+    let failed: Vec<&StepResult> = steps
+        .iter()
+        .filter(|s| s.status == StepStatus::Fail)
+        .collect();
     if failed.is_empty() {
         Verdict {
             action: "proceed".to_string(),
@@ -528,13 +541,7 @@ fn compute_verdict(steps: &[StepResult]) -> Verdict {
             ),
             next_steps: failed
                 .iter()
-                .map(|s| {
-                    format!(
-                        "Fix '{}': {}",
-                        s.name,
-                        step_remediation_hint(&s.name)
-                    )
-                })
+                .map(|s| format!("Fix '{}': {}", s.name, step_remediation_hint(&s.name)))
                 .collect(),
         }
     }
@@ -689,7 +696,10 @@ mod tests {
             "soft-check",
             vec![Finding::warning("soft-check", "just a warning")],
         ));
-        assert!(report.passed(), "warning-only report should pass before promotion");
+        assert!(
+            report.passed(),
+            "warning-only report should pass before promotion"
+        );
 
         promote_warnings(&mut report);
 
@@ -843,7 +853,10 @@ mod tests {
     #[test]
     fn gate_report_has_positive_total_duration() {
         let report = run(&nonexistent_config(Profile::Fast)).unwrap();
-        assert!(report.total_duration_ms < 60_000, "should not take a minute");
+        assert!(
+            report.total_duration_ms < 60_000,
+            "should not take a minute"
+        );
     }
 
     #[test]
@@ -916,9 +929,17 @@ mod tests {
     #[test]
     fn skip_message_references_correct_flag() {
         let report = run(&nonexistent_config(Profile::Fast)).unwrap();
-        let smoke_step = report.steps.iter().find(|s| s.name == "runtime-smoke").unwrap();
+        let smoke_step = report
+            .steps
+            .iter()
+            .find(|s| s.name == "runtime-smoke")
+            .unwrap();
         assert_eq!(smoke_step.status, StepStatus::Skip);
-        assert!(smoke_step.skip_reason.as_ref().unwrap().contains("--profile deep"));
+        assert!(smoke_step
+            .skip_reason
+            .as_ref()
+            .unwrap()
+            .contains("--profile deep"));
     }
 
     #[test]
@@ -1015,7 +1036,10 @@ mod tests {
         };
         let out = render(&gate, OutputFormat::Human).unwrap();
         assert!(out.contains("PASSED"));
-        assert!(out.contains("Safe to proceed"), "passed gate should show safe-to-proceed, got:\n{out}");
+        assert!(
+            out.contains("Safe to proceed"),
+            "passed gate should show safe-to-proceed, got:\n{out}"
+        );
         assert!(!out.contains("Actionable next steps"));
     }
 
@@ -1023,10 +1047,19 @@ mod tests {
     fn human_output_failed_gate_shows_stop() {
         let report = run(&nonexistent_config(Profile::Fast)).unwrap();
         let out = render(&report, OutputFormat::Human).unwrap();
-        assert!(out.contains("Stop"), "failed gate should show stop verdict, got:\n{out}");
-        assert!(out.contains("must be fixed"), "should explain what to do, got:\n{out}");
+        assert!(
+            out.contains("Stop"),
+            "failed gate should show stop verdict, got:\n{out}"
+        );
+        assert!(
+            out.contains("must be fixed"),
+            "should explain what to do, got:\n{out}"
+        );
         assert!(out.contains("Actionable next steps"));
-        assert!(out.contains("Discipline: fix errors first"), "failed gate should show discipline reminder, got:\n{out}");
+        assert!(
+            out.contains("Discipline: fix errors first"),
+            "failed gate should show discipline reminder, got:\n{out}"
+        );
     }
 
     #[test]
@@ -1047,9 +1080,18 @@ mod tests {
             passed: true,
         };
         let out = render(&gate, OutputFormat::Human).unwrap();
-        assert!(out.contains("TDD cycle:"), "passed gate should show TDD cycle, got:\n{out}");
-        assert!(out.contains("make verify"), "should recommend make verify, got:\n{out}");
-        assert!(out.contains("make check-deep"), "fast profile should recommend check-deep, got:\n{out}");
+        assert!(
+            out.contains("TDD cycle:"),
+            "passed gate should show TDD cycle, got:\n{out}"
+        );
+        assert!(
+            out.contains("make verify"),
+            "should recommend make verify, got:\n{out}"
+        );
+        assert!(
+            out.contains("make check-deep"),
+            "fast profile should recommend check-deep, got:\n{out}"
+        );
     }
 
     #[test]
@@ -1070,8 +1112,14 @@ mod tests {
             passed: true,
         };
         let out = render(&gate, OutputFormat::Human).unwrap();
-        assert!(out.contains("TDD cycle:"), "passed gate should show TDD cycle");
-        assert!(!out.contains("make check-deep"), "deep profile already includes runtime, should not recommend check-deep, got:\n{out}");
+        assert!(
+            out.contains("TDD cycle:"),
+            "passed gate should show TDD cycle"
+        );
+        assert!(
+            !out.contains("make check-deep"),
+            "deep profile already includes runtime, should not recommend check-deep, got:\n{out}"
+        );
     }
 
     #[test]
@@ -1111,8 +1159,14 @@ mod tests {
         let default_out = render(&gate, OutputFormat::Human).unwrap();
         let verbose_out = render(&gate, OutputFormat::HumanVerbose).unwrap();
 
-        assert!(!default_out.contains("some detail"), "default should hide passing findings");
-        assert!(verbose_out.contains("some detail"), "verbose should show all findings");
+        assert!(
+            !default_out.contains("some detail"),
+            "default should hide passing findings"
+        );
+        assert!(
+            verbose_out.contains("some detail"),
+            "verbose should show all findings"
+        );
     }
 
     // --- Exit code semantics ---
@@ -1164,11 +1218,7 @@ mod tests {
         // doctor, topology-doctor, and contract-audit on /nonexistent should be Fail, not panic
         for step in &report.steps {
             if step.status == StepStatus::Fail {
-                let has_finding = step
-                    .report
-                    .checks
-                    .iter()
-                    .any(|c| !c.findings.is_empty());
+                let has_finding = step.report.checks.iter().any(|c| !c.findings.is_empty());
                 assert!(
                     has_finding,
                     "failed step '{}' must have at least one finding with context",
@@ -1184,10 +1234,7 @@ mod tests {
     fn mixed_gate_report_fails_overall() {
         let gate = GateReport {
             profile: "fast".to_string(),
-            steps: vec![
-                make_passing_step("a", 5),
-                make_failing_step("b"),
-            ],
+            steps: vec![make_passing_step("a", 5), make_failing_step("b")],
             summary: GateSummary {
                 passed: 1,
                 failed: 1,
@@ -1420,7 +1467,10 @@ mod tests {
         let computed_warnings: usize = report.steps.iter().map(|s| s.warning_count).sum();
         assert_eq!(report.summary.total_errors, computed_errors);
         assert_eq!(report.summary.total_warnings, computed_warnings);
-        assert!(report.summary.total_errors > 0, "nonexistent root should produce errors");
+        assert!(
+            report.summary.total_errors > 0,
+            "nonexistent root should produce errors"
+        );
     }
 
     #[test]
@@ -1429,8 +1479,16 @@ mod tests {
         let out = render(&report, OutputFormat::Json).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
         for step in parsed["steps"].as_array().unwrap() {
-            assert!(step["error_count"].is_number(), "step '{}' must have error_count", step["name"]);
-            assert!(step["warning_count"].is_number(), "step '{}' must have warning_count", step["name"]);
+            assert!(
+                step["error_count"].is_number(),
+                "step '{}' must have error_count",
+                step["name"]
+            );
+            assert!(
+                step["warning_count"].is_number(),
+                "step '{}' must have warning_count",
+                step["name"]
+            );
         }
         assert!(parsed["summary"]["total_errors"].is_number());
         assert!(parsed["summary"]["total_warnings"].is_number());
@@ -1472,7 +1530,10 @@ mod tests {
             passed: true,
         };
         let json = serde_json::to_string(&gate).unwrap();
-        assert!(!json.contains("is_execution_error"), "is_execution_error should be omitted when false");
+        assert!(
+            !json.contains("is_execution_error"),
+            "is_execution_error should be omitted when false"
+        );
     }
 
     // ── Doctor as step 0 ────────────────────────────────────────────
@@ -1544,8 +1605,14 @@ mod tests {
             passed: false,
         };
         let out = render(&gate, OutputFormat::Human).unwrap();
-        assert!(out.contains("2 errors"), "should show error count, got:\n{out}");
-        assert!(out.contains("1 warning"), "should show warning count, got:\n{out}");
+        assert!(
+            out.contains("2 errors"),
+            "should show error count, got:\n{out}"
+        );
+        assert!(
+            out.contains("1 warning"),
+            "should show warning count, got:\n{out}"
+        );
     }
 
     #[test]
@@ -1553,7 +1620,10 @@ mod tests {
         let mut r = Report::new("broken");
         r.add(CheckResult::from_findings(
             "broken",
-            vec![Finding::error("broken", "execution error: io error: not found")],
+            vec![Finding::error(
+                "broken",
+                "execution error: io error: not found",
+            )],
         ));
         let step = StepResult {
             name: "test-step".to_string(),
@@ -1584,7 +1654,10 @@ mod tests {
             passed: false,
         };
         let out = render(&gate, OutputFormat::Human).unwrap();
-        assert!(out.contains("execution error"), "should label execution errors, got:\n{out}");
+        assert!(
+            out.contains("execution error"),
+            "should label execution errors, got:\n{out}"
+        );
     }
 
     // ── make_skip has zero finding counts ────────────────────────────
@@ -1796,6 +1869,9 @@ mod tests {
         let out = render(&gate, OutputFormat::Json).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert_eq!(parsed["verdict"]["action"], "proceed");
-        assert!(parsed["verdict"]["next_steps"].as_array().unwrap().is_empty());
+        assert!(parsed["verdict"]["next_steps"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 }

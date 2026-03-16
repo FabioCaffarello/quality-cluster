@@ -1,0 +1,47 @@
+{
+  "bindings": [
+    {
+      "binding": {
+        "name": "smoke_events",
+        "topic": "smoke.events.created"
+      },
+      "fields": [
+        {
+          "name": "event_id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "number"
+        }
+      ],
+      "runtime": {
+        "activated_at": "2026-03-16T05:11:38Z",
+        "artifact": {
+          "checksum": "1d4f36d482fe473e1ea56477482ebb612badc7952e1511e25f1dd3669947c5ac",
+          "id": "11d9b44a4da78758068133859569fdce",
+          "runtime_loader": "validator:v1",
+          "schema_version": "runtime/v1",
+          "storage_ref": "memory://configctl/artifacts/db7a2aa07f51f34631483000940d322f/bd78baa33b4840a3a11af7d68bd82ab6"
+        },
+        "config": {
+          "definition_checksum": "86e3ff7996a4baed1dfac76a38869effd044c3f31f8e378349b75efcf2f9edce",
+          "key": "scenario-lifecycle",
+          "set_id": "db7a2aa07f51f34631483000940d322f",
+          "version": 1,
+          "version_id": "bd78baa33b4840a3a11af7d68bd82ab6"
+        },
+        "scope": {
+          "key": "default",
+          "kind": "global"
+        }
+      }
+    }
+  ]
+}

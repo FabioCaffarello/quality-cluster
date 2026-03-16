@@ -1,0 +1,6 @@
+configctl-1  | time=2026-03-16T05:10:59.380Z level=INFO msg="configctl starting"
+configctl-1  | time=2026-03-16T05:10:59.382Z level=WARN msg="configctl event router: unknown message" type=actor.Initialized
+configctl-1  | time=2026-03-16T05:10:59.431Z level=WARN msg="configctl control router: unknown message" type=actor.Initialized
+configctl-1  | time=2026-03-16T05:10:59.431Z level=INFO msg="configctl control router started"
+configctl-1  | time=2026-03-16T05:10:59.431Z level=WARN msg="configctl control responder: unknown message" type=actor.Initialized
+configctl-1  | time=2026-03-16T05:10:59.435Z level=INFO msg="configctl runtime started"

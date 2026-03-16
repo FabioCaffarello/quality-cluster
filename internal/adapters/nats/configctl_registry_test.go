@@ -7,18 +7,19 @@ func TestConfigctlRegistryKeepsSubjectsAndStreamsSeparated(t *testing.T) {
 
 	registry := DefaultConfigctlRegistry()
 	subjects := map[string]struct{}{
-		registry.CreateDraft.Subject:                 {},
-		registry.GetConfig.Subject:                   {},
-		registry.GetActive.Subject:                   {},
-		registry.ListActiveIngestionBindings.Subject: {},
-		registry.ListConfigs.Subject:                 {},
-		registry.ValidateDraft.Subject:               {},
-		registry.ValidateConfig.Subject:              {},
-		registry.CompileConfig.Subject:               {},
-		registry.ActivateConfig.Subject:              {},
+		registry.CreateDraft.Subject:                  {},
+		registry.GetConfig.Subject:                    {},
+		registry.GetActive.Subject:                    {},
+		registry.ListActiveRuntimeProjections.Subject: {},
+		registry.ListActiveIngestionBindings.Subject:  {},
+		registry.ListConfigs.Subject:                  {},
+		registry.ValidateDraft.Subject:                {},
+		registry.ValidateConfig.Subject:               {},
+		registry.CompileConfig.Subject:                {},
+		registry.ActivateConfig.Subject:               {},
 	}
 
-	if len(subjects) != 9 {
+	if len(subjects) != 10 {
 		t.Fatalf("expected unique control subjects, got %d", len(subjects))
 	}
 	if registry.Activated.Stream.Name == "" {
@@ -29,6 +30,24 @@ func TestConfigctlRegistryKeepsSubjectsAndStreamsSeparated(t *testing.T) {
 	}
 	if registry.IngestionRuntimeChanged.Subject == registry.Activated.Subject {
 		t.Fatal("expected ingestion runtime changed event subject to stay separate from config.activated")
+	}
+	if registry.ValidatorRuntimeCleared.Event.Subject == registry.ValidatorRuntime.Event.Subject {
+		t.Fatal("expected runtime clear consumer subject to stay separate from activation consumer")
+	}
+	if registry.ValidatorRuntimeCleared.Durable == registry.ValidatorRuntime.Durable {
+		t.Fatal("expected runtime clear consumer durable to stay separate from activation consumer")
+	}
+	if registry.ConsumerRuntimeChanged.Event.Subject != registry.IngestionRuntimeChanged.Subject {
+		t.Fatal("expected consumer runtime refresh to use ingestion runtime changed subject")
+	}
+	if registry.EmulatorRuntimeChanged.Event.Subject != registry.IngestionRuntimeChanged.Subject {
+		t.Fatal("expected emulator runtime refresh to use ingestion runtime changed subject")
+	}
+	if registry.ConsumerRuntimeChanged.Durable == registry.EmulatorRuntimeChanged.Durable {
+		t.Fatal("expected consumer and emulator refresh durables to stay separate")
+	}
+	if registry.ConsumerRuntimeChanged.Durable == registry.ValidatorRuntime.Durable {
+		t.Fatal("expected consumer refresh durable to stay separate from validator runtime durable")
 	}
 }
 

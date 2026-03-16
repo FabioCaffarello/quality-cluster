@@ -5,15 +5,15 @@ use crate::error::Result;
 /// A validated field requirement from the DataPlane Message.Validate() method.
 #[derive(Debug, Clone)]
 pub struct ValidatedField {
-    pub path: String,       // e.g., "binding.name", "metadata.message_id"
+    pub path: String, // e.g., "binding.name", "metadata.message_id"
     #[allow(dead_code)]
-    pub condition: String,  // "not_empty", "not_zero", "valid_json"
+    pub condition: String, // "not_empty", "not_zero", "valid_json"
 }
 
 /// DataPlane contract derived from contracts.go.
 #[derive(Debug)]
 pub struct DataPlaneContract {
-    pub message_fields: Vec<String>,     // top-level fields of Message struct
+    pub message_fields: Vec<String>, // top-level fields of Message struct
     pub validated_fields: Vec<ValidatedField>,
     pub default_content_type: Option<String>,
     pub default_source: Option<String>,
@@ -93,16 +93,21 @@ fn extract_validated_fields(source: &str) -> Vec<ValidatedField> {
                         let after_field = &trimmed[field_pos + "Field:".len()..];
                         if let Some(tag_start) = after_field.find('"') {
                             if let Some(tag_end) = after_field[tag_start + 1..].find('"') {
-                                let path = after_field[tag_start + 1..tag_start + 1 + tag_end].to_string();
+                                let path =
+                                    after_field[tag_start + 1..tag_start + 1 + tag_end].to_string();
 
                                 // Check the same line and adjacent lines for Message context
                                 let window: String = lines
                                     [idx.saturating_sub(2)..std::cmp::min(idx + 3, lines.len())]
                                     .join(" ");
 
-                                let condition = if body.contains("json.Valid(m.Payload)") && path == "payload" {
+                                let condition = if body.contains("json.Valid(m.Payload)")
+                                    && path == "payload"
+                                {
                                     "valid_json".to_string()
-                                } else if window.contains("must not be zero") || window.contains("IsZero") {
+                                } else if window.contains("must not be zero")
+                                    || window.contains("IsZero")
+                                {
                                     "not_zero".to_string()
                                 } else {
                                     "not_empty".to_string()
@@ -266,7 +271,10 @@ func MessageIDForKafkaRecord(binding configctlcontracts.ActiveIngestionBindingRe
         let binding_name = fields.iter().find(|f| f.path == "binding.name").unwrap();
         assert_eq!(binding_name.condition, "not_empty");
 
-        let ingested_at = fields.iter().find(|f| f.path == "metadata.ingested_at").unwrap();
+        let ingested_at = fields
+            .iter()
+            .find(|f| f.path == "metadata.ingested_at")
+            .unwrap();
         assert_eq!(ingested_at.condition, "not_zero");
 
         assert!(fields.iter().any(|f| f.path == "payload"));
@@ -274,8 +282,14 @@ func MessageIDForKafkaRecord(binding configctlcontracts.ActiveIngestionBindingRe
 
     #[test]
     fn extracts_constants() {
-        assert_eq!(extract_const_value(SAMPLE_CONTRACTS, "ContentTypeJSON"), Some("application/json".into()));
-        assert_eq!(extract_const_value(SAMPLE_CONTRACTS, "SourceKafka"), Some("kafka".into()));
+        assert_eq!(
+            extract_const_value(SAMPLE_CONTRACTS, "ContentTypeJSON"),
+            Some("application/json".into())
+        );
+        assert_eq!(
+            extract_const_value(SAMPLE_CONTRACTS, "SourceKafka"),
+            Some("kafka".into())
+        );
     }
 
     #[test]

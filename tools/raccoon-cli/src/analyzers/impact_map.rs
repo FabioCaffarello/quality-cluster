@@ -86,7 +86,10 @@ pub fn analyze_with_lsp(
         LspStatus::NoResults
     } else {
         LspStatus::Unavailable {
-            reason: bridge.unavailable_reason().unwrap_or("gopls not available").to_string(),
+            reason: bridge
+                .unavailable_reason()
+                .unwrap_or("gopls not available")
+                .to_string(),
         }
     };
 
@@ -108,8 +111,7 @@ pub fn analyze_with_lsp(
             for lr in enriched.lsp_references {
                 // Deduplicate by location.
                 if !lsp_refs.iter().any(|r| {
-                    r.location.file == lr.location.file
-                        && r.location.line == lr.location.line
+                    r.location.file == lr.location.file && r.location.line == lr.location.line
                 }) {
                     lsp_refs.push(lr);
                 }
@@ -126,13 +128,16 @@ pub fn analyze_with_lsp(
     // Update scope note.
     match &report.lsp_enrichment.as_ref().unwrap().status {
         LspStatus::Enriched => {
-            report.scope_note = "Impact combines static import graphs and exported symbol analysis \
+            report.scope_note =
+                "Impact combines static import graphs and exported symbol analysis \
                 with gopls semantic references (cross-package call sites). Each source is tagged \
-                [ast] or [lsp].".to_string();
+                [ast] or [lsp]."
+                    .to_string();
         }
         LspStatus::NoResults => {
             report.scope_note = "Impact is computed from static import graphs and exported symbol \
-                analysis. gopls was available but returned no additional references.".to_string();
+                analysis. gopls was available but returned no additional references."
+                .to_string();
         }
         LspStatus::Unavailable { reason } => {
             report.scope_note = format!(
@@ -257,25 +262,41 @@ const SENSITIVE_AREAS: &[SensitiveAreaDef] = &[
         name: "config-files",
         description: "deploy/configs — service configuration",
         patterns: &["deploy/configs/"],
-        commands: &["raccoon-cli doctor", "raccoon-cli topology-doctor", "raccoon-cli drift-detect"],
+        commands: &[
+            "raccoon-cli doctor",
+            "raccoon-cli topology-doctor",
+            "raccoon-cli drift-detect",
+        ],
     },
     SensitiveAreaDef {
         name: "compose",
         description: "docker-compose — service orchestration",
         patterns: &["deploy/compose/"],
-        commands: &["raccoon-cli doctor", "raccoon-cli topology-doctor", "raccoon-cli drift-detect"],
+        commands: &[
+            "raccoon-cli doctor",
+            "raccoon-cli topology-doctor",
+            "raccoon-cli drift-detect",
+        ],
     },
     SensitiveAreaDef {
         name: "nats-adapters",
         description: "NATS/JetStream adapter layer",
         patterns: &["internal/adapters/nats/"],
-        commands: &["raccoon-cli contract-audit", "raccoon-cli runtime-bindings", "raccoon-cli arch-guard"],
+        commands: &[
+            "raccoon-cli contract-audit",
+            "raccoon-cli runtime-bindings",
+            "raccoon-cli arch-guard",
+        ],
     },
     SensitiveAreaDef {
         name: "kafka-adapters",
         description: "Kafka adapter layer",
         patterns: &["internal/adapters/kafka/"],
-        commands: &["raccoon-cli topology-doctor", "raccoon-cli runtime-bindings", "raccoon-cli arch-guard"],
+        commands: &[
+            "raccoon-cli topology-doctor",
+            "raccoon-cli runtime-bindings",
+            "raccoon-cli arch-guard",
+        ],
     },
     SensitiveAreaDef {
         name: "domain",
@@ -304,20 +325,40 @@ const SENSITIVE_AREAS: &[SensitiveAreaDef] = &[
     SensitiveAreaDef {
         name: "validator-logic",
         description: "validator — validation rules and results",
-        patterns: &["internal/actors/scopes/validator/", "internal/application/validatorresults/"],
-        commands: &["raccoon-cli contract-audit", "raccoon-cli runtime-bindings", "raccoon-cli scenario-smoke happy-path"],
+        patterns: &[
+            "internal/actors/scopes/validator/",
+            "internal/application/validatorresults/",
+        ],
+        commands: &[
+            "raccoon-cli contract-audit",
+            "raccoon-cli runtime-bindings",
+            "raccoon-cli scenario-smoke happy-path",
+        ],
     },
     SensitiveAreaDef {
         name: "consumer-pipeline",
         description: "consumer — kafka-to-jetstream bridging",
-        patterns: &["internal/actors/scopes/consumer/", "internal/application/dataplane/"],
-        commands: &["raccoon-cli topology-doctor", "raccoon-cli runtime-bindings", "raccoon-cli scenario-smoke happy-path"],
+        patterns: &[
+            "internal/actors/scopes/consumer/",
+            "internal/application/dataplane/",
+        ],
+        commands: &[
+            "raccoon-cli topology-doctor",
+            "raccoon-cli runtime-bindings",
+            "raccoon-cli scenario-smoke happy-path",
+        ],
     },
     SensitiveAreaDef {
         name: "config-lifecycle",
         description: "configctl — config draft/validate/compile/activate",
-        patterns: &["internal/actors/scopes/configctl/", "internal/application/configctl/"],
-        commands: &["raccoon-cli contract-audit", "raccoon-cli scenario-smoke config-lifecycle"],
+        patterns: &[
+            "internal/actors/scopes/configctl/",
+            "internal/application/configctl/",
+        ],
+        commands: &[
+            "raccoon-cli contract-audit",
+            "raccoon-cli scenario-smoke config-lifecycle",
+        ],
     },
 ];
 
@@ -339,12 +380,18 @@ fn analyze_target(index: &ProjectIndex, target: &str) -> TargetImpact {
     let (areas, commands) = match_areas(target);
     let risks = if !areas.is_empty() {
         vec![Risk {
-            description: format!("target '{}' not found in AST index but matches known project paths", target),
+            description: format!(
+                "target '{}' not found in AST index but matches known project paths",
+                target
+            ),
             basis: "inferred".into(),
         }]
     } else {
         vec![Risk {
-            description: format!("target '{}' not found in AST index and does not match any known area", target),
+            description: format!(
+                "target '{}' not found in AST index and does not match any known area",
+                target
+            ),
             basis: "observed".into(),
         }]
     };
@@ -456,7 +503,12 @@ fn try_as_symbol(index: &ProjectIndex, target: &str) -> Option<TargetImpact> {
         if f.visibility == Visibility::Exported {
             exported_symbols.push(ExportedSymbol {
                 name: f.name.clone(),
-                kind: if f.receiver.is_some() { "method" } else { "func" }.into(),
+                kind: if f.receiver.is_some() {
+                    "method"
+                } else {
+                    "func"
+                }
+                .into(),
                 location: format!("{}:{}", f.location.file, f.location.line),
             });
         }
@@ -528,13 +580,15 @@ fn find_dependents(index: &ProjectIndex, target_dir: &str) -> Vec<Dependent> {
 /// Check if an import path like "github.com/org/repo/internal/domain/configctl"
 /// ends with the given directory like "internal/domain/configctl".
 fn import_matches_dir(import_path: &str, dir: &str) -> bool {
-    import_path.ends_with(dir)
-        || import_path.ends_with(&format!("/{dir}"))
+    import_path.ends_with(dir) || import_path.ends_with(&format!("/{dir}"))
 }
 
 // ── Symbol collection ──────────────────────────────────────────────────────
 
-fn collect_exported_symbols_from_file(index: &ProjectIndex, file_path: &str) -> Vec<ExportedSymbol> {
+fn collect_exported_symbols_from_file(
+    index: &ProjectIndex,
+    file_path: &str,
+) -> Vec<ExportedSymbol> {
     let mut symbols = Vec::new();
     for file in &index.files {
         if file.path != file_path {
@@ -551,7 +605,11 @@ fn collect_exported_symbols_from_file(index: &ProjectIndex, file_path: &str) -> 
         }
         for f in &file.functions {
             if f.visibility == Visibility::Exported {
-                let kind = if f.receiver.is_some() { "method" } else { "func" };
+                let kind = if f.receiver.is_some() {
+                    "method"
+                } else {
+                    "func"
+                };
                 symbols.push(ExportedSymbol {
                     name: f.name.clone(),
                     kind: kind.into(),
@@ -572,7 +630,10 @@ fn collect_exported_symbols_from_file(index: &ProjectIndex, file_path: &str) -> 
     symbols
 }
 
-fn collect_exported_symbols_from_package(index: &ProjectIndex, pkg_dir: &str) -> Vec<ExportedSymbol> {
+fn collect_exported_symbols_from_package(
+    index: &ProjectIndex,
+    pkg_dir: &str,
+) -> Vec<ExportedSymbol> {
     let mut symbols = Vec::new();
     for file in index.files_in_dir(pkg_dir) {
         if file.is_test {
@@ -589,7 +650,11 @@ fn collect_exported_symbols_from_package(index: &ProjectIndex, pkg_dir: &str) ->
         }
         for f in &file.functions {
             if f.visibility == Visibility::Exported {
-                let kind = if f.receiver.is_some() { "method" } else { "func" };
+                let kind = if f.receiver.is_some() {
+                    "method"
+                } else {
+                    "func"
+                };
                 symbols.push(ExportedSymbol {
                     name: f.name.clone(),
                     kind: kind.into(),
@@ -668,7 +733,8 @@ fn append_contracts_from_types(types: &[GoType], contracts: &mut Vec<ContractIte
                 // Structs in contracts/, messages, or with Command/Query/Reply/Event in name
                 let is_message = is_message_type(&t.name, &t.location.file);
                 if is_message {
-                    let field_names: Vec<&str> = fields.iter()
+                    let field_names: Vec<&str> = fields
+                        .iter()
                         .filter(|f| f.visibility == Visibility::Exported)
                         .map(|f| f.name.as_str())
                         .collect();
@@ -678,7 +744,11 @@ fn append_contracts_from_types(types: &[GoType], contracts: &mut Vec<ContractIte
                         location: loc,
                         why: format!(
                             "message struct — field changes affect serialization (fields: {})",
-                            if field_names.is_empty() { "none".into() } else { field_names.join(", ") }
+                            if field_names.is_empty() {
+                                "none".into()
+                            } else {
+                                field_names.join(", ")
+                            }
                         ),
                     });
                 }
@@ -690,7 +760,8 @@ fn append_contracts_from_types(types: &[GoType], contracts: &mut Vec<ContractIte
                         name: t.name.clone(),
                         kind: "contract_type".into(),
                         location: loc,
-                        why: "type alias in contract layer — changes affect message encoding".into(),
+                        why: "type alias in contract layer — changes affect message encoding"
+                            .into(),
                     });
                 }
             }
@@ -699,7 +770,9 @@ fn append_contracts_from_types(types: &[GoType], contracts: &mut Vec<ContractIte
 }
 
 fn is_message_type(name: &str, file_path: &str) -> bool {
-    let message_suffixes = ["Command", "Query", "Reply", "Event", "Request", "Response", "Message"];
+    let message_suffixes = [
+        "Command", "Query", "Reply", "Event", "Request", "Response", "Message",
+    ];
     let contract_paths = ["contracts/", "messages", "events"];
 
     message_suffixes.iter().any(|s| name.ends_with(s))
@@ -743,7 +816,10 @@ fn compute_risks(
 
     if !contracts.is_empty() {
         let iface_count = contracts.iter().filter(|c| c.kind == "interface").count();
-        let msg_count = contracts.iter().filter(|c| c.kind == "message_type").count();
+        let msg_count = contracts
+            .iter()
+            .filter(|c| c.kind == "message_type")
+            .count();
 
         if iface_count > 0 {
             risks.push(Risk {
@@ -825,7 +901,13 @@ pub fn render_human(report: &ImpactReport, verbose: bool) -> String {
     }
 
     for impact in &report.impacts {
-        writeln!(out, "Target: {} [{}]", impact.target, target_kind_label(impact.kind)).unwrap();
+        writeln!(
+            out,
+            "Target: {} [{}]",
+            impact.target,
+            target_kind_label(impact.kind)
+        )
+        .unwrap();
 
         if let Some(pkg) = &impact.resolved_package {
             writeln!(out, "  Package: {pkg}").unwrap();
@@ -844,28 +926,57 @@ pub fn render_human(report: &ImpactReport, verbose: bool) -> String {
 
         // Exported symbols
         if !impact.exported_symbols.is_empty() {
-            writeln!(out, "  Exported symbols ({}): [ast]", impact.exported_symbols.len()).unwrap();
-            let limit = if verbose { impact.exported_symbols.len() } else { 10 };
+            writeln!(
+                out,
+                "  Exported symbols ({}): [ast]",
+                impact.exported_symbols.len()
+            )
+            .unwrap();
+            let limit = if verbose {
+                impact.exported_symbols.len()
+            } else {
+                10
+            };
             for sym in impact.exported_symbols.iter().take(limit) {
                 writeln!(out, "    {} [{}] at {}", sym.name, sym.kind, sym.location).unwrap();
             }
             if !verbose && impact.exported_symbols.len() > 10 {
-                writeln!(out, "    ... and {} more (use --verbose to see all)", impact.exported_symbols.len() - 10).unwrap();
+                writeln!(
+                    out,
+                    "    ... and {} more (use --verbose to see all)",
+                    impact.exported_symbols.len() - 10
+                )
+                .unwrap();
             }
         }
 
         // Contract surface
         if !impact.contract_surface.is_empty() {
-            writeln!(out, "  Contract surface ({}): [ast]", impact.contract_surface.len()).unwrap();
+            writeln!(
+                out,
+                "  Contract surface ({}): [ast]",
+                impact.contract_surface.len()
+            )
+            .unwrap();
             for item in &impact.contract_surface {
-                writeln!(out, "    {} [{}] at {}", item.name, item.kind, item.location).unwrap();
+                writeln!(
+                    out,
+                    "    {} [{}] at {}",
+                    item.name, item.kind, item.location
+                )
+                .unwrap();
                 writeln!(out, "      why: {}", item.why).unwrap();
             }
         }
 
         // Dependents
         if !impact.direct_dependents.is_empty() {
-            writeln!(out, "  Direct dependents ({}): [ast]", impact.direct_dependents.len()).unwrap();
+            writeln!(
+                out,
+                "  Direct dependents ({}): [ast]",
+                impact.direct_dependents.len()
+            )
+            .unwrap();
             for dep in &impact.direct_dependents {
                 writeln!(out, "    {} ({})", dep.package_dir, dep.basis).unwrap();
             }
@@ -905,7 +1016,11 @@ pub fn render_human(report: &ImpactReport, verbose: bool) -> String {
                 lsp.queried_symbols.join(", ")
             )
             .unwrap();
-            let limit = if verbose { lsp.additional_references.len() } else { 20 };
+            let limit = if verbose {
+                lsp.additional_references.len()
+            } else {
+                20
+            };
             for r in lsp.additional_references.iter().take(limit) {
                 let ctx = r.context.as_deref().unwrap_or("");
                 if ctx.is_empty() {
@@ -992,7 +1107,8 @@ const (
 	LifecycleActive    VersionLifecycle = "active"
 )
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/domain/configctl/config.go"),
@@ -1018,7 +1134,8 @@ func NewConfigSet(id string) ConfigSet {
 func (s *ConfigSet) AddVersion(v ConfigVersion) {
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Application ports
         fs::create_dir_all(root.join("internal/application/ports")).unwrap();
@@ -1033,7 +1150,8 @@ type ConfigctlGateway interface {
 	GetConfig(ctx context.Context, id string) (string, error)
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Application use cases (depends on domain + ports)
         fs::create_dir_all(root.join("internal/application/configctl/contracts")).unwrap();
@@ -1051,7 +1169,8 @@ type ActivateConfigCommand struct {
 	VersionID string
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         fs::write(
             root.join("internal/application/configctl/create_draft.go"),
@@ -1065,7 +1184,8 @@ func CreateDraft(id string) domain.ConfigSet {
 	return domain.NewConfigSet(id)
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Adapter layer (depends on application)
         fs::create_dir_all(root.join("internal/adapters/nats")).unwrap();
@@ -1081,7 +1201,8 @@ func Encode(s domain.ConfigSet) ([]byte, error) {
 	return nil, nil
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Actors (depends on application + adapters)
         fs::create_dir_all(root.join("internal/actors/scopes/configctl")).unwrap();
@@ -1103,7 +1224,8 @@ func New() Supervisor {
 	return Supervisor{sets: []domain.ConfigSet{s}}
 }
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         root
     }
@@ -1142,7 +1264,10 @@ func New() Supervisor {
 
         assert_eq!(report.impacts.len(), 1);
         assert_eq!(report.impacts[0].kind, TargetKind::Symbol);
-        assert!(report.impacts[0].exported_symbols.iter().any(|s| s.name == "ConfigSet"));
+        assert!(report.impacts[0]
+            .exported_symbols
+            .iter()
+            .any(|s| s.name == "ConfigSet"));
     }
 
     #[test]
@@ -1179,7 +1304,9 @@ func New() Supervisor {
 
         let contracts = &report.impacts[0].contract_surface;
         assert!(
-            contracts.iter().any(|c| c.name == "ConfigctlGateway" && c.kind == "interface"),
+            contracts
+                .iter()
+                .any(|c| c.name == "ConfigctlGateway" && c.kind == "interface"),
             "should detect ConfigctlGateway interface, got: {:?}",
             contracts
         );
@@ -1340,7 +1467,10 @@ func New() Supervisor {
         assert!(!report.impacts[0].exported_symbols.is_empty());
 
         // LSP enrichment should be present but unavailable.
-        let lsp = report.lsp_enrichment.as_ref().expect("should have lsp_enrichment");
+        let lsp = report
+            .lsp_enrichment
+            .as_ref()
+            .expect("should have lsp_enrichment");
         assert!(
             matches!(lsp.status, LspStatus::Unavailable { .. }),
             "LSP status should be unavailable, got: {:?}",

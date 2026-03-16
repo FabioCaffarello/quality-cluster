@@ -11,12 +11,16 @@ import (
 	"time"
 
 	adapterkafka "internal/adapters/kafka"
+	adapternats "internal/adapters/nats"
 	dataplaneapp "internal/application/dataplane"
 	runtimebootstrap "internal/application/runtimebootstrap"
+	configdomain "internal/domain/configctl"
 	"internal/shared/bootstrap"
 	"internal/shared/problem"
 	"internal/shared/settings"
 )
+
+var ensureTopicsForBootstrap = adapterkafka.EnsureTopics
 
 func Run(config settings.AppConfig) {
 	logger := bootstrap.BuildLogger(config.Log)
@@ -30,14 +34,26 @@ func Run(config settings.AppConfig) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrap(ctx, logger, config, "emulator")
+	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet(ctx, logger, config, "emulator")
 	if prob != nil {
 		logger.Error("bootstrap active ingestion bindings", "error", prob)
 		os.Exit(1)
 	}
+	bootstrapSignature := bootstrapState.Signature()
+	refreshSignals := make(chan struct{}, 1)
+	runtimeChangedConsumer := adapternats.NewIngestionRuntimeChangedConsumer(config.NATS.URL, adapternats.DefaultConfigctlRegistry().EmulatorRuntimeChanged, &emulatorRefreshNotifier{signals: refreshSignals})
+	if err := runtimeChangedConsumer.Start(); err != nil {
+		logger.Error("start emulator runtime refresh consumer", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := runtimeChangedConsumer.Close(); err != nil {
+			logger.Error("close emulator runtime refresh consumer", "error", err)
+		}
+	}()
 
 	registry := dataplaneapp.DefaultRegistry()
-	if err := adapterkafka.EnsureTopics(ctx, config.Kafka.Brokers, bootstrapState.Index.Topics(), config.Kafka.DialTimeoutDuration()); err != nil {
+	if err := ensureTopicsForBootstrap(ctx, config.Kafka.Brokers, bootstrapState.Index.Topics(), config.Kafka.DialTimeoutDuration()); err != nil {
 		logger.Error("ensure kafka topics", "error", err)
 		os.Exit(1)
 	}
@@ -63,6 +79,17 @@ func Run(config settings.AppConfig) {
 	ticker := time.NewTicker(config.Emulator.PublishIntervalDuration())
 	defer ticker.Stop()
 
+	var reconcileTicker *time.Ticker
+	if interval := config.Bootstrap.ReconcileIntervalDuration(); interval > 0 {
+		reconcileTicker = time.NewTicker(interval)
+		defer reconcileTicker.Stop()
+	}
+
+	var reconcileTick <-chan time.Time
+	if reconcileTicker != nil {
+		reconcileTick = reconcileTicker.C
+	}
+
 	var sequence int64
 	if err := publishSyntheticBatch(ctx, logger, producer, registry, bootstrapState.Index, &sequence); err != nil {
 		logger.Error("publish synthetic batch", "error", err)
@@ -74,6 +101,10 @@ func Run(config settings.AppConfig) {
 		case <-ctx.Done():
 			logger.Info("emulator stopped")
 			return
+		case <-refreshSignals:
+			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, bootstrapState, bootstrapSignature)
+		case <-reconcileTick:
+			bootstrapState, bootstrapSignature = reconcileBootstrapState(ctx, logger, config, bootstrapState, bootstrapSignature)
 		case <-ticker.C:
 			if err := publishSyntheticBatch(ctx, logger, producer, registry, bootstrapState.Index, &sequence); err != nil {
 				logger.Error("publish synthetic batch", "error", err)
@@ -83,10 +114,44 @@ func Run(config settings.AppConfig) {
 	}
 }
 
+func reconcileBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, current runtimebootstrap.ActiveIngestionBootstrap, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, string) {
+	refreshed, changed, refreshErr := refreshBootstrapState(ctx, logger, config, currentSignature)
+	if refreshErr != nil {
+		logger.Warn("refresh emulator bootstrap", "error", refreshErr)
+		return current, currentSignature
+	}
+	if !changed {
+		return current, currentSignature
+	}
+	if err := ensureTopicsForBootstrap(ctx, config.Kafka.Brokers, refreshed.Index.Topics(), config.Kafka.DialTimeoutDuration()); err != nil {
+		logger.Warn("ensure kafka topics for refreshed bootstrap", "error", err)
+		return current, currentSignature
+	}
+
+	logger.Info("emulator bootstrap refreshed", "topics", refreshed.Index.Topics(), "bindings", len(refreshed.Index.All()))
+	return refreshed, refreshed.Signature()
+}
+
+func refreshBootstrapState(ctx context.Context, logger *slog.Logger, config settings.AppConfig, currentSignature string) (runtimebootstrap.ActiveIngestionBootstrap, bool, *problem.Problem) {
+	bootstrapState, prob := runtimebootstrap.WaitForConfiguredActiveIngestionBootstrapSet(ctx, logger, config, "emulator")
+	if prob != nil {
+		return runtimebootstrap.ActiveIngestionBootstrap{}, false, prob
+	}
+
+	nextSignature := bootstrapState.Signature()
+	return bootstrapState, nextSignature != currentSignature, nil
+}
+
 func validateEmulatorConfig(config settings.AppConfig) *problem.Problem {
 	var issues []problem.ValidationIssue
 	if !config.Kafka.Enabled {
 		issues = append(issues, problem.ValidationIssue{Field: "kafka.enabled", Message: "must be true for emulator"})
+	}
+	if !config.NATS.Enabled {
+		issues = append(issues, problem.ValidationIssue{Field: "nats.enabled", Message: "must be true for emulator"})
+	}
+	if strings.TrimSpace(config.NATS.URL) == "" {
+		issues = append(issues, problem.ValidationIssue{Field: "nats.url", Message: "must not be empty for emulator"})
 	}
 	if strings.TrimSpace(config.Bootstrap.BaseURL) == "" {
 		issues = append(issues, problem.ValidationIssue{Field: "bootstrap.base_url", Message: "must not be empty for emulator"})
@@ -98,6 +163,21 @@ func validateEmulatorConfig(config settings.AppConfig) *problem.Problem {
 		return nil
 	}
 	return problem.Validation(problem.InvalidArgument, "emulator config is invalid", issues...)
+}
+
+type emulatorRefreshNotifier struct {
+	signals chan<- struct{}
+}
+
+func (n *emulatorRefreshNotifier) HandleIngestionRuntimeChanged(_ context.Context, _ configdomain.IngestionRuntimeChangedEvent) *problem.Problem {
+	if n == nil || n.signals == nil {
+		return problem.New(problem.Unavailable, "emulator refresh channel is unavailable")
+	}
+	select {
+	case n.signals <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 func publishSyntheticBatch(ctx context.Context, logger *slog.Logger, producer *adapterkafka.Producer, registry dataplaneapp.Registry, index dataplaneapp.BindingIndex, sequence *int64) error {

@@ -83,6 +83,9 @@ func TestLoadSupportsDataPlaneSections(t *testing.T) {
 	if cfg.Emulator.PublishInterval != "7s" {
 		t.Fatalf("expected emulator config to load, got %q", cfg.Emulator.PublishInterval)
 	}
+	if cfg.Bootstrap.ReconcileInterval != "30s" {
+		t.Fatalf("expected bootstrap reconcile interval default, got %q", cfg.Bootstrap.ReconcileInterval)
+	}
 }
 
 func TestLoadRejectsUnknownFields(t *testing.T) {

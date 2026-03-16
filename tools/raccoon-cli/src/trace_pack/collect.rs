@@ -1,3 +1,4 @@
+use crate::process_utils::run_command_with_timeout;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -48,6 +49,8 @@ const SERVICES: &[&str] = &[
     "emulator",
 ];
 
+const NATS_MONITOR_BASE_URL: &str = "http://127.0.0.1:8222";
+
 impl Collector {
     pub fn new(
         compose_file: &Path,
@@ -71,9 +74,12 @@ impl Collector {
         let mut evidences = Vec::new();
 
         evidences.push(self.collect_compose_status());
+        evidences.push(self.collect_nats_healthz());
+        evidences.push(self.collect_jetstream_state());
         evidences.push(self.collect_healthz());
         evidences.push(self.collect_readyz());
         evidences.push(self.collect_active_config());
+        evidences.push(self.collect_configctl_runtime_projections());
         evidences.push(self.collect_ingestion_bindings());
         evidences.push(self.collect_validator_runtime());
         evidences.push(self.collect_validation_results());
@@ -98,16 +104,21 @@ impl Collector {
                 };
             }
         };
+        let compose_file_arg = self
+            .compose_file
+            .canonicalize()
+            .unwrap_or_else(|_| self.compose_file.clone());
 
-        match Command::new("docker")
+        let mut command = Command::new("docker");
+        command
             .args(["compose", "-f"])
-            .arg(&self.compose_file)
+            .arg(&compose_file_arg)
             .args(["ps", "--all"])
-            .current_dir(compose_dir)
-            .output()
-        {
+            .current_dir(compose_dir);
+
+        match run_command_with_timeout(&mut command, Duration::from_secs(5), "docker compose ps") {
             Ok(output) if output.status.success() => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stdout = output.stdout;
                 Evidence {
                     name,
                     file,
@@ -116,12 +127,14 @@ impl Collector {
                 }
             }
             Ok(output) => {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stderr = output.stderr.trim().to_string();
                 Evidence {
                     name,
                     file,
                     content: String::new(),
-                    status: EvidenceStatus::Unavailable(format!("docker compose ps failed: {stderr}")),
+                    status: EvidenceStatus::Unavailable(format!(
+                        "docker compose ps failed: {stderr}"
+                    )),
                 }
             }
             Err(e) => Evidence {
@@ -137,12 +150,42 @@ impl Collector {
         self.collect_endpoint("Health check", "healthz.json", "/healthz")
     }
 
+    fn collect_nats_healthz(&self) -> Evidence {
+        self.collect_external_endpoint(
+            "NATS monitor health",
+            "nats/healthz.json",
+            NATS_MONITOR_BASE_URL,
+            "/healthz",
+        )
+    }
+
+    fn collect_jetstream_state(&self) -> Evidence {
+        self.collect_external_endpoint(
+            "JetStream state",
+            "nats/jsz.json",
+            NATS_MONITOR_BASE_URL,
+            "/jsz?streams=true&consumers=true&config=true",
+        )
+    }
+
     fn collect_readyz(&self) -> Evidence {
         self.collect_endpoint("Readiness check", "readyz.json", "/readyz")
     }
 
     fn collect_active_config(&self) -> Evidence {
-        self.collect_endpoint("Active config", "active-config.json", "/configctl/configs/active")
+        self.collect_endpoint(
+            "Active config",
+            "active-config.json",
+            "/configctl/configs/active",
+        )
+    }
+
+    fn collect_configctl_runtime_projections(&self) -> Evidence {
+        self.collect_endpoint(
+            "Configctl runtime projections",
+            "configctl-runtime-projections.json",
+            "/runtime/configctl/projections?scope_kind=global&scope_key=default",
+        )
     }
 
     fn collect_ingestion_bindings(&self) -> Evidence {
@@ -171,6 +214,21 @@ impl Collector {
 
     fn collect_endpoint(&self, name: &str, file: &str, path: &str) -> Evidence {
         let url = format!("{}{path}", self.base_url);
+        self.collect_url(name, file, &url)
+    }
+
+    fn collect_external_endpoint(
+        &self,
+        name: &str,
+        file: &str,
+        base_url: &str,
+        path: &str,
+    ) -> Evidence {
+        let url = format!("{}{path}", base_url.trim_end_matches('/'));
+        self.collect_url(name, file, &url)
+    }
+
+    fn collect_url(&self, name: &str, file: &str, url: &str) -> Evidence {
         match ureq::get(&url)
             .set("Accept", "application/json")
             .set("X-Correlation-ID", "raccoon-trace-pack")
@@ -194,9 +252,7 @@ impl Collector {
                 }
             }
             Err(ureq::Error::Status(_code, resp)) => {
-                let body = resp
-                    .into_string()
-                    .unwrap_or_else(|_| String::new());
+                let body = resp.into_string().unwrap_or_else(|_| String::new());
                 Evidence {
                     name: name.into(),
                     file: file.into(),
@@ -256,16 +312,25 @@ impl Collector {
                 let name = format!("Logs: {service}");
                 let file = format!("logs/{service}.log");
                 let tail = self.log_lines.to_string();
+                let compose_file_arg = self
+                    .compose_file
+                    .canonicalize()
+                    .unwrap_or_else(|_| self.compose_file.clone());
 
-                match Command::new("docker")
+                let mut command = Command::new("docker");
+                command
                     .args(["compose", "-f"])
-                    .arg(&self.compose_file)
+                    .arg(&compose_file_arg)
                     .args(["logs", "--no-color", "--tail", &tail, service])
-                    .current_dir(compose_dir)
-                    .output()
-                {
+                    .current_dir(compose_dir);
+
+                match run_command_with_timeout(
+                    &mut command,
+                    Duration::from_secs(5),
+                    &format!("docker compose logs {service}"),
+                ) {
                     Ok(output) if output.status.success() => {
-                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let stdout = output.stdout;
                         if stdout.trim().is_empty() {
                             Evidence {
                                 name,
@@ -283,7 +348,7 @@ impl Collector {
                         }
                     }
                     Ok(output) => {
-                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        let stderr = output.stderr.trim().to_string();
                         Evidence {
                             name,
                             file,
@@ -371,8 +436,7 @@ mod tests {
         let ok = serde_json::to_string(&EvidenceStatus::Ok).unwrap();
         assert!(ok.contains("Ok"));
 
-        let unavail =
-            serde_json::to_string(&EvidenceStatus::Unavailable("gone".into())).unwrap();
+        let unavail = serde_json::to_string(&EvidenceStatus::Unavailable("gone".into())).unwrap();
         assert!(unavail.contains("Unavailable"));
         assert!(unavail.contains("gone"));
     }
@@ -444,8 +508,8 @@ mod tests {
         );
 
         let evidences = collector.collect_all();
-        // 1 compose + 3 health/readyz + 3 runtime endpoints + 5 configs + 7 logs = 19
-        let expected = 1 + 2 + 4 + CONFIG_FILES.len() + SERVICES.len();
+        // 1 compose + 2 NATS monitor + 2 health/readyz + 5 runtime endpoints + configs + logs
+        let expected = 1 + 2 + 2 + 5 + CONFIG_FILES.len() + SERVICES.len();
         assert_eq!(
             evidences.len(),
             expected,

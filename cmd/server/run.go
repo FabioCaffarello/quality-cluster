@@ -40,6 +40,7 @@ func Run(config settings.AppConfig) {
 	createDraftUseCase := configctlclient.NewCreateDraftUseCase(gateway)
 	getConfigUseCase := configctlclient.NewGetConfigUseCase(gateway)
 	getActiveUseCase := configctlclient.NewGetActiveConfigUseCase(gateway)
+	listActiveRuntimeProjectionsUseCase := configctlclient.NewListActiveRuntimeProjectionsUseCase(gateway)
 	listActiveIngestionBindingsUseCase := configctlclient.NewListActiveIngestionBindingsUseCase(gateway)
 	listConfigsUseCase := configctlclient.NewListConfigsUseCase(gateway)
 	validateDraftUseCase := configctlclient.NewValidateDraftUseCase(gateway)
@@ -76,18 +77,19 @@ func Run(config settings.AppConfig) {
 	listValidationResultsUseCase := validatorresultsclient.NewListValidationResultsUseCase(resultsGateway)
 
 	serverRoutes := routes.DefaultRoutes(routes.Dependencies{
-		Readiness:                   newConfigctlReadinessChecker(gateway),
-		CreateDraft:                 createDraftUseCase,
-		GetConfig:                   getConfigUseCase,
-		GetActive:                   getActiveUseCase,
-		ListActiveIngestionBindings: listActiveIngestionBindingsUseCase,
-		ListConfigs:                 listConfigsUseCase,
-		ValidateDraft:               validateDraftUseCase,
-		ValidateConfig:              validateConfigUseCase,
-		CompileConfig:               compileConfigUseCase,
-		ActivateConfig:              activateConfigUseCase,
-		GetRuntime:                  getValidatorRuntimeUseCase,
-		ListValidationResults:       listValidationResultsUseCase,
+		Readiness:                    newServerReadinessChecker(config, gateway, runtimeGateway, resultsGateway),
+		CreateDraft:                  createDraftUseCase,
+		GetConfig:                    getConfigUseCase,
+		GetActive:                    getActiveUseCase,
+		ListActiveRuntimeProjections: listActiveRuntimeProjectionsUseCase,
+		ListActiveIngestionBindings:  listActiveIngestionBindingsUseCase,
+		ListConfigs:                  listConfigsUseCase,
+		ValidateDraft:                validateDraftUseCase,
+		ValidateConfig:               validateConfigUseCase,
+		CompileConfig:                compileConfigUseCase,
+		ActivateConfig:               activateConfigUseCase,
+		GetRuntime:                   getValidatorRuntimeUseCase,
+		ListValidationResults:        listValidationResultsUseCase,
 	})
 
 	pid := engine.Spawn(actorserver.NewServer(config.HTTP, serverRoutes), "server")

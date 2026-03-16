@@ -83,10 +83,7 @@ fn extract_streams(content: &str, topo: &mut SourceTopology) {
             // Search nearby lines (within 10 lines) for Subjects
             let subjects = find_subjects_near(&lines, i, 10);
             if !subjects.is_empty() {
-                topo.streams
-                    .entry(name)
-                    .or_default()
-                    .extend(subjects);
+                topo.streams.entry(name).or_default().extend(subjects);
             } else {
                 // Still register the stream even without subjects
                 topo.streams.entry(name).or_default();
@@ -109,9 +106,8 @@ fn extract_quoted_stream_name(line: &str) -> Option<String> {
 
     // Match lines containing Name:, Stream:, or the word "stream"/"Stream"
     // that also contain an UPPER_SNAKE_CASE quoted string
-    let is_stream_context = trimmed.contains("Name:")
-        || trimmed.contains("Stream")
-        || trimmed.contains("stream");
+    let is_stream_context =
+        trimmed.contains("Name:") || trimmed.contains("Stream") || trimmed.contains("stream");
 
     if !is_stream_context {
         return None;
@@ -294,7 +290,8 @@ mod tests {
 
     #[test]
     fn extract_all_quoted_finds_values() {
-        let line = r#"Name: "DATA_PLANE_INGESTION", Subjects: []string{"dataplane.ingestion.received.>"}"#;
+        let line =
+            r#"Name: "DATA_PLANE_INGESTION", Subjects: []string{"dataplane.ingestion.received.>"}"#;
         let vals = extract_all_quoted(line);
         assert!(vals.contains(&"DATA_PLANE_INGESTION".to_string()));
         assert!(vals.contains(&"dataplane.ingestion.received.>".to_string()));
@@ -422,7 +419,9 @@ func Real() {
         .unwrap();
 
         let result = scan_source(dir.path()).unwrap();
-        assert!(!result.subjects.contains(&"commented.out.subject".to_string()));
+        assert!(!result
+            .subjects
+            .contains(&"commented.out.subject".to_string()));
         assert!(!result.streams.contains_key("COMMENTED_STREAM"));
         assert!(result.subjects.contains(&"real.subject.here".to_string()));
     }
@@ -430,16 +429,8 @@ func Real() {
     #[test]
     fn scan_source_ignores_non_go_files() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("readme.md"),
-            r#"Subject: "not.a.go.file""#,
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("test.txt"),
-            r#"Name: "NOT_A_STREAM""#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("readme.md"), r#"Subject: "not.a.go.file""#).unwrap();
+        std::fs::write(dir.path().join("test.txt"), r#"Name: "NOT_A_STREAM""#).unwrap();
 
         let result = scan_source(dir.path()).unwrap();
         assert!(result.streams.is_empty());

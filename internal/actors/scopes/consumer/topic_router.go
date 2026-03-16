@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	dataplaneapp "internal/application/dataplane"
 	"internal/shared/problem"
 
@@ -39,6 +40,9 @@ func (a *TopicRouterActor) Receive(c *actor.Context) {
 		c.Respond(routeKafkaMessageResult{Prob: a.routeMessage(c, msg)})
 	case actor.Stopped:
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("consumer topic router: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

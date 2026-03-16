@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	actorcommon "internal/actors/common"
 	adapterkafka "internal/adapters/kafka"
 	"internal/shared/settings"
 
@@ -59,6 +60,9 @@ func (a *KafkaTopicConsumerActor) Receive(c *actor.Context) {
 			}
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("kafka topic consumer: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

@@ -10,20 +10,17 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(base_url: &str) -> Self {
+    pub fn new(base_url: &str, run_id: &str) -> Self {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            correlation_id: format!("raccoon-smoke-{}", std::process::id()),
+            correlation_id: format!("raccoon-smoke-{run_id}"),
         }
     }
 
     /// GET /healthz
     pub fn healthz(&self) -> Result<u16, String> {
         let url = format!("{}/healthz", self.base_url);
-        match ureq::get(&url)
-            .timeout(REQUEST_TIMEOUT)
-            .call()
-        {
+        match ureq::get(&url).timeout(REQUEST_TIMEOUT).call() {
             Ok(resp) => Ok(resp.status()),
             Err(ureq::Error::Status(code, _)) => Ok(code),
             Err(e) => Err(format!("healthz request failed: {e}")),
@@ -33,10 +30,7 @@ impl ApiClient {
     /// GET /readyz
     pub fn readyz(&self) -> Result<u16, String> {
         let url = format!("{}/readyz", self.base_url);
-        match ureq::get(&url)
-            .timeout(REQUEST_TIMEOUT)
-            .call()
-        {
+        match ureq::get(&url).timeout(REQUEST_TIMEOUT).call() {
             Ok(resp) => Ok(resp.status()),
             Err(ureq::Error::Status(code, _)) => Ok(code),
             Err(e) => Err(format!("readyz request failed: {e}")),
@@ -59,7 +53,10 @@ impl ApiClient {
 
     /// POST /configctl/config-versions/:id/validate
     pub fn validate_config(&self, id: &str) -> Result<Value, String> {
-        let url = format!("{}/configctl/config-versions/{}/validate", self.base_url, id);
+        let url = format!(
+            "{}/configctl/config-versions/{}/validate",
+            self.base_url, id
+        );
         self.post_json(&url, &serde_json::json!({}))
     }
 
@@ -70,30 +67,36 @@ impl ApiClient {
     }
 
     /// POST /configctl/config-versions/:id/activate
-    pub fn activate_config(&self, id: &str) -> Result<Value, String> {
+    pub fn activate_config(
+        &self,
+        id: &str,
+        scope_kind: &str,
+        scope_key: &str,
+    ) -> Result<Value, String> {
         let url = format!(
             "{}/configctl/config-versions/{}/activate",
             self.base_url, id
         );
         let body = serde_json::json!({
-            "scope_kind": "global",
-            "scope_key": "default"
+            "scope_kind": scope_kind,
+            "scope_key": scope_key
         });
         self.post_json(&url, &body)
     }
 
     /// GET /runtime/ingestion/bindings
-    pub fn ingestion_bindings(&self) -> Result<Value, String> {
-        let url = format!(
-            "{}/runtime/ingestion/bindings?scope_kind=global&scope_key=default",
-            self.base_url
-        );
-        self.get_json(&url)
+    pub fn ingestion_bindings(&self, scope_kind: &str, scope_key: &str) -> Result<Value, String> {
+        self.ingestion_bindings_scoped(scope_kind, scope_key)
     }
 
     /// GET /runtime/validator/results
-    pub fn validation_results(&self, limit: u32) -> Result<Value, String> {
-        self.validation_results_scoped("global", "default", limit)
+    pub fn validation_results(
+        &self,
+        scope_kind: &str,
+        scope_key: &str,
+        limit: u32,
+    ) -> Result<Value, String> {
+        self.validation_results_scoped(scope_kind, scope_key, limit)
     }
 
     /// GET /runtime/validator/results with custom scope
@@ -124,10 +127,32 @@ impl ApiClient {
     }
 
     /// GET /configctl/configs/active
-    pub fn get_active_config(&self) -> Result<Value, String> {
+    pub fn get_active_config(&self, scope_kind: &str, scope_key: &str) -> Result<Value, String> {
         let url = format!(
-            "{}/configctl/configs/active?scope_kind=global&scope_key=default",
-            self.base_url
+            "{}/configctl/configs/active?scope_kind={}&scope_key={}",
+            self.base_url, scope_kind, scope_key
+        );
+        self.get_json(&url)
+    }
+
+    /// GET /runtime/configctl/projections
+    pub fn configctl_runtime_projections(
+        &self,
+        scope_kind: &str,
+        scope_key: &str,
+    ) -> Result<Value, String> {
+        let url = format!(
+            "{}/runtime/configctl/projections?scope_kind={}&scope_key={}",
+            self.base_url, scope_kind, scope_key
+        );
+        self.get_json(&url)
+    }
+
+    /// GET /runtime/validator/active
+    pub fn validator_runtime(&self, scope_kind: &str, scope_key: &str) -> Result<Value, String> {
+        let url = format!(
+            "{}/runtime/validator/active?scope_kind={}&scope_key={}",
+            self.base_url, scope_kind, scope_key
         );
         self.get_json(&url)
     }
@@ -164,13 +189,13 @@ mod tests {
 
     #[test]
     fn api_client_strips_trailing_slash() {
-        let client = ApiClient::new("http://localhost:8080/");
+        let client = ApiClient::new("http://localhost:8080/", "run-1");
         assert_eq!(client.base_url, "http://localhost:8080");
     }
 
     #[test]
     fn api_client_correlation_id_contains_pid() {
-        let client = ApiClient::new("http://localhost:8080");
-        assert!(client.correlation_id.starts_with("raccoon-smoke-"));
+        let client = ApiClient::new("http://localhost:8080", "run-123");
+        assert_eq!(client.correlation_id, "raccoon-smoke-run-123");
     }
 }

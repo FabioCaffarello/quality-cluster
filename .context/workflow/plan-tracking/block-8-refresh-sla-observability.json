@@ -1,0 +1,43 @@
+{
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:01:51.270Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:01:51.272Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T16:01:51.273Z"
+    }
+  },
+  "progress": 100,
+  "decisions": [
+    {
+      "title": "Trace-pack is the canonical refresh SLA evidence bundle",
+      "description": "The trace-pack summary now consolidates both configured bootstrap.reconcile_interval values and JetStream counters for consumer-runtime-refresh-v1 and emulator-runtime-refresh-v1. This removes the need to hand-assemble refresh health from configs and jsz output during incidents and keeps the raccoon-cli as the first troubleshooting surface.",
+      "phase": "V",
+      "alternatives": [
+        "Leave refresh counters only in raw nats/jsz.json",
+        "Create a separate custom command instead of extending trace-pack summary"
+      ],
+      "status": "accepted",
+      "id": "dec-1773676911276",
+      "decidedAt": "2026-03-16T16:01:51.276Z"
+    },
+    {
+      "title": "Refresh cadence becomes a frozen CLI invariant",
+      "description": "Block 8 promotes bootstrap.reconcile_interval from an implementation detail to a topology-doctor invariant for consumer and emulator. The repository now treats refresh cadence as part of the dataplane operational contract, so drift in cadence is detected before runtime proof rather than after operators inspect configs manually.",
+      "phase": "E",
+      "alternatives": [
+        "Keep reconcile cadence visible only in deploy/configs and rely on code review",
+        "Expose reconcile cadence only in docs without a static CLI check"
+      ],
+      "status": "accepted",
+      "id": "dec-1773676911277",
+      "decidedAt": "2026-03-16T16:01:51.277Z"
+    }
+  ]
+}

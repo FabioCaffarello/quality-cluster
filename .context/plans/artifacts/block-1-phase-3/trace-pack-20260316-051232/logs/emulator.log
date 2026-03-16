@@ -1,0 +1,17 @@
+emulator-1  | time=2026-03-16T05:11:15.726Z level=INFO msg="waiting for active ingestion bindings" reason="none active yet"
+emulator-1  | time=2026-03-16T05:11:20.731Z level=INFO msg="waiting for active ingestion bindings" reason="none active yet"
+emulator-1  | time=2026-03-16T05:11:25.748Z level=INFO msg="emulator started" topics=[smoke.events.created] bindings=1
+emulator-1  | time=2026-03-16T05:11:27.793Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:25.749Z
+emulator-1  | time=2026-03-16T05:11:32.769Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:30.751Z
+emulator-1  | time=2026-03-16T05:11:37.778Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:35.756Z
+emulator-1  | time=2026-03-16T05:11:42.766Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:40.752Z
+emulator-1  | time=2026-03-16T05:11:47.771Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:45.751Z
+emulator-1  | time=2026-03-16T05:11:52.768Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:50.751Z
+emulator-1  | time=2026-03-16T05:11:57.763Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:11:55.756Z
+emulator-1  | time=2026-03-16T05:12:02.765Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:00.753Z
+emulator-1  | time=2026-03-16T05:12:07.764Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:05.750Z
+emulator-1  | time=2026-03-16T05:12:12.763Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:10.752Z
+emulator-1  | time=2026-03-16T05:12:17.764Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:15.751Z
+emulator-1  | time=2026-03-16T05:12:22.769Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:20.757Z
+emulator-1  | time=2026-03-16T05:12:27.765Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:25.751Z
+emulator-1  | time=2026-03-16T05:12:32.758Z level=INFO msg="published synthetic batch" messages=2 at=2026-03-16T05:12:30.749Z

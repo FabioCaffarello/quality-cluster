@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	actorcommon "internal/actors/common"
 	adapternats "internal/adapters/nats"
 	"internal/shared/problem"
 
@@ -57,6 +58,9 @@ func (a *DataPlanePublisherActor) Receive(c *actor.Context) {
 			}
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("consumer publisher: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

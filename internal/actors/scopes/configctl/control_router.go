@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	memoryrepo "internal/adapters/repositories/memory/configctl"
 	configapp "internal/application/configctl"
 	"internal/shared/events"
@@ -21,19 +22,20 @@ type ControlRouterConfig struct {
 }
 
 type ControlRouterActor struct {
-	cfg                   ControlRouterConfig
-	logger                *slog.Logger
-	engine                *actor.Engine
-	repository            configapp.Repository
-	createDraft           *configapp.CreateDraftUseCase
-	getConfig             *configapp.GetConfigUseCase
-	getActive             *configapp.GetActiveConfigUseCase
-	listIngestionBindings *configapp.ListActiveIngestionBindingsUseCase
-	listConfigs           *configapp.ListConfigsUseCase
-	validateDraft         *configapp.ValidateDraftUseCase
-	validateConfig        *configapp.ValidateConfigUseCase
-	compileConfig         *configapp.CompileConfigUseCase
-	activateConfig        *configapp.ActivateConfigUseCase
+	cfg                    ControlRouterConfig
+	logger                 *slog.Logger
+	engine                 *actor.Engine
+	repository             configapp.Repository
+	createDraft            *configapp.CreateDraftUseCase
+	getConfig              *configapp.GetConfigUseCase
+	getActive              *configapp.GetActiveConfigUseCase
+	listRuntimeProjections *configapp.ListActiveRuntimeProjectionsUseCase
+	listIngestionBindings  *configapp.ListActiveIngestionBindingsUseCase
+	listConfigs            *configapp.ListConfigsUseCase
+	validateDraft          *configapp.ValidateDraftUseCase
+	validateConfig         *configapp.ValidateConfigUseCase
+	compileConfig          *configapp.CompileConfigUseCase
+	activateConfig         *configapp.ActivateConfigUseCase
 }
 
 func NewControlRouterActor(cfg ControlRouterConfig) actor.Producer {
@@ -57,6 +59,9 @@ func (a *ControlRouterActor) Receive(c *actor.Context) {
 	case getActiveConfigMessage:
 		reply, prob := a.getActive.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
 		a.reply(c, getActiveConfigResult{Reply: reply, Prob: prob})
+	case listActiveRuntimeProjectionsMessage:
+		reply, prob := a.listRuntimeProjections.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
+		a.reply(c, listActiveRuntimeProjectionsResult{Reply: reply, Prob: prob})
 	case listActiveIngestionBindingsMessage:
 		reply, prob := a.listIngestionBindings.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Query)
 		a.reply(c, listActiveIngestionBindingsResult{Reply: reply, Prob: prob})
@@ -76,6 +81,9 @@ func (a *ControlRouterActor) Receive(c *actor.Context) {
 		reply, prob := a.activateConfig.Execute(requestctx.WithCorrelationID(context.Background(), msg.CorrelationID), msg.Command)
 		a.reply(c, activateConfigResult{Reply: reply, Prob: prob})
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("configctl control router: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }
@@ -106,6 +114,9 @@ func (a *ControlRouterActor) ensureDefaults(c *actor.Context) {
 	}
 	if a.listConfigs == nil {
 		a.listConfigs = configapp.NewListConfigsUseCase(a.repository)
+	}
+	if a.listRuntimeProjections == nil {
+		a.listRuntimeProjections = configapp.NewListActiveRuntimeProjectionsUseCase(a.repository)
 	}
 	if a.listIngestionBindings == nil {
 		a.listIngestionBindings = configapp.NewListActiveIngestionBindingsUseCase(a.repository)

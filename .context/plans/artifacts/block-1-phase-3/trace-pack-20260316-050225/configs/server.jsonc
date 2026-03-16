@@ -1,0 +1,19 @@
+{
+  // HTTP API exposed for local development.
+  "log": {
+    "level": "info",
+    "format": "text"
+  },
+  "http": {
+    "addr": ":8080",
+    "read_timeout": "10s",
+    "write_timeout": "15s",
+    "idle_timeout": "60s",
+    "shutdown_timeout": "10s"
+  },
+  "nats": {
+    "enabled": true,
+    "url": "nats://nats:4222",
+    "request_timeout": "2s"
+  }
+}

@@ -1,10 +1,13 @@
 package validator
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
 	adapternats "internal/adapters/nats"
+	configctlcontracts "internal/application/configctl/contracts"
+	configctlclient "internal/application/configctlclient"
 	"internal/shared/settings"
 
 	"github.com/anthdm/hollywood/actor"
@@ -44,6 +47,9 @@ func (s *Supervisor) start(c *actor.Context) error {
 	}
 
 	cachePID := c.SpawnChild(NewRuntimeCacheActor(), "runtime-cache")
+	if err := s.bootstrapRuntimeCache(c, cachePID); err != nil {
+		return err
+	}
 	resultsPID := c.SpawnChild(NewValidationResultsStoreActor(), "results-store")
 	routerPID := c.SpawnChild(NewValidationRouterActor(ValidationRouterConfig{
 		RuntimeCachePID: cachePID,
@@ -77,5 +83,27 @@ func (s *Supervisor) start(c *actor.Context) error {
 	}), "results-query-responder")
 
 	s.logger.Info("validator started")
+	return nil
+}
+
+func (s *Supervisor) bootstrapRuntimeCache(c *actor.Context, cachePID *actor.PID) error {
+	requestClient, err := adapternats.NewNATSRequestClientWithURL(s.cfg.NATS.URL, s.cfg.NATS.RequestTimeoutDuration())
+	if err != nil {
+		return err
+	}
+	defer requestClient.Close()
+
+	gateway := adapternats.NewConfigctlGateway(requestClient, "validator.bootstrap")
+	reply, prob := configctlclient.NewListActiveRuntimeProjectionsUseCase(gateway).Execute(context.Background(), configctlcontracts.ListActiveRuntimeProjectionsQuery{})
+	if prob != nil {
+		return prob
+	}
+
+	for _, runtime := range reply.Runtimes {
+		c.Engine().Send(cachePID, bootstrapRuntimeProjectionMessage{
+			Projection: runtimeProjectionFromRecord(runtime),
+		})
+	}
+	s.logger.Info("validator runtime bootstrap loaded", "runtimes", len(reply.Runtimes))
 	return nil
 }

@@ -1,0 +1,79 @@
+{
+  "decisions": [
+    {
+      "title": "Block 2 targets signal quality and static topology guard rails",
+      "description": "After lifecycle hardening, the next concrete gaps are noisy actor lifecycle warnings across configctl/consumer/validator and the absence of static tests around Compose topology and service/image drift. Block 2 should improve operator signal quality without changing the architecture that Block 1 stabilized.",
+      "phase": "P",
+      "alternatives": [
+        "Start directly on persistence or horizontalization work",
+        "Treat actor warning noise as acceptable and leave Compose validation entirely to live smoke"
+      ],
+      "status": "accepted",
+      "id": "dec-1773638505662",
+      "decidedAt": "2026-03-16T05:21:45.662Z"
+    },
+    {
+      "title": "Block 2 starts with log signal inventory and Compose invariants freeze",
+      "description": "The first execution step is to inventory actor lifecycle warnings and freeze which Compose invariants deserve static protection before any implementation begins. This keeps the block narrow, preserves Block 1 architecture decisions, and avoids mixing signal cleanup with broader refactors.",
+      "phase": "P",
+      "alternatives": [
+        "Start by editing actor warning handlers immediately",
+        "Start by adding Compose tests without freezing the invariants they are meant to protect"
+      ],
+      "status": "accepted",
+      "id": "dec-1773638616425",
+      "decidedAt": "2026-03-16T05:23:36.425Z"
+    },
+    {
+      "title": "Actor lifecycle warning inventory is noise-cleanup scope for Block 2",
+      "description": "Bootstrap logs show repeated WARN lines for actor.Initialized and actor.Started across configctl, consumer and validator actors. Block 2 will treat these as noise-cleanup candidates and will preserve WARN/ERROR for genuine protocol, transport and domain anomalies.",
+      "phase": "P",
+      "alternatives": [
+        "Leave all actor lifecycle warnings untouched",
+        "Suppress warnings globally without actor-by-actor classification"
+      ],
+      "status": "accepted",
+      "id": "dec-1773638658200",
+      "decidedAt": "2026-03-16T05:24:18.200Z"
+    },
+    {
+      "title": "Freeze Compose invariants inside topology-doctor",
+      "description": "The raccoon-cli topology-doctor now enforces the frozen local cluster contract for required services, profile membership, critical broker images, and stable operator-facing ports before runtime proof starts.",
+      "phase": "E",
+      "alternatives": [
+        "Keep compose coverage only in runtime smoke",
+        "Add standalone YAML tests outside raccoon-cli"
+      ],
+      "status": "accepted",
+      "id": "dec-1773670839810",
+      "decidedAt": "2026-03-16T14:20:39.810Z"
+    },
+    {
+      "title": "Run named scenario-smoke flows sequentially",
+      "description": "Happy-path and invalid-payload share the fixed raccoon-smoke config key, so concurrent execution can generate false 409 conflicts in configctl. Runtime proof for this block must execute the named smoke flows sequentially until the CLI isolates their keys.",
+      "phase": "V",
+      "alternatives": [
+        "Run smoke scenarios in parallel for speed",
+        "Treat 409 conflicts during concurrent smoke as runtime regressions"
+      ],
+      "status": "accepted",
+      "id": "dec-1773671109515",
+      "decidedAt": "2026-03-16T14:25:09.515Z"
+    }
+  ],
+  "phases": {
+    "phase-1": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:20:51.708Z"
+    },
+    "phase-2": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:20:33.651Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T14:25:09.520Z"
+    }
+  },
+  "progress": 100
+}

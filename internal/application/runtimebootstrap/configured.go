@@ -22,3 +22,15 @@ func WaitForConfiguredActiveIngestionBootstrap(ctx context.Context, logger *slog
 		CorrelationID: strings.TrimSpace(source) + ".bootstrap",
 	})
 }
+
+func WaitForConfiguredActiveIngestionBootstrapSet(ctx context.Context, logger *slog.Logger, config settings.AppConfig, source string) (ActiveIngestionBootstrap, *problem.Problem) {
+	baseURL := strings.TrimSpace(config.Bootstrap.BaseURL)
+	if baseURL == "" {
+		return ActiveIngestionBootstrap{}, problem.New(problem.InvalidArgument, "bootstrap.base_url must not be empty")
+	}
+
+	client := NewClient(baseURL, config.Bootstrap.TimeoutDuration())
+	return client.WaitForActiveIngestionBootstrapSet(ctx, logger, AggregateWaitOptions{
+		CorrelationID: strings.TrimSpace(source) + ".bootstrap-set",
+	})
+}

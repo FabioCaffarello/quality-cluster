@@ -120,7 +120,10 @@ mod tests {
         assert!(render_human(&passing, false).contains("PASSED"));
 
         let mut failing = Report::new("test");
-        failing.add(CheckResult::from_findings("b", vec![Finding::error("x", "boom")]));
+        failing.add(CheckResult::from_findings(
+            "b",
+            vec![Finding::error("x", "boom")],
+        ));
         assert!(render_human(&failing, false).contains("FAILED"));
     }
 
@@ -145,7 +148,10 @@ mod tests {
             vec![Finding::error("bad", "this is broken")],
         ));
         let out = render_human(&report, false);
-        assert!(out.contains("this is broken"), "failed check findings should show in non-verbose mode");
+        assert!(
+            out.contains("this is broken"),
+            "failed check findings should show in non-verbose mode"
+        );
     }
 
     #[test]
@@ -197,7 +203,10 @@ mod tests {
         let mut report = Report::new("test");
         report.add(CheckResult::pass("a"));
         let out = render_human(&report, false);
-        assert!(out.contains("Safe to proceed"), "passing report should show safe-to-proceed verdict, got:\n{out}");
+        assert!(
+            out.contains("Safe to proceed"),
+            "passing report should show safe-to-proceed verdict, got:\n{out}"
+        );
     }
 
     #[test]
@@ -208,8 +217,14 @@ mod tests {
             vec![Finding::error("x", "broke")],
         ));
         let out = render_human(&report, false);
-        assert!(out.contains("Stop"), "failing report should show stop verdict, got:\n{out}");
-        assert!(out.contains("1 error must be fixed"), "should count errors, got:\n{out}");
+        assert!(
+            out.contains("Stop"),
+            "failing report should show stop verdict, got:\n{out}"
+        );
+        assert!(
+            out.contains("1 error must be fixed"),
+            "should count errors, got:\n{out}"
+        );
     }
 
     #[test]
@@ -224,7 +239,10 @@ mod tests {
             ],
         ));
         let out = render_human(&report, false);
-        assert!(out.contains("3 errors must be fixed"), "should pluralize, got:\n{out}");
+        assert!(
+            out.contains("3 errors must be fixed"),
+            "should pluralize, got:\n{out}"
+        );
     }
 
     #[test]
@@ -237,7 +255,13 @@ mod tests {
                 .with_help("run fix command")],
         ));
         let out = render_human(&report, false);
-        assert!(out.contains("causes data loss"), "should show why, got:\n{out}");
-        assert!(out.contains("Fix: run fix command"), "should show help, got:\n{out}");
+        assert!(
+            out.contains("causes data loss"),
+            "should show why, got:\n{out}"
+        );
+        assert!(
+            out.contains("Fix: run fix command"),
+            "should show help, got:\n{out}"
+        );
     }
 }

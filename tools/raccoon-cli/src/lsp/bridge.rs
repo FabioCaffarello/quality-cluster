@@ -106,15 +106,16 @@ impl GoplsBridge {
             None => (vec![], vec![], None),
         };
 
-        let lsp_status = if !lsp_definitions.is_empty() || !lsp_references.is_empty() || hover.is_some() {
-            LspStatus::Enriched
-        } else if self.client.is_some() {
-            LspStatus::NoResults
-        } else {
-            LspStatus::Unavailable {
-                reason: "gopls not available".into(),
-            }
-        };
+        let lsp_status =
+            if !lsp_definitions.is_empty() || !lsp_references.is_empty() || hover.is_some() {
+                LspStatus::Enriched
+            } else if self.client.is_some() {
+                LspStatus::NoResults
+            } else {
+                LspStatus::Unavailable {
+                    reason: "gopls not available".into(),
+                }
+            };
 
         EnrichedSymbol {
             symbol: symbol.to_string(),
@@ -311,8 +312,16 @@ fn split_hover_text(text: &str) -> (Option<String>, Option<String>) {
             let sig = parts[0].trim();
             let doc = parts[1].trim();
             (
-                if sig.is_empty() { None } else { Some(sig.to_string()) },
-                if doc.is_empty() { None } else { Some(doc.to_string()) },
+                if sig.is_empty() {
+                    None
+                } else {
+                    Some(sig.to_string())
+                },
+                if doc.is_empty() {
+                    None
+                } else {
+                    Some(doc.to_string())
+                },
             )
         }
     }
@@ -422,11 +431,7 @@ mod tests {
         assert!(!bridge.is_available());
         assert_eq!(bridge.unavailable_reason(), Some("test: no gopls"));
 
-        let enriched = bridge.enrich_symbol_with_index(
-            &index,
-            Path::new("."),
-            "ConfigSet",
-        );
+        let enriched = bridge.enrich_symbol_with_index(&index, Path::new("."), "ConfigSet");
         assert_eq!(enriched.symbol, "ConfigSet");
         assert_eq!(enriched.ast_definitions.len(), 1);
         assert!(enriched.lsp_definitions.is_empty());
@@ -470,8 +475,14 @@ mod tests {
         let lsp_loc = protocol::LspLocation {
             uri: "file:///src/main.go".into(),
             range: protocol::Range {
-                start: protocol::Position { line: 9, character: 0 },
-                end: protocol::Position { line: 9, character: 10 },
+                start: protocol::Position {
+                    line: 9,
+                    character: 0,
+                },
+                end: protocol::Position {
+                    line: 9,
+                    character: 10,
+                },
             },
         };
         let loc = lsp_location_to_ours(&lsp_loc);

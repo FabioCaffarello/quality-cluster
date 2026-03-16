@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	actorcommon "internal/actors/common"
 	adapternats "internal/adapters/nats"
 	dataplaneapp "internal/application/dataplane"
 	"internal/shared/problem"
@@ -61,6 +62,9 @@ func (a *DataPlaneConsumerActor) Receive(c *actor.Context) {
 			}
 		}
 	default:
+		if actorcommon.ShouldIgnoreLifecycleMessage(msg) {
+			return
+		}
 		a.logger.Warn("validator data plane consumer: unknown message", "type", fmt.Sprintf("%T", msg))
 	}
 }

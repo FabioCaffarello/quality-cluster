@@ -261,14 +261,8 @@ mod tests {
 
     #[test]
     fn path_uri_conversions() {
-        assert_eq!(
-            path_to_uri("/foo/bar.go"),
-            "file:///foo/bar.go"
-        );
-        assert_eq!(
-            path_to_uri("file:///already/uri"),
-            "file:///already/uri"
-        );
+        assert_eq!(path_to_uri("/foo/bar.go"), "file:///foo/bar.go");
+        assert_eq!(path_to_uri("file:///already/uri"), "file:///already/uri");
         assert_eq!(uri_to_path("file:///foo/bar.go"), "/foo/bar.go");
         assert_eq!(uri_to_path("/no/prefix"), "/no/prefix");
     }

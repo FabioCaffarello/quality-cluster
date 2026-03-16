@@ -5,6 +5,7 @@ mod gate;
 mod lsp;
 mod models;
 mod output;
+mod process_utils;
 mod results_inspect;
 mod smoke;
 mod trace_pack;
@@ -774,7 +775,10 @@ fn main() {
                         }
                     }
                 } else {
-                    print!("{}", analyzers::snapshot_diff::render_human(&d, cli.verbose));
+                    print!(
+                        "{}",
+                        analyzers::snapshot_diff::render_human(&d, cli.verbose)
+                    );
                 }
             }
             Err(e) => {
@@ -798,9 +802,11 @@ fn main() {
         };
 
         let report = match baseline {
-            Some(ref baseline_path) => {
-                analyzers::recommend::analyze_with_baseline(&cli.project_root, &changed, baseline_path)
-            }
+            Some(ref baseline_path) => analyzers::recommend::analyze_with_baseline(
+                &cli.project_root,
+                &changed,
+                baseline_path,
+            ),
             None => analyzers::recommend::analyze(&cli.project_root, &changed),
         };
 
@@ -960,7 +966,12 @@ fn main() {
     }
 
     // Symbol trace has its own report type
-    if let Commands::SymbolTrace { ref symbol, lsp, no_lsp } = cli.command {
+    if let Commands::SymbolTrace {
+        ref symbol,
+        lsp,
+        no_lsp,
+    } = cli.command
+    {
         let report = if lsp && !no_lsp {
             let mut bridge = lsp::GoplsBridge::new(&cli.project_root);
             let r = analyzers::symbol_trace::trace_with_lsp(&cli.project_root, symbol, &mut bridge);
@@ -979,13 +990,21 @@ fn main() {
                 }
             }
         } else {
-            print!("{}", analyzers::symbol_trace::render_human(&report, cli.verbose));
+            print!(
+                "{}",
+                analyzers::symbol_trace::render_human(&report, cli.verbose)
+            );
         }
         return;
     }
 
     // Briefing has its own report type
-    if let Commands::Briefing { ref targets, lsp, no_lsp } = cli.command {
+    if let Commands::Briefing {
+        ref targets,
+        lsp,
+        no_lsp,
+    } = cli.command
+    {
         let changed = if targets.is_empty() {
             detect_changed_files(&cli.project_root)
         } else {
@@ -1010,13 +1029,21 @@ fn main() {
                 }
             }
         } else {
-            print!("{}", analyzers::briefing::render_human(&report, cli.verbose));
+            print!(
+                "{}",
+                analyzers::briefing::render_human(&report, cli.verbose)
+            );
         }
         return;
     }
 
     // Impact map has its own report type
-    if let Commands::ImpactMap { ref targets, lsp, no_lsp } = cli.command {
+    if let Commands::ImpactMap {
+        ref targets,
+        lsp,
+        no_lsp,
+    } = cli.command
+    {
         let changed = if targets.is_empty() {
             detect_changed_files(&cli.project_root)
         } else {
@@ -1025,7 +1052,8 @@ fn main() {
 
         let report = if lsp && !no_lsp {
             let mut bridge = lsp::GoplsBridge::new(&cli.project_root);
-            let r = analyzers::impact_map::analyze_with_lsp(&cli.project_root, &changed, &mut bridge);
+            let r =
+                analyzers::impact_map::analyze_with_lsp(&cli.project_root, &changed, &mut bridge);
             bridge.shutdown();
             r
         } else {
@@ -1041,7 +1069,10 @@ fn main() {
                 }
             }
         } else {
-            print!("{}", analyzers::impact_map::render_human(&report, cli.verbose));
+            print!(
+                "{}",
+                analyzers::impact_map::render_human(&report, cli.verbose)
+            );
         }
         return;
     }
@@ -1214,7 +1245,10 @@ fn render_enriched_human(enriched: &lsp::EnrichedSymbol, verbose: bool) -> Strin
         ));
         for def in &enriched.ast_definitions {
             let name = def.qualified_name.as_deref().unwrap_or(&enriched.symbol);
-            out.push_str(&format!("  {} at {}:{}\n", name, def.location.file, def.location.line));
+            out.push_str(&format!(
+                "  {} at {}:{}\n",
+                name, def.location.file, def.location.line
+            ));
         }
     }
 
@@ -1235,7 +1269,11 @@ fn render_enriched_human(enriched: &lsp::EnrichedSymbol, verbose: bool) -> Strin
             "\nLSP references ({}):\n",
             enriched.lsp_references.len()
         ));
-        let limit = if verbose { enriched.lsp_references.len() } else { 10 };
+        let limit = if verbose {
+            enriched.lsp_references.len()
+        } else {
+            10
+        };
         for r in enriched.lsp_references.iter().take(limit) {
             out.push_str(&format!("  {}:{}\n", r.location.file, r.location.line));
         }
@@ -1285,7 +1323,6 @@ fn detect_changed_files(project_root: &std::path::Path) -> Vec<String> {
         Err(_) => Vec::new(),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1427,8 +1464,7 @@ mod tests {
 
     #[test]
     fn cli_parses_quality_gate_ci() {
-        let cli =
-            Cli::try_parse_from(["raccoon-cli", "quality-gate", "--profile", "ci"]).unwrap();
+        let cli = Cli::try_parse_from(["raccoon-cli", "quality-gate", "--profile", "ci"]).unwrap();
         match cli.command {
             Commands::QualityGate { profile, .. } => assert_eq!(profile, GateProfile::Ci),
             _ => panic!("expected QualityGate"),
@@ -1454,14 +1490,9 @@ mod tests {
 
     #[test]
     fn cli_parses_quality_gate_json() {
-        let cli = Cli::try_parse_from([
-            "raccoon-cli",
-            "--json",
-            "quality-gate",
-            "--profile",
-            "fast",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["raccoon-cli", "--json", "quality-gate", "--profile", "fast"])
+                .unwrap();
         assert!(cli.json);
         assert!(matches!(cli.command, Commands::QualityGate { .. }));
     }
@@ -1496,7 +1527,11 @@ mod tests {
     fn cli_parses_symbol_trace() {
         let cli = Cli::try_parse_from(["raccoon", "symbol-trace", "ConfigSet"]).unwrap();
         match cli.command {
-            Commands::SymbolTrace { ref symbol, lsp, no_lsp } => {
+            Commands::SymbolTrace {
+                ref symbol,
+                lsp,
+                no_lsp,
+            } => {
                 assert_eq!(symbol, "ConfigSet");
                 assert!(!lsp);
                 assert!(!no_lsp);
@@ -1509,7 +1544,11 @@ mod tests {
     fn cli_parses_symbol_trace_with_lsp() {
         let cli = Cli::try_parse_from(["raccoon", "symbol-trace", "--lsp", "ConfigSet"]).unwrap();
         match cli.command {
-            Commands::SymbolTrace { ref symbol, lsp, no_lsp } => {
+            Commands::SymbolTrace {
+                ref symbol,
+                lsp,
+                no_lsp,
+            } => {
                 assert_eq!(symbol, "ConfigSet");
                 assert!(lsp);
                 assert!(!no_lsp);
@@ -1563,7 +1602,11 @@ mod tests {
         ])
         .unwrap();
         match cli.command {
-            Commands::QualityGate { profile, base_url, fail_fast } => {
+            Commands::QualityGate {
+                profile,
+                base_url,
+                fail_fast,
+            } => {
                 assert_eq!(profile, GateProfile::Deep);
                 assert_eq!(base_url, "http://localhost:9090");
                 assert!(!fail_fast);
@@ -1628,7 +1671,8 @@ mod tests {
 
     #[test]
     fn cli_parses_snapshot_with_output() {
-        let cli = Cli::try_parse_from(["raccoon-cli", "snapshot", "--output", "snap.json"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["raccoon-cli", "snapshot", "--output", "snap.json"]).unwrap();
         match cli.command {
             Commands::Snapshot { output } => {
                 assert_eq!(output, Some(std::path::PathBuf::from("snap.json")));
@@ -1791,8 +1835,7 @@ mod tests {
 
     #[test]
     fn cli_parses_results_inspect_json() {
-        let cli =
-            Cli::try_parse_from(["raccoon-cli", "--json", "results-inspect"]).unwrap();
+        let cli = Cli::try_parse_from(["raccoon-cli", "--json", "results-inspect"]).unwrap();
         assert!(cli.json);
         assert!(matches!(cli.command, Commands::ResultsInspect { .. }));
     }
@@ -1803,7 +1846,11 @@ mod tests {
     fn cli_parses_scenario_smoke_with_scenario() {
         let cli = Cli::try_parse_from(["raccoon-cli", "scenario-smoke", "happy-path"]).unwrap();
         match cli.command {
-            Commands::ScenarioSmoke { scenario, base_url, list } => {
+            Commands::ScenarioSmoke {
+                scenario,
+                base_url,
+                list,
+            } => {
                 assert_eq!(scenario.as_deref(), Some("happy-path"));
                 assert_eq!(base_url, "http://127.0.0.1:8080");
                 assert!(!list);
@@ -1835,7 +1882,9 @@ mod tests {
         ])
         .unwrap();
         match cli.command {
-            Commands::ScenarioSmoke { scenario, base_url, .. } => {
+            Commands::ScenarioSmoke {
+                scenario, base_url, ..
+            } => {
                 assert_eq!(scenario.as_deref(), Some("config-lifecycle"));
                 assert_eq!(base_url, "http://localhost:9090");
             }
@@ -1845,7 +1894,8 @@ mod tests {
 
     #[test]
     fn cli_parses_scenario_smoke_json() {
-        let cli = Cli::try_parse_from(["raccoon-cli", "--json", "scenario-smoke", "happy-path"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["raccoon-cli", "--json", "scenario-smoke", "happy-path"]).unwrap();
         assert!(cli.json);
         assert!(matches!(cli.command, Commands::ScenarioSmoke { .. }));
     }
@@ -1914,8 +1964,7 @@ mod tests {
 
     #[test]
     fn cli_parses_rename_safety_json() {
-        let cli =
-            Cli::try_parse_from(["raccoon-cli", "--json", "rename-safety", "Foo"]).unwrap();
+        let cli = Cli::try_parse_from(["raccoon-cli", "--json", "rename-safety", "Foo"]).unwrap();
         assert!(cli.json);
         assert!(matches!(cli.command, Commands::RenameSafety { .. }));
     }
@@ -1927,16 +1976,14 @@ mod tests {
 
     #[test]
     fn cli_parses_results_inspect_verbose() {
-        let cli =
-            Cli::try_parse_from(["raccoon-cli", "-v", "results-inspect"]).unwrap();
+        let cli = Cli::try_parse_from(["raccoon-cli", "-v", "results-inspect"]).unwrap();
         assert!(cli.verbose);
         assert!(matches!(cli.command, Commands::ResultsInspect { .. }));
     }
 
     #[test]
     fn cli_parses_results_inspect_failed_only() {
-        let cli =
-            Cli::try_parse_from(["raccoon-cli", "results-inspect", "--failed-only"]).unwrap();
+        let cli = Cli::try_parse_from(["raccoon-cli", "results-inspect", "--failed-only"]).unwrap();
         match cli.command {
             Commands::ResultsInspect { failed_only, .. } => assert!(failed_only),
             _ => panic!("expected ResultsInspect"),
@@ -1948,7 +1995,13 @@ mod tests {
     #[test]
     fn cli_parses_contract_usage_map() {
         let cli = Cli::try_parse_from(["raccoon-cli", "contract-usage-map"]).unwrap();
-        assert!(matches!(cli.command, Commands::ContractUsageMap { lsp: false, no_lsp: false }));
+        assert!(matches!(
+            cli.command,
+            Commands::ContractUsageMap {
+                lsp: false,
+                no_lsp: false
+            }
+        ));
     }
 
     #[test]
@@ -2075,7 +2128,11 @@ mod tests {
     fn cli_parses_impact_map_with_lsp() {
         let cli = Cli::try_parse_from(["raccoon-cli", "impact-map", "--lsp", "ConfigSet"]).unwrap();
         match cli.command {
-            Commands::ImpactMap { lsp, no_lsp, targets } => {
+            Commands::ImpactMap {
+                lsp,
+                no_lsp,
+                targets,
+            } => {
                 assert!(lsp);
                 assert!(!no_lsp);
                 assert_eq!(targets, vec!["ConfigSet"]);
