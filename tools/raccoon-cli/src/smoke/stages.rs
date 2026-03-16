@@ -2,9 +2,15 @@ use super::api::ApiClient;
 use super::compose;
 use super::SmokeConfig;
 use crate::models::{CheckResult, Finding};
+use crate::runtime_diagnostics::{
+    compact_bootstrap_signature, parse_consumer_bootstrap_diagnostics,
+    parse_emulator_bootstrap_diagnostics, LoadedBootstrapDiagnostics,
+};
 use serde_json::Value;
 use std::thread;
 use std::time::{Duration, Instant};
+
+const BOOTSTRAP_LOG_TAIL_LINES: u32 = 200;
 
 /// Synthetic config content for the smoke test.
 pub fn smoke_config_content(config: &SmokeConfig) -> serde_json::Value {
@@ -403,6 +409,137 @@ pub fn validate(config: &SmokeConfig) -> CheckResult {
     CheckResult::from_findings("validate", findings)
 }
 
+/// Stage 7: Bootstrap alignment — verify consumer and emulator converged on the same loaded bootstrap.
+pub fn bootstrap_alignment(config: &SmokeConfig) -> CheckResult {
+    let consumer_logs =
+        match compose::service_logs(&config.compose_file, "consumer", BOOTSTRAP_LOG_TAIL_LINES) {
+            Ok(logs) => logs,
+            Err(err) => {
+                return CheckResult::from_findings(
+                    "bootstrap-alignment",
+                    vec![Finding::error(
+                        "bootstrap-alignment",
+                        format!("failed to read consumer logs: {err}"),
+                    )],
+                );
+            }
+        };
+    let emulator_logs =
+        match compose::service_logs(&config.compose_file, "emulator", BOOTSTRAP_LOG_TAIL_LINES) {
+            Ok(logs) => logs,
+            Err(err) => {
+                return CheckResult::from_findings(
+                    "bootstrap-alignment",
+                    vec![Finding::error(
+                        "bootstrap-alignment",
+                        format!("failed to read emulator logs: {err}"),
+                    )],
+                );
+            }
+        };
+
+    bootstrap_alignment_from_logs(&consumer_logs, &emulator_logs)
+}
+
+fn bootstrap_alignment_from_logs(consumer_logs: &str, emulator_logs: &str) -> CheckResult {
+    let consumer = parse_consumer_bootstrap_diagnostics(consumer_logs);
+    let emulator = parse_emulator_bootstrap_diagnostics(emulator_logs);
+    let mut findings = Vec::new();
+
+    match consumer.as_ref() {
+        Some(diag) => findings.extend(render_loaded_bootstrap_findings(diag)),
+        None => findings.push(Finding::error(
+            "bootstrap-alignment",
+            "consumer logs did not expose a loaded bootstrap diagnostic",
+        )),
+    }
+
+    match emulator.as_ref() {
+        Some(diag) => findings.extend(render_loaded_bootstrap_findings(diag)),
+        None => findings.push(Finding::error(
+            "bootstrap-alignment",
+            "emulator logs did not expose a loaded bootstrap diagnostic",
+        )),
+    }
+
+    if let (Some(consumer), Some(emulator)) = (consumer.as_ref(), emulator.as_ref()) {
+        if consumer.signature == emulator.signature
+            && consumer.runtime_refs == emulator.runtime_refs
+        {
+            findings.push(Finding::info(
+                "bootstrap-alignment",
+                "consumer and emulator loaded the same aggregate bootstrap generation",
+            ));
+        } else {
+            findings.push(Finding::error(
+                "bootstrap-alignment",
+                format!(
+                    "consumer and emulator loaded different bootstrap generations: consumer=`{}` emulator=`{}`",
+                    compact_bootstrap_signature(&consumer.signature),
+                    compact_bootstrap_signature(&emulator.signature)
+                ),
+            ));
+            findings.push(Finding::error(
+                "bootstrap-alignment",
+                format!(
+                    "runtime refs diverged: consumer={} emulator={}",
+                    format_runtime_refs(&consumer.runtime_refs),
+                    format_runtime_refs(&emulator.runtime_refs)
+                ),
+            ));
+        }
+    }
+
+    if findings
+        .iter()
+        .any(|finding| finding.severity == crate::models::Severity::Error)
+    {
+        findings.push(Finding::info(
+            "bootstrap-alignment",
+            "inspect consumer/emulator logs or run `raccoon-cli trace-pack` for the latest loaded bootstrap evidence",
+        ));
+    }
+
+    CheckResult::from_findings("bootstrap-alignment", findings)
+}
+
+fn render_loaded_bootstrap_findings(diag: &LoadedBootstrapDiagnostics) -> Vec<Finding> {
+    vec![
+        Finding::info(
+            "bootstrap-alignment",
+            format!("{} observed `{}`", diag.source, diag.event),
+        ),
+        Finding::info(
+            "bootstrap-alignment",
+            format!(
+                "{} bootstrap signature `{}`",
+                diag.source,
+                compact_bootstrap_signature(&diag.signature)
+            ),
+        ),
+        Finding::info(
+            "bootstrap-alignment",
+            format!(
+                "{} runtime refs {}",
+                diag.source,
+                format_runtime_refs(&diag.runtime_refs)
+            ),
+        ),
+    ]
+}
+
+fn format_runtime_refs(runtime_refs: &[String]) -> String {
+    if runtime_refs.is_empty() {
+        return "none".into();
+    }
+
+    runtime_refs
+        .iter()
+        .map(|value| format!("`{value}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn diagnose_pipeline_gap(client: &ApiClient, config: &SmokeConfig) -> Vec<Finding> {
     let mut findings = Vec::new();
 
@@ -612,5 +749,47 @@ mod tests {
         });
         let diagnostic = runtime_diagnostic(&resp).expect("expected runtime diagnostic");
         assert!(diagnostic.contains("cfg-456"));
+    }
+
+    #[test]
+    fn bootstrap_alignment_passes_when_loaded_bootstrap_matches() {
+        let result = bootstrap_alignment_from_logs(
+            r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" bootstrap_signature="binding|tenant|br|||ver-br\nruntime|tenant|br|||ver-br" runtime_refs="[tenant:br:ver-br:artifact-br]""#,
+            r#"time=2026-03-16T18:00:01Z level=INFO msg="emulator bootstrap refreshed" bootstrap_signature="binding|tenant|br|||ver-br\nruntime|tenant|br|||ver-br" runtime_refs="[tenant:br:ver-br:artifact-br]""#,
+        );
+
+        assert_eq!(result.status, CheckStatus::Pass);
+        assert!(result.findings.iter().any(|finding| finding
+            .message
+            .contains("same aggregate bootstrap generation")));
+    }
+
+    #[test]
+    fn bootstrap_alignment_fails_when_loaded_bootstrap_mismatches() {
+        let result = bootstrap_alignment_from_logs(
+            r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" bootstrap_signature="consumer-signature" runtime_refs="[tenant:br:ver-br:artifact-br]""#,
+            r#"time=2026-03-16T18:00:01Z level=INFO msg="emulator started" bootstrap_signature="emulator-signature" runtime_refs="[tenant:us:ver-us:artifact-us]""#,
+        );
+
+        assert_eq!(result.status, CheckStatus::Fail);
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.message.contains("different bootstrap generations")));
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.message.contains("runtime refs diverged")));
+    }
+
+    #[test]
+    fn bootstrap_alignment_fails_when_diagnostics_are_missing() {
+        let result =
+            bootstrap_alignment_from_logs("time=2026-03-16T18:00:00Z level=INFO msg=\"other\"", "");
+
+        assert_eq!(result.status, CheckStatus::Fail);
+        assert!(result.findings.iter().any(|finding| finding
+            .message
+            .contains("did not expose a loaded bootstrap diagnostic")));
     }
 }

@@ -47,6 +47,15 @@ pub struct BindingsIndex {
     pub resolved: Vec<ResolvedBinding>,
 }
 
+#[derive(Debug, Default, Clone)]
+struct BootstrapRuntimeContract {
+    has_ingestion_bindings_field: bool,
+    has_ingestion_runtimes_field: bool,
+    populates_compact_runtimes: bool,
+    has_compact_runtime_mapper: bool,
+    has_runtime_projections_route: bool,
+}
+
 // ── Main analysis entry point ───────────────────────────────────────
 
 pub fn analyze(project_root: &Path) -> Result<Report> {
@@ -129,6 +138,16 @@ pub fn analyze(project_root: &Path) -> Result<Report> {
     report.add(check_binding_consumer_coverage(&index));
     report.add(check_binding_validator_coverage(&index));
     report.add(check_scope_consistency(&index));
+    match scan_bootstrap_runtime_contract(project_root) {
+        Ok(contract) => report.add(check_bootstrap_runtime_contract(&contract)),
+        Err(e) => report.add(CheckResult::from_findings(
+            "bootstrap-runtime-contract",
+            vec![Finding::error(
+                "bootstrap-runtime-contract",
+                format!("failed to scan bootstrap runtime contract: {e}"),
+            )],
+        )),
+    }
     report.add(check_drift(&index));
 
     Ok(report)
@@ -248,6 +267,38 @@ fn subject_matches_pattern(subject: &str, pattern: &str) -> bool {
         true
     } else {
         false
+    }
+}
+
+fn scan_bootstrap_runtime_contract(project_root: &Path) -> Result<BootstrapRuntimeContract> {
+    let replies = read_file_if_exists(
+        &project_root.join("internal/application/configctl/contracts/replies.go"),
+    )?;
+    let usecase = read_file_if_exists(
+        &project_root.join("internal/application/configctl/list_active_ingestion_bindings.go"),
+    )?;
+    let mappers =
+        read_file_if_exists(&project_root.join("internal/application/configctl/mappers.go"))?;
+    let routes =
+        read_file_if_exists(&project_root.join("internal/interfaces/http/routes/runtime.go"))?;
+
+    Ok(BootstrapRuntimeContract {
+        has_ingestion_bindings_field: replies.contains("Bindings []ActiveIngestionBindingRecord"),
+        has_ingestion_runtimes_field: replies.contains("Runtimes []sharedruntime.RuntimeRecord"),
+        populates_compact_runtimes: usecase
+            .contains("Runtimes: compactIngestionRuntimesFromDomain(runtimes)"),
+        has_compact_runtime_mapper: mappers.contains("func compactIngestionRuntimesFromDomain")
+            && mappers.contains("sharedruntime.RecordFromIngestionProjection(runtime)"),
+        has_runtime_projections_route: routes
+            .contains("Path:    \"/runtime/configctl/projections\""),
+    })
+}
+
+fn read_file_if_exists(path: &Path) -> Result<String> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => Ok(content),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -385,9 +436,9 @@ fn check_config_bindings(bindings: &[BindingDefinition]) -> CheckResult {
     let mut findings = Vec::new();
 
     if bindings.is_empty() {
-        findings.push(Finding::warning(
+        findings.push(Finding::info(
             "config-bindings",
-            "no binding definitions found in deploy/configs/",
+            "no binding definitions found in deploy/configs/; bindings are expected to come from runtime fixtures and configctl lifecycle flows",
         ));
         return CheckResult::from_findings("config-bindings", findings);
     }
@@ -667,6 +718,74 @@ fn check_scope_consistency(index: &BindingsIndex) -> CheckResult {
     CheckResult::from_findings("scope-consistency", findings)
 }
 
+fn check_bootstrap_runtime_contract(contract: &BootstrapRuntimeContract) -> CheckResult {
+    let mut findings = Vec::new();
+
+    if !contract.has_ingestion_bindings_field {
+        findings.push(
+            Finding::error(
+                "bootstrap-runtime-contract",
+                "ListActiveIngestionBindingsReply no longer exposes `bindings`",
+            )
+            .with_why("bootstrap clients still depend on per-binding records to build the dataplane index")
+            .with_help("restore `Bindings []ActiveIngestionBindingRecord` in internal/application/configctl/contracts/replies.go"),
+        );
+    }
+
+    if !contract.has_ingestion_runtimes_field {
+        findings.push(
+            Finding::error(
+                "bootstrap-runtime-contract",
+                "ListActiveIngestionBindingsReply no longer exposes compact `runtimes`",
+            )
+            .with_why("local inspection and future consumer bootstrap would lose the explicit active runtime set and fall back to inference from repeated binding metadata")
+            .with_help("restore `Runtimes []sharedruntime.RuntimeRecord` in internal/application/configctl/contracts/replies.go"),
+        );
+    }
+
+    if !contract.populates_compact_runtimes {
+        findings.push(
+            Finding::error(
+                "bootstrap-runtime-contract",
+                "active ingestion bindings use case no longer populates compact `runtimes`",
+            )
+            .with_why("the HTTP bootstrap reply would advertise a runtime summary surface without actually binding it to the active ingestion projection set")
+            .with_help("populate `Runtimes: compactIngestionRuntimesFromDomain(runtimes)` in internal/application/configctl/list_active_ingestion_bindings.go"),
+        );
+    }
+
+    if !contract.has_compact_runtime_mapper {
+        findings.push(
+            Finding::error(
+                "bootstrap-runtime-contract",
+                "compact ingestion runtime mapper is missing or no longer derived from ingestion projections",
+            )
+            .with_why("bootstrap runtime summaries must stay derived from configctl ingestion projections, not from ad hoc HTTP-only assembly")
+            .with_help("preserve `compactIngestionRuntimesFromDomain` using `sharedruntime.RecordFromIngestionProjection` in internal/application/configctl/mappers.go"),
+        );
+    }
+
+    if !contract.has_runtime_projections_route {
+        findings.push(
+            Finding::error(
+                "bootstrap-runtime-contract",
+                "canonical runtime projection route `/runtime/configctl/projections` is missing",
+            )
+            .with_why("runtime-bindings must be able to point operators from bootstrap state back to the configctl truth surface")
+            .with_help("restore the `/runtime/configctl/projections` route in internal/interfaces/http/routes/runtime.go"),
+        );
+    }
+
+    if findings.is_empty() {
+        findings.push(Finding::info(
+            "bootstrap-runtime-contract",
+            "bootstrap contract keeps `bindings`, compact `runtimes`, and the configctl projection route aligned",
+        ));
+    }
+
+    CheckResult::from_findings("bootstrap-runtime-contract", findings)
+}
+
 fn check_drift(index: &BindingsIndex) -> CheckResult {
     let source = match &index.source {
         Some(s) => s,
@@ -845,6 +964,16 @@ mod tests {
         }
     }
 
+    fn make_bootstrap_contract() -> BootstrapRuntimeContract {
+        BootstrapRuntimeContract {
+            has_ingestion_bindings_field: true,
+            has_ingestion_runtimes_field: true,
+            populates_compact_runtimes: true,
+            has_compact_runtime_mapper: true,
+            has_runtime_projections_route: true,
+        }
+    }
+
     // ── sanitize_token ──────────────────────────────────────────────
 
     #[test]
@@ -999,7 +1128,8 @@ mod tests {
         assert!(result
             .findings
             .iter()
-            .any(|f| f.severity == crate::models::Severity::Warning));
+            .any(|f| f.severity == crate::models::Severity::Info));
+        assert_eq!(result.status, crate::models::CheckStatus::Pass);
     }
 
     #[test]
@@ -1156,6 +1286,66 @@ mod tests {
             .findings
             .iter()
             .any(|f| f.message.contains("multiple scopes")));
+    }
+
+    // ── bootstrap_runtime_contract ──────────────────────────────────
+
+    #[test]
+    fn bootstrap_runtime_contract_passes_when_complete() {
+        let result = check_bootstrap_runtime_contract(&make_bootstrap_contract());
+        assert_eq!(result.status, crate::models::CheckStatus::Pass);
+    }
+
+    #[test]
+    fn bootstrap_runtime_contract_fails_when_runtime_summary_is_missing() {
+        let mut contract = make_bootstrap_contract();
+        contract.has_ingestion_runtimes_field = false;
+        let result = check_bootstrap_runtime_contract(&contract);
+        assert_eq!(result.status, crate::models::CheckStatus::Fail);
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.message.contains("compact `runtimes`")));
+    }
+
+    #[test]
+    fn scan_bootstrap_runtime_contract_detects_complete_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("internal/application/configctl/contracts"))
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join("internal/application/configctl")).unwrap();
+        std::fs::create_dir_all(dir.path().join("internal/interfaces/http/routes")).unwrap();
+
+        std::fs::write(
+            dir.path()
+                .join("internal/application/configctl/contracts/replies.go"),
+            "type ListActiveIngestionBindingsReply struct {\nBindings []ActiveIngestionBindingRecord\nRuntimes []sharedruntime.RuntimeRecord\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path()
+                .join("internal/application/configctl/list_active_ingestion_bindings.go"),
+            "return contracts.ListActiveIngestionBindingsReply{\nBindings: activeIngestionBindingsFromDomain(runtimes),\nRuntimes: compactIngestionRuntimesFromDomain(runtimes),\n}, nil\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("internal/application/configctl/mappers.go"),
+            "func compactIngestionRuntimesFromDomain() {}\nsharedruntime.RecordFromIngestionProjection(runtime)\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path()
+                .join("internal/interfaces/http/routes/runtime.go"),
+            "Path:    \"/runtime/configctl/projections\"\n",
+        )
+        .unwrap();
+
+        let contract = scan_bootstrap_runtime_contract(dir.path()).unwrap();
+        assert!(contract.has_ingestion_bindings_field);
+        assert!(contract.has_ingestion_runtimes_field);
+        assert!(contract.populates_compact_runtimes);
+        assert!(contract.has_compact_runtime_mapper);
+        assert!(contract.has_runtime_projections_route);
     }
 
     // ── check_consumer_coverage ─────────────────────────────────────

@@ -95,7 +95,9 @@ func (s *Supervisor) Receive(c *actor.Context) {
 		s.state.Ready = true
 		s.state.Topics = msg.Topology.TopicNames()
 		s.state.Bindings = msg.Topology.BindingCount()
-		s.logger.Info("consumer runtime ready", "generation", msg.Generation, "topics", s.state.Topics, "bindings", s.state.Bindings)
+		s.state.BootstrapSignature = msg.BootstrapSignature
+		s.state.RuntimeRefs = append([]string(nil), msg.RuntimeRefs...)
+		s.logger.Info("consumer runtime ready", "generation", msg.Generation, "topics", s.state.Topics, "bindings", s.state.Bindings, "bootstrap_signature", s.state.BootstrapSignature, "runtime_refs", s.state.RuntimeRefs)
 	case consumerRuntimeFailedMessage:
 		if msg.Generation != s.state.Generation {
 			s.logger.Info("ignore stale consumer runtime failure", "generation", msg.Generation, "current_generation", s.state.Generation, "error", msg.Err)
@@ -119,6 +121,8 @@ func (s *Supervisor) startRuntime(c *actor.Context, bootstrap runtimebootstrap.A
 	s.state.Ready = false
 	s.state.Topics = nil
 	s.state.Bindings = 0
+	s.state.BootstrapSignature = ""
+	s.state.RuntimeRefs = nil
 
 	if s.runtimePID != nil {
 		_ = c.Engine().Poison(s.runtimePID)

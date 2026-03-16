@@ -54,6 +54,11 @@ Use these when touching subjects, streams, queue groups, payload expectations, o
 
 Use these when changing package structure, layer boundaries, config, documentation, or compose/runtime alignment.
 
+Operational rule:
+
+- `drift-detect` must derive `raccoon-cli` subcommands from `tools/raccoon-cli/src/main.rs` instead of a stale manual allowlist, so `workflow-drift` stays aligned with the real CLI surface
+- `drift-detect` must normalize transport event names like `configctl.event.config.activated` into domain names like `config.activated` before `contract-domain-drift` comparison, so adapter registry wiring is checked against domain truth rather than transport prefixes
+
 ### Change planning and semantic analysis
 
 - `tdd`
@@ -82,6 +87,7 @@ Operational rule:
 - smoke and trace commands must fail fast when Docker or HTTP dependencies are unavailable
 - `trace-pack` should capture both application endpoints and NATS monitor endpoints so refresh failures can be triaged at the transport layer
 - `scenario-smoke config-lifecycle` is expected to preflight only the control-plane baseline (`nats`, `configctl`, `server`) before attempting readiness or lifecycle actions
+- `scenario-smoke happy-path` must now prove not only end-to-end data flow but also that `consumer` and `emulator` converged on the same loaded aggregate bootstrap generation before the scenario is considered healthy
 - named smoke scenarios should be run sequentially unless the CLI gives each scenario its own config key and runtime scope
 - the current smoke engine already isolates per-run `config_key`, binding name, and correlation id, but it still uses the canonical runtime scope baseline; do not infer full multi-scope parallel safety from that
 - after Block 4, bootstrap-sensitive runtime changes must be validated against aggregate dataplane refresh, not only startup readiness; `runtime-bindings` remains the static guard rail and `scenario-smoke`/`check-deep` remain the live proof
@@ -92,6 +98,7 @@ Operational rule:
 - `trace-pack` now summarizes refresh observability directly in `SUMMARY.md`, including configured reconcile cadence and JetStream lag for `consumer-runtime-refresh-v1` and `emulator-runtime-refresh-v1`
 - `trace-pack` now also classifies that observability as `healthy` or `degraded`, and must emit diagnosis-oriented guidance instead of leaving the operator to interpret raw counters alone
 - `trace-pack` now also emits `refresh mode` for degraded refresh, so the first troubleshooting step depends on the actual failure shape rather than on a generic lag warning
+- `trace-pack` now also summarizes the latest loaded bootstrap generation seen by `consumer` and `emulator`, including `bootstrap_signature`, compact `runtime_refs`, and whether both services are aligned on the same aggregate runtime
 
 ## Operational Position In The Workflow
 
@@ -158,6 +165,7 @@ When the repository changes event-driven refresh behavior:
 
 - `contract-audit` proves subject, stream, durable, and event-name continuity
 - `runtime-bindings` proves the aggregate bootstrap still describes the effective dataplane set
+- `runtime-bindings` now also guards the bootstrap runtime summary contract, so `/runtime/ingestion/bindings` keeps both `bindings` and compact `runtimes` aligned with the canonical `/runtime/configctl/projections` surface
 - `trace-pack` should expose NATS monitor and JetStream state for `CONFIGCTL_EVENTS` when refresh diagnostics are needed
 - `scenario-smoke` and `check-deep` prove that the runtime really converges after the event
 - docs, configs, and smoke expectations must stay aligned on `bootstrap.reconcile_interval` so operators understand that event-driven refresh is primary and bounded reconciliation is fallback

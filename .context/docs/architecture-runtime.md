@@ -94,6 +94,8 @@ This means the HTTP layer is intentionally thin. It is a transport facade over N
   - configctl truth about active runtime projections
 - `/runtime/ingestion/bindings`
   - operational bootstrap view derived from that truth
+  - returns both per-binding bootstrap records and a compact `runtimes` set for the same active state
+  - dataplane bootstrap now rejects active bindings without that matching compact `runtimes` set, so consumer/emulator do not infer runtime truth ad hoc from partial payloads
 - `/runtime/validator/active`
   - validator loaded-state only, not source of truth
 - `/runtime/validator/results`
@@ -102,13 +104,14 @@ This means the HTTP layer is intentionally thin. It is a transport facade over N
 ### Dataplane validation path
 
 1. Activation in `configctl` projects active ingestion bindings and runtime metadata.
-2. `consumer` boots from the aggregate `/runtime/ingestion/bindings` view, builds a runtime topology across the active binding set, consumes Kafka topics, and republishes canonical dataplane messages into JetStream.
-3. `consumer` refreshes that topology when `configctl` emits `config.ingestion_runtime_changed`; the event is the primary trigger, while aggregate bootstrap remains the state source.
-4. `consumer` also runs bounded self-healing reconciliation through `bootstrap.reconcile_interval`, so a missed local event does not leave the dataplane stale indefinitely.
-5. `validator` consumes both config activation events and dataplane ingestion events.
-6. The validator resolves the active runtime for the message scope, evaluates rules, and stores the result.
-7. `emulator` uses the same aggregate bootstrap seam, refreshes on the same runtime-change signal, and continuously produces one valid and one invalid synthetic JSON payload per active binding, which closes the loop for smoke validation.
-8. `emulator` also reconciles by `bootstrap.reconcile_interval` before continuing synthetic publication; this keeps smoke useful even if the refresh event is delayed or lost locally.
+2. `consumer` boots from the aggregate `/runtime/ingestion/bindings` view, using the `bindings` set as the dataplane bootstrap seam while the compact `runtimes` set keeps local inspection aligned with configctl truth.
+3. The bootstrap client validates that every active binding is covered by the compact runtime set before building the local topology, and its refresh signature now includes artifact/runtime metadata as well as binding identity.
+4. `consumer` refreshes that topology when `configctl` emits `config.ingestion_runtime_changed`; the event is the primary trigger, while aggregate bootstrap remains the state source.
+5. `consumer` also runs bounded self-healing reconciliation through `bootstrap.reconcile_interval`, so a missed local event does not leave the dataplane stale indefinitely.
+6. `validator` consumes both config activation events and dataplane ingestion events.
+7. The validator resolves the active runtime for the message scope, evaluates rules, and stores the result.
+8. `emulator` uses the same aggregate bootstrap seam, refreshes on the same runtime-change signal, and continuously produces one valid and one invalid synthetic JSON payload per active binding, which closes the loop for smoke validation.
+9. `emulator` also reconciles by `bootstrap.reconcile_interval` before continuing synthetic publication; this keeps smoke useful even if the refresh event is delayed or lost locally.
 
 Relevant code paths:
 
@@ -128,6 +131,7 @@ Relevant code paths:
 - `validator` owns runtime cache resolution and result evaluation.
 - `consumer` and `emulator` are runtime clients of active-ingestion bootstrap, not independent sources of truth.
 - `consumer` and `emulator` now default to aggregate bootstrap plus signature-based refresh.
+- `consumer` keeps the loaded aggregate bootstrap signature and compact runtime refs in local loaded-state, and `emulator` logs the same bootstrap diagnostics on start/refresh; these are observability aids for the loaded generation, not new truth surfaces.
 - `consumer` and `emulator` also use bounded reconciliation via `bootstrap.reconcile_interval`; that fallback exists for self-healing, not as a replacement for the event-driven path.
 - `config.ingestion_runtime_changed` is the canonical dataplane refresh trigger; it does not replace aggregate bootstrap as the source of truth.
 - the scope-specific bootstrap path remains an internal troubleshooting seam, not the primary dataplane mode.
@@ -137,7 +141,7 @@ Relevant code paths:
 
 - `server` readiness depends on successful configctl reachability through NATS.
 - `consumer` and `emulator` depend on the aggregate active-ingestion view exposed by `/runtime/ingestion/bindings`.
-- dataplane refresh is event-driven by `config.ingestion_runtime_changed` and gated by binding-set signature: no reload when the aggregate bootstrap is unchanged; runtime replacement when the active set changes.
+- dataplane refresh is event-driven by `config.ingestion_runtime_changed` and gated by a bootstrap signature that now includes compact runtime and artifact metadata: no reload when the aggregate bootstrap is unchanged; runtime replacement when the active set changes.
 - when the local event path is missed or delayed, dataplane convergence falls back to aggregate bootstrap reconciliation on `bootstrap.reconcile_interval`.
 - `validator` depends on both activation events and dataplane ingestion events.
 - scope defaults are `global/default` unless explicitly overridden.

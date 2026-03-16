@@ -5,11 +5,15 @@
       "updatedAt": "2026-03-16T18:21:19.776Z"
     },
     "phase-2": {
-      "status": "in_progress",
-      "updatedAt": "2026-03-16T18:21:19.783Z"
+      "status": "completed",
+      "updatedAt": "2026-03-16T19:23:04.751Z"
+    },
+    "phase-3": {
+      "status": "completed",
+      "updatedAt": "2026-03-16T19:23:04.757Z"
     }
   },
-  "progress": 33,
+  "progress": 100,
   "decisions": [
     {
       "title": "Tooling now treats configctl projections as canonical runtime evidence",
@@ -22,6 +26,90 @@
       "status": "accepted",
       "id": "dec-1773685288006",
       "decidedAt": "2026-03-16T18:21:28.006Z"
+    },
+    {
+      "title": "Ingestion bootstrap reply now carries compact runtime set",
+      "description": "`/runtime/ingestion/bindings` remains the primary bootstrap seam for dataplane clients through `bindings`, but the reply now also carries a deduplicated compact `runtimes` set with scope, config, artifact, checksum, and activation metadata for the same active state. This keeps local inspection and future consumer bootstrapping aligned with configctl runtime truth without moving lifecycle logic out of configctl or expanding validator ownership.",
+      "phase": "E",
+      "alternatives": [
+        "Keep only repeated runtime metadata inside each binding record and require operators or future consumers to infer the active runtime set",
+        "Create a separate HTTP endpoint just for compact ingestion runtimes instead of extending the existing bootstrap reply"
+      ],
+      "status": "accepted",
+      "id": "dec-1773685746726",
+      "decidedAt": "2026-03-16T18:29:06.726Z"
+    },
+    {
+      "title": "runtime-bindings now guards the bootstrap runtime summary contract",
+      "description": "The static `runtime-bindings` analyzer now verifies that `/runtime/ingestion/bindings` preserves both the per-binding bootstrap seam and the compact `runtimes` summary derived from configctl ingestion projections, and that the canonical `/runtime/configctl/projections` route remains available. The analyzer also stops treating missing binding definitions in `deploy/configs/` as a CI error because bindings are created through configctl lifecycle and fixture flows in this repository.",
+      "phase": "E",
+      "alternatives": [
+        "Leave the new bootstrap summary unguarded and rely on code review plus live smoke only",
+        "Keep treating `deploy/configs/` as the expected source of binding declarations even though bindings are runtime-created in this repository"
+      ],
+      "status": "accepted",
+      "id": "dec-1773686101330",
+      "decidedAt": "2026-03-16T18:35:01.330Z"
+    },
+    {
+      "title": "drift-detect derives CLI commands and normalizes transport event names",
+      "description": "The drift-detect analyzer now scans tools/raccoon-cli/src/main.rs for real subcommands instead of relying on a stale manual list, and normalizes registry transport event names such as configctl.event.config.activated into domain names like config.activated before contract drift comparison. This removes false positives from workflow-drift and contract-domain-drift and keeps quality-gate-ci aligned with the actual runtime/tooling surface.",
+      "phase": "E",
+      "alternatives": [
+        "Keep maintaining a manual known_cli_subcommands list in drift_detect.rs",
+        "Treat transport event names as separate from domain events and accept persistent false positives in contract-domain-drift"
+      ],
+      "status": "accepted",
+      "id": "dec-1773686658402",
+      "decidedAt": "2026-03-16T18:44:18.402Z"
+    },
+    {
+      "title": "runtimebootstrap now requires compact runtimes and signs artifact drift",
+      "description": "The runtime bootstrap client now rejects active ingestion bootstrap responses that expose bindings without a matching compact runtime summary, carries the compact runtimes into ActiveIngestionBootstrap, and includes artifact/runtime metadata in the bootstrap signature. This removes silent drift where the consumer/emulator refresh loop could ignore artifact changes and reduces inference by treating the compact runtimes set as part of the canonical bootstrap seam.",
+      "phase": "E",
+      "alternatives": [
+        "Keep bootstrap reconstruction based only on bindings and continue ignoring the runtimes summary",
+        "Allow bindings without compact runtimes and rely on ad hoc inference from per-binding runtime fields during refresh"
+      ],
+      "status": "accepted",
+      "id": "dec-1773687251553",
+      "decidedAt": "2026-03-16T18:54:11.553Z"
+    },
+    {
+      "title": "consumer and emulator now expose loaded aggregate bootstrap diagnostics",
+      "description": "The consumer supervisor now keeps the loaded aggregate bootstrap signature and compact runtime refs in its local loaded-state, and the emulator logs the same bootstrap diagnostics on start and refresh. This makes the loaded aggregate generation observable for local debugging without creating a new source of truth or adding new ownership to server/http surfaces.",
+      "phase": "E",
+      "alternatives": [
+        "Keep bootstrap signature and runtime refs implicit in logs/tests only",
+        "Expose a new HTTP endpoint just for consumer/emulator bootstrap inspection"
+      ],
+      "status": "accepted",
+      "id": "dec-1773687914751",
+      "decidedAt": "2026-03-16T19:05:14.751Z"
+    },
+    {
+      "title": "happy-path now proves loaded bootstrap alignment",
+      "description": "scenario-smoke happy-path now reads consumer and emulator logs, parses the loaded bootstrap diagnostics with the same shared parser used by trace-pack, and fails when the two services converge on different aggregate bootstrap generations. This turns loaded bootstrap alignment from passive evidence into active runtime proof without adding a new HTTP surface.",
+      "phase": "E",
+      "alternatives": [
+        "Keep bootstrap alignment only in trace-pack summary output",
+        "Add a new HTTP endpoint just for consumer/emulator loaded bootstrap state"
+      ],
+      "status": "accepted",
+      "id": "dec-1773688667072",
+      "decidedAt": "2026-03-16T19:17:47.072Z"
+    },
+    {
+      "title": "Block 2 validation ladder is green end-to-end",
+      "description": "The repository now proves the ingestion runtime contract with static and live validation: make raccoon-test, make quality-gate-ci, make up-dataplane, make scenario-smoke SCENARIO=happy-path, make trace-pack, and make down all completed successfully. The live trace-pack summary reported loaded bootstrap alignment as aligned, matching the new bootstrap-alignment smoke stage.",
+      "phase": "V",
+      "alternatives": [
+        "Treat trace-pack loaded bootstrap diagnostics as sufficient without live happy-path proof",
+        "Leave phase-3 open and rely on previous partial validations"
+      ],
+      "status": "accepted",
+      "id": "dec-1773688984869",
+      "decidedAt": "2026-03-16T19:23:04.869Z"
     }
   ]
 }

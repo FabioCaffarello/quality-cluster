@@ -74,7 +74,7 @@ func Run(config settings.AppConfig) {
 		}
 	}()
 
-	logger.Info("emulator started", "topics", bootstrapState.Index.Topics(), "bindings", len(bootstrapState.Index.All()))
+	logger.Info("emulator started", "topics", bootstrapState.Index.Topics(), "bindings", len(bootstrapState.Index.All()), "bootstrap_signature", bootstrapSignature, "runtime_refs", bootstrapState.RuntimeRefs())
 
 	ticker := time.NewTicker(config.Emulator.PublishIntervalDuration())
 	defer ticker.Stop()
@@ -128,7 +128,7 @@ func reconcileBootstrapState(ctx context.Context, logger *slog.Logger, config se
 		return current, currentSignature
 	}
 
-	logger.Info("emulator bootstrap refreshed", "topics", refreshed.Index.Topics(), "bindings", len(refreshed.Index.All()))
+	logger.Info("emulator bootstrap refreshed", "topics", refreshed.Index.Topics(), "bindings", len(refreshed.Index.All()), "bootstrap_signature", refreshed.Signature(), "runtime_refs", refreshed.RuntimeRefs())
 	return refreshed, refreshed.Signature()
 }
 

@@ -54,7 +54,7 @@ fn gather_evidence(project_root: &Path) -> Result<Evidence> {
         makefile_targets: HashSet::new(),
         dev_doc_targets: HashSet::new(),
         dev_doc_cli_commands: HashSet::new(),
-        cli_subcommands: known_cli_subcommands(),
+        cli_subcommands: scan_cli_subcommands(project_root),
         domain_events: Vec::new(),
         registry_events: Vec::new(),
         config_bindings: Vec::new(),
@@ -115,6 +115,93 @@ fn known_cli_subcommands() -> HashSet<String> {
     .iter()
     .map(|s| s.to_string())
     .collect()
+}
+
+fn scan_cli_subcommands(project_root: &Path) -> HashSet<String> {
+    let main_path = project_root.join("tools/raccoon-cli/src/main.rs");
+    let content = match std::fs::read_to_string(&main_path) {
+        Ok(content) => content,
+        Err(_) => return known_cli_subcommands(),
+    };
+
+    let commands = extract_cli_subcommands(&content);
+    if commands.is_empty() {
+        return known_cli_subcommands();
+    }
+
+    commands
+}
+
+fn extract_cli_subcommands(content: &str) -> HashSet<String> {
+    let mut commands = HashSet::new();
+    let mut in_commands_enum = false;
+    let mut brace_depth = 0i32;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if !in_commands_enum {
+            if trimmed.starts_with("enum Commands") {
+                in_commands_enum = true;
+                brace_depth += line.matches('{').count() as i32;
+                brace_depth -= line.matches('}').count() as i32;
+            }
+            continue;
+        }
+
+        brace_depth += line.matches('{').count() as i32;
+        brace_depth -= line.matches('}').count() as i32;
+
+        if brace_depth <= 0 {
+            break;
+        }
+
+        if trimmed.is_empty() || trimmed.starts_with("///") || trimmed.starts_with("#[") {
+            continue;
+        }
+
+        let indent = line.chars().take_while(|c| c.is_whitespace()).count();
+        if indent != 4 {
+            continue;
+        }
+
+        let variant = trimmed
+            .split([' ', '{', ',', '('])
+            .next()
+            .unwrap_or_default()
+            .trim();
+        if variant.is_empty() {
+            continue;
+        }
+
+        let starts_with_upper = variant
+            .chars()
+            .next()
+            .map(|ch| ch.is_ascii_uppercase())
+            .unwrap_or(false);
+        if !starts_with_upper {
+            continue;
+        }
+
+        commands.insert(camel_to_kebab(variant));
+    }
+
+    commands
+}
+
+fn camel_to_kebab(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    for (idx, ch) in input.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if idx > 0 {
+                output.push('-');
+            }
+            output.push(ch.to_ascii_lowercase());
+        } else {
+            output.push(ch);
+        }
+    }
+    output
 }
 
 // ── Scanners ────────────────────────────────────────────────────────
@@ -227,6 +314,28 @@ fn is_event_name(s: &str) -> bool {
     action.contains('_') || known_verbs.contains(&action)
 }
 
+fn normalize_registry_event_name(s: &str) -> Option<String> {
+    if is_event_name(s) {
+        return Some(s.to_string());
+    }
+
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+
+    if parts[0] != "configctl" || !["event", "events"].contains(&parts[1]) {
+        return None;
+    }
+
+    let normalized = format!("{}.{}", parts[2], parts[3]);
+    if is_event_name(&normalized) {
+        return Some(normalized);
+    }
+
+    None
+}
+
 fn scan_registry_events(internal_dir: &Path, events: &mut Vec<String>) {
     let adapters_dir = internal_dir.join("adapters");
     if !adapters_dir.is_dir() {
@@ -257,8 +366,8 @@ fn scan_registry_files(dir: &Path, events: &mut Vec<String>) {
                         }
                         if trimmed.contains("Type:") || trimmed.contains("type:") {
                             for val in extract_all_quoted(trimmed) {
-                                if is_event_name(&val) {
-                                    events.push(val);
+                                if let Some(event_name) = normalize_registry_event_name(&val) {
+                                    events.push(event_name);
                                 }
                             }
                         }
@@ -1578,6 +1687,80 @@ mod tests {
             .iter()
             .any(|f| f.message.contains("config.ingestion_runtime_changed")
                 && f.message.contains("no matching domain")));
+    }
+
+    #[test]
+    fn extract_cli_subcommands_reads_real_command_variants() {
+        let commands = extract_cli_subcommands(
+            r#"
+enum Commands {
+    Doctor,
+    DriftDetect,
+    Tdd {
+        files: Vec<String>,
+    },
+    SnapshotDiff {
+        before: std::path::PathBuf,
+    },
+    Recommend {
+        files: Vec<String>,
+    },
+}
+"#,
+        );
+
+        assert!(commands.contains("doctor"), "commands: {commands:?}");
+        assert!(commands.contains("drift-detect"));
+        assert!(commands.contains("tdd"));
+        assert!(commands.contains("snapshot-diff"));
+        assert!(commands.contains("recommend"));
+    }
+
+    #[test]
+    fn scan_registry_events_normalizes_transport_event_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry_dir = dir.path().join("adapters/nats");
+        std::fs::create_dir_all(&registry_dir).unwrap();
+        std::fs::write(
+            registry_dir.join("configctl_registry.go"),
+            r#"
+package nats
+
+func DefaultConfigctlRegistry() {
+    _ = EventSpec{
+        Subject: "configctl.events.config.activated",
+        Type:    "configctl.event.config.activated",
+    }
+    _ = EventSpec{
+        Type: "configctl.event.config.ingestion_runtime_changed",
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let mut events = Vec::new();
+        scan_registry_events(dir.path(), &mut events);
+
+        assert_eq!(
+            events,
+            vec![
+                "config.activated".to_string(),
+                "config.ingestion_runtime_changed".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn normalize_registry_event_name_rejects_non_event_transport_types() {
+        assert_eq!(
+            normalize_registry_event_name("configctl.command.activate_config"),
+            None
+        );
+        assert_eq!(
+            normalize_registry_event_name("configctl.reply.list_active_runtime_projections"),
+            None
+        );
     }
 
     // ── compose-profile-drift ───────────────────────────────────────

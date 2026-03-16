@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	configctlcontracts "internal/application/configctl/contracts"
 	runtimebootstrap "internal/application/runtimebootstrap"
+	sharedruntime "internal/application/runtimecontracts"
 	"internal/shared/settings"
 )
 
@@ -18,7 +20,7 @@ func TestRefreshBootstrapStateDetectsChange(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"}}},{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"}}}]}`))
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}}},{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}},{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}}]}`))
 	}))
 	defer server.Close()
 
@@ -29,7 +31,7 @@ func TestRefreshBootstrapStateDetectsChange(t *testing.T) {
 		},
 	}
 
-	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, "tenant|br|ver-br|sum-br|orders-br|sales.order.created")
+	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
 	if prob != nil {
 		t.Fatalf("refresh bootstrap state: %v", prob)
 	}
@@ -46,7 +48,7 @@ func TestRefreshBootstrapStateDetectsNoChange(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"}}}]}`))
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}}]}`))
 	}))
 	defer server.Close()
 
@@ -57,7 +59,7 @@ func TestRefreshBootstrapStateDetectsNoChange(t *testing.T) {
 		},
 	}
 
-	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, "tenant|br|ver-br|sum-br|orders-br|sales.order.created")
+	state, changed, prob := refreshBootstrapState(context.Background(), slog.Default(), config, mustBootstrapSignature("orders-br", "sales.order.created", "ver-br", "tenant", "br", "sum-br", "artifact-br", "artifact-sum-br"))
 	if prob != nil {
 		t.Fatalf("refresh bootstrap state: %v", prob)
 	}
@@ -101,7 +103,7 @@ func TestReconcileBootstrapStateAdoptsChangedBootstrap(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"}}}]}`))
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}}]}`))
 	}))
 	defer server.Close()
 
@@ -128,4 +130,27 @@ func TestReconcileBootstrapStateAdoptsChangedBootstrap(t *testing.T) {
 	if len(next.Index.All()) != 1 {
 		t.Fatalf("expected adopted bootstrap binding, got %+v", next.Index.All())
 	}
+}
+
+func mustBootstrapSignature(name, topic, versionID, scopeKind, scopeKey, definitionChecksum, artifactID, artifactChecksum string) string {
+	bootstrap := runtimebootstrap.ActiveIngestionBootstrap{
+		Bindings: []configctlcontracts.ActiveIngestionBindingRecord{
+			{
+				Binding: configctlcontracts.BindingRecord{Name: name, Topic: topic},
+				Runtime: sharedruntime.RuntimeRecord{
+					Scope:    sharedruntime.ScopeRecord{Kind: scopeKind, Key: scopeKey},
+					Config:   sharedruntime.ConfigRecord{VersionID: versionID, DefinitionChecksum: definitionChecksum},
+					Artifact: sharedruntime.ArtifactRecord{ID: artifactID, Checksum: artifactChecksum, RuntimeLoader: "validator:v1"},
+				},
+			},
+		},
+		Runtimes: []sharedruntime.RuntimeRecord{
+			{
+				Scope:    sharedruntime.ScopeRecord{Kind: scopeKind, Key: scopeKey},
+				Config:   sharedruntime.ConfigRecord{VersionID: versionID, DefinitionChecksum: definitionChecksum},
+				Artifact: sharedruntime.ArtifactRecord{ID: artifactID, Checksum: artifactChecksum, RuntimeLoader: "validator:v1"},
+			},
+		},
+	}
+	return bootstrap.Signature()
 }

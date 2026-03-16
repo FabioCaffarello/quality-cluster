@@ -1,6 +1,10 @@
 mod collect;
 
 use crate::error::{CliError, Result};
+use crate::runtime_diagnostics::{
+    compact_bootstrap_signature, parse_consumer_bootstrap_diagnostics,
+    parse_emulator_bootstrap_diagnostics,
+};
 use collect::{Collector, Evidence, EvidenceStatus};
 use serde::Serialize;
 use serde_json::Value;
@@ -240,6 +244,12 @@ fn build_summary(
         s.push('\n');
     }
 
+    if let Some(loaded_bootstrap_summary) = build_loaded_bootstrap_summary(evidences) {
+        s.push_str("\n## Loaded bootstrap diagnostics\n\n");
+        s.push_str(&loaded_bootstrap_summary);
+        s.push('\n');
+    }
+
     if !failed.is_empty() {
         s.push_str("\n## Unavailable evidence\n\n");
         s.push_str("| Evidence | Reason |\n");
@@ -321,6 +331,83 @@ fn build_refresh_observability_summary(evidences: &[Evidence]) -> Option<String>
     }
 
     Some(out)
+}
+
+fn build_loaded_bootstrap_summary(evidences: &[Evidence]) -> Option<String> {
+    let by_file: HashMap<&str, &Evidence> =
+        evidences.iter().map(|e| (e.file.as_str(), e)).collect();
+
+    let consumer = by_file
+        .get("logs/consumer.log")
+        .and_then(|e| parse_consumer_bootstrap_diagnostics(e.content.as_str()));
+    let emulator = by_file
+        .get("logs/emulator.log")
+        .and_then(|e| parse_emulator_bootstrap_diagnostics(e.content.as_str()));
+
+    if consumer.is_none() && emulator.is_none() {
+        return None;
+    }
+
+    let mut out = String::new();
+    match consumer.as_ref() {
+        Some(diag) => {
+            out.push_str("- consumer loaded bootstrap:\n");
+            out.push_str(&format!("  - event: `{}`\n", diag.event));
+            out.push_str(&format!(
+                "  - signature: `{}`\n",
+                compact_bootstrap_signature(diag.signature.as_str())
+            ));
+            out.push_str(&format!(
+                "  - runtime refs: {}\n",
+                format_runtime_refs(diag.runtime_refs.as_slice())
+            ));
+        }
+        None => out.push_str("- consumer loaded bootstrap: unavailable in logs\n"),
+    }
+
+    match emulator.as_ref() {
+        Some(diag) => {
+            out.push_str("- emulator loaded bootstrap:\n");
+            out.push_str(&format!("  - event: `{}`\n", diag.event));
+            out.push_str(&format!(
+                "  - signature: `{}`\n",
+                compact_bootstrap_signature(diag.signature.as_str())
+            ));
+            out.push_str(&format!(
+                "  - runtime refs: {}\n",
+                format_runtime_refs(diag.runtime_refs.as_slice())
+            ));
+        }
+        None => out.push_str("- emulator loaded bootstrap: unavailable in logs\n"),
+    }
+
+    if let (Some(consumer), Some(emulator)) = (consumer.as_ref(), emulator.as_ref()) {
+        let aligned = consumer.signature == emulator.signature
+            && consumer.runtime_refs == emulator.runtime_refs;
+        out.push_str(&format!(
+            "- loaded bootstrap alignment: `{}`\n",
+            if aligned { "aligned" } else { "mismatch" }
+        ));
+        if !aligned {
+            out.push_str(
+                "- diagnosis: consumer and emulator loaded different aggregate bootstrap generations\n",
+            );
+            out.push_str("- next step: inspect `logs/consumer.log` and `logs/emulator.log`, then rerun `raccoon-cli scenario-smoke happy-path`\n");
+        }
+    }
+
+    Some(out)
+}
+
+fn format_runtime_refs(runtime_refs: &[String]) -> String {
+    if runtime_refs.is_empty() {
+        return "none".into();
+    }
+    runtime_refs
+        .iter()
+        .map(|value| format!("`{value}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn extract_reconcile_interval(raw: &str) -> Option<String> {
@@ -764,6 +851,66 @@ mod tests {
         assert!(summary.contains("consumer-runtime-refresh-v1"));
         assert!(summary.contains("pending=`2`"));
         assert!(summary.contains("delivered=`15`"));
+    }
+
+    #[test]
+    fn build_summary_contains_loaded_bootstrap_diagnostics() {
+        let evidences = vec![
+            Evidence {
+                name: "consumer log".into(),
+                file: "logs/consumer.log".into(),
+                content: r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" generation=2 topics="[sales.order.created]" bindings=1 bootstrap_signature="binding|tenant|br|||ver-br|0|sum-br|artifact-br||artifact-sum-br||validator:v1|orders|sales.order.created\nruntime|tenant|br|||ver-br|0|sum-br|artifact-br||artifact-sum-br||validator:v1" runtime_refs="[tenant:br:ver-br:artifact-br]""#.into(),
+                status: EvidenceStatus::Ok,
+            },
+            Evidence {
+                name: "emulator log".into(),
+                file: "logs/emulator.log".into(),
+                content: r#"time=2026-03-16T18:00:01Z level=INFO msg="emulator started" topics="[sales.order.created]" bindings=1 bootstrap_signature="binding|tenant|br|||ver-br|0|sum-br|artifact-br||artifact-sum-br||validator:v1|orders|sales.order.created\nruntime|tenant|br|||ver-br|0|sum-br|artifact-br||artifact-sum-br||validator:v1" runtime_refs="[tenant:br:ver-br:artifact-br]""#.into(),
+                status: EvidenceStatus::Ok,
+            },
+        ];
+
+        let summary = build_summary("20260314-120000", &evidences, &[], &[]);
+        assert!(summary.contains("Loaded bootstrap diagnostics"));
+        assert!(summary.contains("consumer loaded bootstrap"));
+        assert!(summary.contains("emulator loaded bootstrap"));
+        assert!(summary.contains("loaded bootstrap alignment: `aligned`"));
+        assert!(summary.contains("tenant:br:ver-br:artifact-br"));
+    }
+
+    #[test]
+    fn build_summary_reports_loaded_bootstrap_mismatch() {
+        let evidences = vec![
+            Evidence {
+                name: "consumer log".into(),
+                file: "logs/consumer.log".into(),
+                content: r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" generation=2 topics="[sales.order.created]" bindings=1 bootstrap_signature="consumer-signature" runtime_refs="[tenant:br:ver-br:artifact-br]""#.into(),
+                status: EvidenceStatus::Ok,
+            },
+            Evidence {
+                name: "emulator log".into(),
+                file: "logs/emulator.log".into(),
+                content: r#"time=2026-03-16T18:00:01Z level=INFO msg="emulator bootstrap refreshed" topics="[sales.order.created]" bindings=1 bootstrap_signature="emulator-signature" runtime_refs="[tenant:us:ver-us:artifact-us]""#.into(),
+                status: EvidenceStatus::Ok,
+            },
+        ];
+
+        let summary = build_summary("20260314-120000", &evidences, &[], &[]);
+        assert!(summary.contains("loaded bootstrap alignment: `mismatch`"));
+        assert!(summary.contains("different aggregate bootstrap generations"));
+    }
+
+    #[test]
+    fn parse_loaded_bootstrap_diagnostics_uses_latest_matching_line() {
+        let parsed = parse_consumer_bootstrap_diagnostics(
+            r#"time=2026-03-16T18:00:00Z level=INFO msg="consumer runtime ready" bootstrap_signature="old" runtime_refs="[tenant:br:old:artifact-old]"
+time=2026-03-16T18:00:01Z level=INFO msg="consumer runtime ready" bootstrap_signature="new" runtime_refs="[tenant:br:new:artifact-new]""#,
+        )
+        .expect("consumer diagnostics");
+
+        assert_eq!(parsed.source, "consumer");
+        assert_eq!(parsed.signature, "new");
+        assert_eq!(parsed.runtime_refs, vec!["tenant:br:new:artifact-new"]);
     }
 
     #[test]

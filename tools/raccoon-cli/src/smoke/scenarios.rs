@@ -144,6 +144,7 @@ fn run_happy_path(config: &SmokeConfig) -> Report {
         ("route", Box::new(stages::route)),
         ("consume", Box::new(stages::consume)),
         ("validate", Box::new(stages::validate)),
+        ("bootstrap-alignment", Box::new(stages::bootstrap_alignment)),
     ];
 
     run_stages_sequential(&mut report, &stage_fns, config);

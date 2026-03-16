@@ -43,12 +43,12 @@ agents:
 
 execution:
   history:
-    - timestamp: "2026-03-16T18:21:28.008Z"
-      phase: E
+    - timestamp: "2026-03-16T19:23:04.870Z"
+      phase: V
       action: decision_recorded
       plan: "block-2-ingestion-runtime-contract"
-      description: "Decision recorded: Tooling now treats configctl projections as canonical runtime evidence"
-  last_activity: "2026-03-16T18:21:28.008Z"
+      description: "Decision recorded: Block 2 validation ladder is green end-to-end"
+  last_activity: "2026-03-16T19:23:04.870Z"
   resume_context: "Decisão registrada"
 
 approval:

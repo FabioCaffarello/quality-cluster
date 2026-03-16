@@ -23,8 +23,10 @@ type refreshActiveIngestionBootstrapMessage struct {
 }
 
 type consumerRuntimeReadyMessage struct {
-	Generation int
-	Topology   dataplaneapp.RuntimeTopology
+	Generation         int
+	Topology           dataplaneapp.RuntimeTopology
+	BootstrapSignature string
+	RuntimeRefs        []string
 }
 
 type consumerRuntimeFailedMessage struct {
@@ -67,8 +69,10 @@ type queryConsumerSupervisorStateResult struct {
 }
 
 type ConsumerSupervisorState struct {
-	Generation int
-	Ready      bool
-	Topics     []string
-	Bindings   int
+	Generation         int
+	Ready              bool
+	Topics             []string
+	Bindings           int
+	BootstrapSignature string
+	RuntimeRefs        []string
 }

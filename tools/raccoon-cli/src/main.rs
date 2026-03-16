@@ -7,6 +7,7 @@ mod models;
 mod output;
 mod process_utils;
 mod results_inspect;
+mod runtime_diagnostics;
 mod smoke;
 mod trace_pack;
 

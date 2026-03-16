@@ -25,8 +25,10 @@ func (a *readyRuntimeActor) Receive(c *actor.Context) {
 	switch c.Message().(type) {
 	case actor.Started:
 		c.Send(c.Parent(), consumerRuntimeReadyMessage{
-			Generation: a.cfg.Generation,
-			Topology:   a.cfg.Bootstrap.Topology,
+			Generation:         a.cfg.Generation,
+			Topology:           a.cfg.Bootstrap.Topology,
+			BootstrapSignature: a.cfg.Bootstrap.Signature(),
+			RuntimeRefs:        a.cfg.Bootstrap.RuntimeRefs(),
 		})
 	}
 }
@@ -61,6 +63,9 @@ func TestSupervisorReplacesRuntimeGenerationOnBootstrapReload(t *testing.T) {
 	if state.Bindings != 1 {
 		t.Fatalf("expected one binding in first generation, got %+v", state)
 	}
+	if state.BootstrapSignature == "" || len(state.RuntimeRefs) != 1 {
+		t.Fatalf("expected diagnostic bootstrap state in first generation, got %+v", state)
+	}
 
 	engine.Send(supervisorPID, activeIngestionBootstrapLoadedMessage{Bootstrap: second})
 	state = awaitConsumerState(t, engine, supervisorPID, func(state ConsumerSupervisorState) bool {
@@ -68,6 +73,9 @@ func TestSupervisorReplacesRuntimeGenerationOnBootstrapReload(t *testing.T) {
 	})
 	if state.Bindings != 1 {
 		t.Fatalf("expected one binding in second generation, got %+v", state)
+	}
+	if state.BootstrapSignature != second.Signature() || len(state.RuntimeRefs) != 1 {
+		t.Fatalf("expected updated bootstrap diagnostics in second generation, got %+v", state)
 	}
 }
 
@@ -106,10 +114,15 @@ func TestSupervisorIgnoresStaleRuntimeReadyMessages(t *testing.T) {
 	if state.Bindings != 1 {
 		t.Fatalf("expected one binding after second generation, got %+v", state)
 	}
+	if state.BootstrapSignature != second.Signature() || len(state.RuntimeRefs) != 1 {
+		t.Fatalf("expected second-generation bootstrap diagnostics, got %+v", state)
+	}
 
 	engine.Send(supervisorPID, consumerRuntimeReadyMessage{
-		Generation: 1,
-		Topology:   first.Topology,
+		Generation:         1,
+		Topology:           first.Topology,
+		BootstrapSignature: first.Signature(),
+		RuntimeRefs:        first.RuntimeRefs(),
 	})
 
 	state = awaitConsumerState(t, engine, supervisorPID, func(state ConsumerSupervisorState) bool {
@@ -117,6 +130,9 @@ func TestSupervisorIgnoresStaleRuntimeReadyMessages(t *testing.T) {
 	})
 	if state.Bindings != 1 {
 		t.Fatalf("expected stale ready message to be ignored, got %+v", state)
+	}
+	if state.BootstrapSignature != second.Signature() {
+		t.Fatalf("expected stale bootstrap signature to be ignored, got %+v", state)
 	}
 }
 
@@ -127,8 +143,9 @@ func mustBootstrap(t *testing.T, name, topic, versionID, scopeKind, scopeKey str
 		{
 			Binding: configctlcontracts.BindingRecord{Name: name, Topic: topic},
 			Runtime: sharedruntime.RuntimeRecord{
-				Scope:  sharedruntime.ScopeRecord{Kind: scopeKind, Key: scopeKey},
-				Config: sharedruntime.ConfigRecord{VersionID: versionID},
+				Scope:    sharedruntime.ScopeRecord{Kind: scopeKind, Key: scopeKey},
+				Config:   sharedruntime.ConfigRecord{VersionID: versionID, DefinitionChecksum: "sum-" + versionID},
+				Artifact: sharedruntime.ArtifactRecord{ID: "artifact-" + versionID, Checksum: "artifact-sum-" + versionID, RuntimeLoader: "validator:v1"},
 			},
 		},
 	}
@@ -145,6 +162,7 @@ func mustBootstrap(t *testing.T, name, topic, versionID, scopeKind, scopeKey str
 
 	return runtimebootstrap.ActiveIngestionBootstrap{
 		Bindings: bindings,
+		Runtimes: []sharedruntime.RuntimeRecord{bindings[0].Runtime},
 		Index:    index,
 		Topology: topology,
 	}

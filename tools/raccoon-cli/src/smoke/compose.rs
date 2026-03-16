@@ -46,6 +46,45 @@ pub fn running_services(compose_file: &std::path::Path) -> Result<Vec<String>, S
     Ok(running)
 }
 
+pub fn service_logs(
+    compose_file: &std::path::Path,
+    service: &str,
+    tail_lines: u32,
+) -> Result<String, String> {
+    let compose_dir = compose_file
+        .parent()
+        .ok_or_else(|| "cannot determine compose directory".to_string())?;
+    let compose_file_arg = compose_file
+        .canonicalize()
+        .unwrap_or_else(|_| compose_file.to_path_buf());
+
+    let mut command = Command::new("docker");
+    command
+        .args(["compose", "-f"])
+        .arg(&compose_file_arg)
+        .args(["logs", "--no-color", "--tail"])
+        .arg(tail_lines.to_string())
+        .arg(service)
+        .current_dir(compose_dir);
+
+    let output =
+        run_command_with_timeout(&mut command, Duration::from_secs(5), "docker compose logs")?;
+
+    if !output.status.success() {
+        let stderr = output.stderr.trim();
+        if stderr.is_empty() {
+            return Err(format!(
+                "docker compose logs failed for service '{service}'"
+            ));
+        }
+        return Err(format!(
+            "docker compose logs failed for service '{service}': {stderr}"
+        ));
+    }
+
+    Ok(output.stdout)
+}
+
 /// Required services for a full dataplane smoke test.
 pub const REQUIRED_SERVICES: &[&str] = &[
     "nats",

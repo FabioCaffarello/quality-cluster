@@ -106,16 +106,18 @@ Tokens are normalized to lowercase and sanitized for subject-safe routing.
 
 ### 5. Runtime bootstrap payloads
 
-`consumer` and `emulator` do not hardcode dataplane topology. They bootstrap from `/runtime/ingestion/bindings`, which returns `ActiveIngestionBindingRecord` values containing:
+`consumer` and `emulator` do not hardcode dataplane topology. They bootstrap from `/runtime/ingestion/bindings`, which returns:
 
-- binding identity and Kafka topic,
-- field shape,
-- compact runtime metadata:
-  - scope,
-  - config version,
-  - checksum,
-  - artifact,
-  - activation time.
+- `bindings`: `ActiveIngestionBindingRecord` values containing:
+  - binding identity and Kafka topic,
+  - field shape,
+  - compact runtime metadata:
+    - scope,
+    - config version,
+    - checksum,
+    - artifact,
+    - activation time.
+- `runtimes`: the deduplicated compact active runtime set for the same bootstrap state.
 
 Default scope behavior is operationally important:
 
@@ -128,7 +130,8 @@ After Block 5, bootstrap has a stricter operational role:
 
 - aggregate `/runtime/ingestion/bindings` is the canonical state source for dataplane refresh
 - `config.ingestion_runtime_changed` is only the trigger that tells dataplane clients to reload that state
-- signature comparison on the active binding set remains the guard rail that prevents unnecessary runtime replacement
+- dataplane bootstrap must include a compact `runtimes` set that matches the active bindings; bindings without matching runtime summaries are invalid bootstrap state
+- signature comparison on the bootstrap state now includes compact runtime/artifact metadata as well as binding identity, which prevents silent drift when artifacts change without changing the topic map
 
 ### 6. Validation result payloads
 
@@ -166,6 +169,7 @@ These endpoints should be read as stable runtime views over application contract
   - thin HTTP facade for `configctl.control.list_active_runtime_projections`
 - `/runtime/ingestion/bindings`
   - thin HTTP facade for `configctl.control.list_active_ingestion_bindings`
+  - keeps bootstrap-friendly `bindings` plus the compact `runtimes` summary in the same reply
 - `/runtime/validator/active`
   - thin HTTP facade for `validator.runtime.get_active`
 - `/runtime/validator/results`

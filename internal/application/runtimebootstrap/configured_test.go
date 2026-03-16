@@ -18,7 +18,7 @@ func TestWaitForConfiguredActiveIngestionBootstrapUsesAppConfig(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotCorrelationID = r.Header.Get("X-Correlation-ID")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"global","key":"default"},"config":{"version_id":"ver-1"}}}]}`))
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"global","key":"default"},"config":{"version_id":"ver-1","definition_checksum":"sum-1"},"artifact":{"id":"artifact-1","checksum":"artifact-sum-1","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"global","key":"default"},"config":{"version_id":"ver-1","definition_checksum":"sum-1"},"artifact":{"id":"artifact-1","checksum":"artifact-sum-1","runtime_loader":"validator:v1"}}]}`))
 	}))
 	defer server.Close()
 
@@ -66,7 +66,7 @@ func TestWaitForConfiguredActiveIngestionBootstrapSetIgnoresConfiguredScope(t *t
 		gotScopeKey = r.URL.Query().Get("scope_key")
 		gotCorrelationID = r.Header.Get("X-Correlation-ID")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br"}}},{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us"}}}]}`))
+		_, _ = w.Write([]byte(`{"bindings":[{"binding":{"name":"orders-br","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}}},{"binding":{"name":"orders-us","topic":"sales.order.created"},"fields":[{"name":"order_id","type":"string","required":true}],"runtime":{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}}}],"runtimes":[{"scope":{"kind":"tenant","key":"br"},"config":{"version_id":"ver-br","definition_checksum":"sum-br"},"artifact":{"id":"artifact-br","checksum":"artifact-sum-br","runtime_loader":"validator:v1"}},{"scope":{"kind":"tenant","key":"us"},"config":{"version_id":"ver-us","definition_checksum":"sum-us"},"artifact":{"id":"artifact-us","checksum":"artifact-sum-us","runtime_loader":"validator:v1"}}]}`))
 	}))
 	defer server.Close()
 

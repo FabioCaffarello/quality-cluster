@@ -113,8 +113,10 @@ func (a *ConsumerRuntimeActor) startTopicConsumers(c *actor.Context) {
 	}
 
 	c.Send(c.Parent(), consumerRuntimeReadyMessage{
-		Generation: a.cfg.Generation,
-		Topology:   a.topology,
+		Generation:         a.cfg.Generation,
+		Topology:           a.topology,
+		BootstrapSignature: a.cfg.Bootstrap.Signature(),
+		RuntimeRefs:        a.cfg.Bootstrap.RuntimeRefs(),
 	})
 }
 
