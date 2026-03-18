@@ -153,6 +153,9 @@ func TestLifecycleUseCasesValidateCompileActivateDeactivateAndQuery(t *testing.T
 	if compiled.Config.Artifact == nil || compiled.Config.Lifecycle != string(configdomain.LifecycleCompiled) {
 		t.Fatalf("expected compiled artifact, got %+v", compiled.Config)
 	}
+	if len(compiled.Config.Artifact.Capabilities) != 2 {
+		t.Fatalf("expected compiled artifact capabilities, got %+v", compiled.Config.Artifact)
+	}
 
 	activated, prob := activate.Execute(context.Background(), contracts.ActivateConfigCommand{VersionID: created.Config.ID})
 	if prob != nil {
@@ -163,6 +166,9 @@ func TestLifecycleUseCasesValidateCompileActivateDeactivateAndQuery(t *testing.T
 	}
 	if activated.Projection.Artifact.ID != "artifact-1" {
 		t.Fatalf("expected projection artifact id %q, got %q", "artifact-1", activated.Projection.Artifact.ID)
+	}
+	if len(activated.Projection.Artifact.Capabilities) != 2 {
+		t.Fatalf("expected projection artifact capabilities, got %+v", activated.Projection.Artifact)
 	}
 
 	ingestionBindingsReply, prob := listIngestionBindings.Execute(context.Background(), contracts.ListActiveIngestionBindingsQuery{})
@@ -186,6 +192,9 @@ func TestLifecycleUseCasesValidateCompileActivateDeactivateAndQuery(t *testing.T
 	}
 	if ingestionBindingsReply.Runtimes[0].Config.VersionID != created.Config.ID {
 		t.Fatalf("expected compact runtime version id %q, got %+v", created.Config.ID, ingestionBindingsReply.Runtimes[0])
+	}
+	if len(ingestionBindingsReply.Runtimes[0].Artifact.Capabilities) != 2 {
+		t.Fatalf("expected compact runtime capabilities, got %+v", ingestionBindingsReply.Runtimes[0].Artifact)
 	}
 
 	runtimeProjectionsReply, prob := listRuntimeProjections.Execute(context.Background(), contracts.ListActiveRuntimeProjectionsQuery{})
@@ -349,6 +358,9 @@ func TestCompileUseCaseBuildsDefaultArtifactMetadata(t *testing.T) {
 	}
 	if reply.Config.Artifact.StorageRef == "" || reply.Config.Artifact.Checksum == "" {
 		t.Fatalf("expected generated artifact metadata, got %+v", reply.Config.Artifact)
+	}
+	if got, want := reply.Config.Artifact.Capabilities, []string{configdomain.RuntimeCapabilityRuleNotEmpty, configdomain.RuntimeCapabilityRuleRequired}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("expected generated capabilities %v, got %v", want, got)
 	}
 }
 

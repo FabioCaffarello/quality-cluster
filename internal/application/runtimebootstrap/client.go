@@ -69,6 +69,7 @@ func (b ActiveIngestionBootstrap) Signature() string {
 			strings.TrimSpace(runtime.Artifact.Checksum),
 			strings.TrimSpace(runtime.Artifact.StorageRef),
 			strings.TrimSpace(runtime.Artifact.RuntimeLoader),
+			strings.Join(runtime.Artifact.Capabilities, ","),
 		}, "|"))
 	}
 	for _, binding := range bindings {
@@ -86,6 +87,7 @@ func (b ActiveIngestionBootstrap) Signature() string {
 			strings.TrimSpace(binding.Runtime.Artifact.Checksum),
 			strings.TrimSpace(binding.Runtime.Artifact.StorageRef),
 			strings.TrimSpace(binding.Runtime.Artifact.RuntimeLoader),
+			strings.Join(binding.Runtime.Artifact.Capabilities, ","),
 			strings.TrimSpace(binding.Binding.Name),
 			strings.TrimSpace(binding.Binding.Topic),
 		}, "|"))

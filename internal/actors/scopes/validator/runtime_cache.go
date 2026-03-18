@@ -197,6 +197,7 @@ func runtimeProjectionFromRecord(record configctlcontracts.RuntimeProjectionReco
 			Checksum:        record.Artifact.Checksum,
 			StorageRef:      record.Artifact.StorageRef,
 			RuntimeLoader:   record.Artifact.RuntimeLoader,
+			Capabilities:    append([]string(nil), record.Artifact.Capabilities...),
 			CompilerVersion: record.Artifact.CompilerVersion,
 			CreatedAt:       record.Artifact.CreatedAt,
 		},

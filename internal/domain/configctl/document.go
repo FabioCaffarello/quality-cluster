@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -85,6 +86,12 @@ type Rule struct {
 	ExpectedValue string       `json:"expected_value,omitempty" yaml:"expected_value,omitempty"`
 	Severity      RuleSeverity `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
+
+const (
+	RuntimeCapabilityRuleRequired = "rule.operator.required"
+	RuntimeCapabilityRuleNotEmpty = "rule.operator.not_empty"
+	RuntimeCapabilityRuleEquals   = "rule.operator.equals"
+)
 
 func (s ConfigSource) Normalize() ConfigSource {
 	s.Format = SourceFormat(strings.ToLower(strings.TrimSpace(string(s.Format))))
@@ -282,6 +289,30 @@ func (d ConfigDocument) Checksum() string {
 	return checksum(string(payload))
 }
 
+func (d ConfigDocument) RuntimeCapabilities() []string {
+	normalized := d.normalize()
+	if len(normalized.Rules) == 0 {
+		return nil
+	}
+
+	capabilitySet := make(map[string]struct{}, len(normalized.Rules))
+	for _, rule := range normalized.Rules {
+		if capability := runtimeCapabilityForOperator(rule.Operator); capability != "" {
+			capabilitySet[capability] = struct{}{}
+		}
+	}
+	if len(capabilitySet) == 0 {
+		return nil
+	}
+
+	capabilities := make([]string, 0, len(capabilitySet))
+	for capability := range capabilitySet {
+		capabilities = append(capabilities, capability)
+	}
+	sort.Strings(capabilities)
+	return capabilities
+}
+
 func (d ConfigDocument) normalize() ConfigDocument {
 	normalized := ConfigDocument{
 		Metadata: ConfigMetadata{
@@ -340,4 +371,17 @@ func checksum(value string) string {
 
 func itoa(value int) string {
 	return strconv.Itoa(value)
+}
+
+func runtimeCapabilityForOperator(operator RuleOperator) string {
+	switch operator {
+	case RuleOperatorRequired:
+		return RuntimeCapabilityRuleRequired
+	case RuleOperatorNotEmpty:
+		return RuntimeCapabilityRuleNotEmpty
+	case RuleOperatorEquals:
+		return RuntimeCapabilityRuleEquals
+	default:
+		return ""
+	}
 }

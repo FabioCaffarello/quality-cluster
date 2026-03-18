@@ -50,6 +50,7 @@ type CompilationArtifactSummaryRecord struct {
 	Checksum      string `json:"checksum"`
 	StorageRef    string `json:"storage_ref"`
 	RuntimeLoader string `json:"runtime_loader"`
+	Capabilities  []string `json:"capabilities,omitempty"`
 }
 
 type ConfigMetadataRecord struct {
@@ -83,6 +84,7 @@ type CompilationArtifactRecord struct {
 	Checksum        string    `json:"checksum"`
 	StorageRef      string    `json:"storage_ref"`
 	RuntimeLoader   string    `json:"runtime_loader"`
+	Capabilities    []string  `json:"capabilities,omitempty"`
 	CompilerVersion string    `json:"compiler_version,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }

@@ -72,6 +72,7 @@ These are not naming conventions only. `raccoon-cli arch-guard` treats them as e
 3. `configctl` routes control messages into actor-driven use cases and in-memory state.
 4. Lifecycle transitions emit domain events over the `CONFIGCTL_EVENTS` stream.
 5. Activation produces runtime projection records that downstream services depend on.
+6. The compiled artifact attached to those projections is now the capability envelope for execution: `schema_version`, `runtime_loader`, `compiler_version`, checksums, and explicit `capabilities` travel with the runtime truth that `validator`, `consumer`, and `emulator` consume.
 
 Relevant code paths:
 
@@ -114,8 +115,9 @@ This means the HTTP layer is intentionally thin. It is a transport facade over N
 5. `consumer` also runs bounded self-healing reconciliation through `bootstrap.reconcile_interval`, so a missed local event does not leave the dataplane stale indefinitely.
 6. `validator` consumes both config activation events and dataplane ingestion events.
 7. The validator resolves the active runtime for the message scope, evaluates rules, and stores the result.
-8. `emulator` uses the same aggregate bootstrap seam, refreshes on the same runtime-change signal, and continuously produces one valid and one invalid synthetic JSON payload per active binding, which closes the loop for smoke validation.
-9. `emulator` also reconciles by `bootstrap.reconcile_interval` before continuing synthetic publication; this keeps smoke useful even if the refresh event is delayed or lost locally.
+8. Validator execution is now fail-closed against the compiled artifact capability envelope; if a projected rule operator is outside the compiled `capabilities`, the runtime returns a conflict instead of silently inferring support.
+9. `emulator` uses the same aggregate bootstrap seam, refreshes on the same runtime-change signal, and continuously produces one valid and one invalid synthetic JSON payload per active binding, which closes the loop for smoke validation.
+10. `emulator` also reconciles by `bootstrap.reconcile_interval` before continuing synthetic publication; this keeps smoke useful even if the refresh event is delayed or lost locally.
 
 Relevant code paths:
 
@@ -133,6 +135,7 @@ Relevant code paths:
 - `server` should not own domain rules; it should proxy through gateways and use cases.
 - `configctl` owns lifecycle and event emission.
 - `validator` owns runtime cache resolution and result evaluation.
+- compiled artifact metadata, including `capabilities`, belongs to configctl-authored runtime truth; validator consumes it but does not invent or mutate it.
 - `consumer` and `emulator` are runtime clients of active-ingestion bootstrap, not independent sources of truth.
 - `consumer` and `emulator` now default to aggregate bootstrap plus signature-based refresh.
 - `consumer` keeps the loaded aggregate bootstrap signature and compact runtime refs in local loaded-state, and `emulator` logs the same bootstrap diagnostics on start/refresh; these are observability aids for the loaded generation, not new truth surfaces.

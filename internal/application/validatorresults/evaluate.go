@@ -33,6 +33,9 @@ func Evaluate(runtime configdomain.RuntimeProjection, message dataplaneapp.Messa
 	if processedAt.IsZero() {
 		processedAt = time.Now().UTC()
 	}
+	if prob := validateRuntimeCapabilities(runtime); prob != nil {
+		return validatorcontracts.ValidationResultRecord{}, prob
+	}
 
 	result := validatorcontracts.ValidationResultRecord{
 		ProcessingKey: validatorcontracts.BuildValidationProcessingKey(
@@ -88,6 +91,21 @@ func Evaluate(runtime configdomain.RuntimeProjection, message dataplaneapp.Messa
 	}
 
 	return result, nil
+}
+
+func validateRuntimeCapabilities(runtime configdomain.RuntimeProjection) *problem.Problem {
+	for _, rule := range runtime.Rules {
+		if runtime.Artifact.SupportsRuleOperator(rule.Operator) {
+			continue
+		}
+		return problem.New(problem.Conflict, "validator runtime capability does not support configured rule operator").WithDetails(map[string]any{
+			"rule":       strings.TrimSpace(rule.Name),
+			"operator":   strings.TrimSpace(string(rule.Operator)),
+			"artifact":   strings.TrimSpace(runtime.Artifact.ID),
+			"version_id": strings.TrimSpace(runtime.VersionID),
+		})
+	}
+	return nil
 }
 
 func decodePayloadObject(payload []byte) (map[string]any, *problem.Problem) {

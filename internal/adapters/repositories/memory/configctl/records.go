@@ -75,6 +75,7 @@ type compilationArtifactRecord struct {
 	Checksum        string `json:"checksum"`
 	StorageRef      string `json:"storage_ref"`
 	RuntimeLoader   string `json:"runtime_loader"`
+	Capabilities    []string `json:"capabilities,omitempty"`
 	CompilerVersion string `json:"compiler_version,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
@@ -308,6 +309,7 @@ func newCompilationArtifactRecord(artifact configdomain.CompilationArtifact) *co
 		Checksum:        artifact.Checksum,
 		StorageRef:      artifact.StorageRef,
 		RuntimeLoader:   artifact.RuntimeLoader,
+		Capabilities:    append([]string(nil), artifact.NormalizedCapabilities()...),
 		CompilerVersion: artifact.CompilerVersion,
 		CreatedAt:       formatTime(artifact.CreatedAt),
 	}
@@ -328,6 +330,7 @@ func (r compilationArtifactRecord) toDomain() (configdomain.CompilationArtifact,
 		Checksum:        r.Checksum,
 		StorageRef:      r.StorageRef,
 		RuntimeLoader:   r.RuntimeLoader,
+		Capabilities:    configdomain.CompilationArtifact{Capabilities: r.Capabilities}.NormalizedCapabilities(),
 		CompilerVersion: r.CompilerVersion,
 		CreatedAt:       createdAt,
 	}, nil
@@ -394,6 +397,7 @@ func newIngestionRuntimeRecord(runtime configdomain.IngestionRuntimeProjection) 
 			Checksum:        runtime.Artifact.Checksum,
 			StorageRef:      runtime.Artifact.StorageRef,
 			RuntimeLoader:   runtime.Artifact.RuntimeLoader,
+			Capabilities:    append([]string(nil), runtime.Artifact.NormalizedCapabilities()...),
 			CompilerVersion: runtime.Artifact.CompilerVersion,
 			CreatedAt:       formatTime(runtime.Artifact.CreatedAt),
 		},

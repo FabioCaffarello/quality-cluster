@@ -46,6 +46,7 @@ func TestConfigSetLifecycleTransitions(t *testing.T) {
 	if prob != nil {
 		t.Fatalf("new artifact: %v", prob)
 	}
+	artifact = artifact.WithCapabilities(versionCapabilities(t, set, "ver-1"))
 	if prob := set.CompileVersion("ver-1", artifact, createdAt.Add(2*time.Minute)); prob != nil {
 		t.Fatalf("compile version: %v", prob)
 	}
@@ -62,6 +63,9 @@ func TestConfigSetLifecycleTransitions(t *testing.T) {
 	}
 	if projection.Artifact.ID != "artifact-1" || len(projection.Bindings) != 1 {
 		t.Fatalf("unexpected runtime projection: %+v", projection)
+	}
+	if len(projection.Artifact.Capabilities) != 2 {
+		t.Fatalf("expected projection capabilities to be preserved, got %+v", projection.Artifact.Capabilities)
 	}
 	ingestionProjection, prob := version.BuildIngestionRuntimeProjection(set, scope, activation.ActivatedAt)
 	if prob != nil {
@@ -122,6 +126,49 @@ func TestConfigSetRejectsInvalidLifecycleTransitions(t *testing.T) {
 	if _, prob := set.ValidateVersion("ver-1", time.Unix(13, 0).UTC()); prob == nil || prob.Code != problem.Conflict {
 		t.Fatalf("expected conflict validating archived version, got %v", prob)
 	}
+}
+
+func TestInspectDocumentDerivesRuntimeCapabilitiesFromRules(t *testing.T) {
+	t.Parallel()
+
+	document, diagnostics, prob := InspectDocument(ConfigSource{
+		Format: FormatJSON,
+		Content: `{
+			"metadata":{"name":"core"},
+			"bindings":[{"name":"orders","topic":"orders.v1"}],
+			"fields":[{"name":"order_id","type":"string"},{"name":"status","type":"string"}],
+			"rules":[
+				{"name":"order_id_required","field":"order_id","operator":"required"},
+				{"name":"status_not_empty","field":"status","operator":"not_empty"},
+				{"name":"status_match","field":"status","operator":"equals","expected_value":"approved"}
+			]
+		}`,
+	})
+	if prob != nil {
+		t.Fatalf("inspect document: %v", prob)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %+v", diagnostics)
+	}
+
+	expected := []string{
+		RuntimeCapabilityRuleEquals,
+		RuntimeCapabilityRuleNotEmpty,
+		RuntimeCapabilityRuleRequired,
+	}
+	if got := document.RuntimeCapabilities(); len(got) != len(expected) || got[0] != expected[0] || got[1] != expected[1] || got[2] != expected[2] {
+		t.Fatalf("expected capabilities %v, got %v", expected, got)
+	}
+}
+
+func versionCapabilities(t *testing.T, set ConfigSet, versionID string) []string {
+	t.Helper()
+
+	version, ok := set.VersionByID(versionID)
+	if !ok || version.Document == nil {
+		t.Fatalf("expected version %q with validated document", versionID)
+	}
+	return version.Document.RuntimeCapabilities()
 }
 
 func TestCreateDraftVersionBlocksConcurrentOpenCandidate(t *testing.T) {

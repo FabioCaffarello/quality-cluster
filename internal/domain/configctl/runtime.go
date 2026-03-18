@@ -1,6 +1,8 @@
 package configctl
 
 import (
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ type CompilationArtifact struct {
 	Checksum        string
 	StorageRef      string
 	RuntimeLoader   string
+	Capabilities    []string
 	CompilerVersion string
 	CreatedAt       time.Time
 }
@@ -110,6 +113,7 @@ func NewCompilationArtifact(id, schemaVersion, checksumValue, storageRef, runtim
 		CompilerVersion: strings.TrimSpace(compilerVersion),
 		CreatedAt:       createdAt.UTC(),
 	}
+	artifact.Capabilities = normalizeCapabilities(artifact.Capabilities)
 
 	var issues []problem.ValidationIssue
 	if artifact.ID == "" {
@@ -134,4 +138,54 @@ func NewCompilationArtifact(id, schemaVersion, checksumValue, storageRef, runtim
 		return artifact, nil
 	}
 	return CompilationArtifact{}, problem.Validation(problem.InvalidArgument, "compilation artifact is invalid", issues...)
+}
+
+func (a CompilationArtifact) WithCapabilities(capabilities []string) CompilationArtifact {
+	a.Capabilities = normalizeCapabilities(capabilities)
+	return a
+}
+
+func (a CompilationArtifact) NormalizedCapabilities() []string {
+	return normalizeCapabilities(a.Capabilities)
+}
+
+func (a CompilationArtifact) SupportsCapability(capability string) bool {
+	capability = strings.TrimSpace(capability)
+	if capability == "" {
+		return false
+	}
+	return slices.Contains(a.NormalizedCapabilities(), capability)
+}
+
+func (a CompilationArtifact) SupportsRuleOperator(operator RuleOperator) bool {
+	capability := runtimeCapabilityForOperator(RuleOperator(strings.ToLower(strings.TrimSpace(string(operator)))))
+	if capability == "" {
+		return false
+	}
+	return a.SupportsCapability(capability)
+}
+
+func normalizeCapabilities(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	unique := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		unique[value] = struct{}{}
+	}
+	if len(unique) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(unique))
+	for value := range unique {
+		normalized = append(normalized, value)
+	}
+	sort.Strings(normalized)
+	return normalized
 }

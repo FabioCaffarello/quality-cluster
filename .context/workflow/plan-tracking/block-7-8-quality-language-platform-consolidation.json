@@ -47,6 +47,30 @@
       "status": "accepted",
       "id": "dec-1773703598004",
       "decidedAt": "2026-03-16T22:26:38Z"
+    },
+    {
+      "title": "Compiled artifacts now carry explicit DSL execution capabilities",
+      "description": "The first execution slice of Blocks 7-8 derives normalized capabilities from the validated config document, stores them in the compilation artifact, propagates them through runtime projections and compact bootstrap summaries, and keeps the runtime truth anchored in configctl-owned compile metadata.",
+      "phase": "E",
+      "alternatives": [
+        "Infer supported rule operators only from validator code paths",
+        "Leave capability metadata implicit in schema_version and runtime_loader alone"
+      ],
+      "status": "accepted",
+      "id": "dec-1773704078005",
+      "decidedAt": "2026-03-16T22:34:38Z"
+    },
+    {
+      "title": "Validator execution now fails closed on capability mismatch",
+      "description": "Validator evaluation now checks projected rule operators against the compiled artifact capability envelope before rule execution. Unsupported operators return a conflict instead of silently behaving as if support exists, which keeps future DSL growth bounded by compile-time truth.",
+      "phase": "E",
+      "alternatives": [
+        "Continue treating validator source code as the only capability gate",
+        "Emit best-effort violations for unsupported operators and proceed"
+      ],
+      "status": "accepted",
+      "id": "dec-1773704078006",
+      "decidedAt": "2026-03-16T22:34:38Z"
     }
   ],
   "phases": {
@@ -55,7 +79,8 @@
       "updatedAt": "2026-03-16T22:26:38Z"
     },
     "phase-2": {
-      "status": "pending"
+      "status": "in_progress",
+      "updatedAt": "2026-03-16T22:34:38Z"
     },
     "phase-3": {
       "status": "pending"
@@ -64,5 +89,5 @@
       "status": "pending"
     }
   },
-  "progress": 25
+  "progress": 40
 }

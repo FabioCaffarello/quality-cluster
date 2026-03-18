@@ -104,7 +104,7 @@ func (uc *CompileConfigUseCase) buildArtifact(set configdomain.ConfigSet, versio
 		compilerVersion = "configctl-sync/v1"
 	}
 
-	return configdomain.NewCompilationArtifact(
+	artifact, prob := configdomain.NewCompilationArtifact(
 		artifactID,
 		schemaVersion,
 		checksumValue,
@@ -113,6 +113,14 @@ func (uc *CompileConfigUseCase) buildArtifact(set configdomain.ConfigSet, versio
 		compilerVersion,
 		uc.now(),
 	)
+	if prob != nil {
+		return configdomain.CompilationArtifact{}, prob
+	}
+	var capabilities []string
+	if version.Document != nil {
+		capabilities = version.Document.RuntimeCapabilities()
+	}
+	return artifact.WithCapabilities(capabilities), nil
 }
 
 func compileChecksum(version configdomain.ConfigVersion) string {

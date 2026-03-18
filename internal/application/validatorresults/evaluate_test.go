@@ -20,6 +20,7 @@ func TestEvaluateReturnsPassedWhenRulesMatch(t *testing.T) {
 		ConfigKey:          "orders-prod",
 		VersionID:          "ver-1",
 		Version:            2,
+		Artifact:           configdomain.CompilationArtifact{Capabilities: []string{configdomain.RuntimeCapabilityRuleNotEmpty, configdomain.RuntimeCapabilityRuleRequired}},
 		DefinitionChecksum: "definition-1",
 		Rules: []configdomain.Rule{
 			{Name: "order_id_required", Field: "order_id", Operator: configdomain.RuleOperatorRequired, Severity: configdomain.RuleSeverityError},
@@ -46,6 +47,7 @@ func TestEvaluateReturnsViolationsForMissingRequiredField(t *testing.T) {
 		ConfigKey:          "orders-prod",
 		VersionID:          "ver-1",
 		Version:            2,
+		Artifact:           configdomain.CompilationArtifact{Capabilities: []string{configdomain.RuntimeCapabilityRuleNotEmpty, configdomain.RuntimeCapabilityRuleRequired}},
 		DefinitionChecksum: "definition-1",
 		Rules: []configdomain.Rule{
 			{Name: "order_id_required", Field: "order_id", Operator: configdomain.RuleOperatorRequired, Severity: configdomain.RuleSeverityError},
@@ -72,6 +74,7 @@ func TestEvaluateSupportsEqualsOperator(t *testing.T) {
 		ConfigKey:          "orders-prod",
 		VersionID:          "ver-1",
 		Version:            2,
+		Artifact:           configdomain.CompilationArtifact{Capabilities: []string{configdomain.RuntimeCapabilityRuleEquals}},
 		DefinitionChecksum: "definition-1",
 		Rules: []configdomain.Rule{
 			{Name: "status_equals", Field: "status", Operator: configdomain.RuleOperatorEquals, ExpectedValue: "approved", Severity: configdomain.RuleSeverityWarn},
@@ -82,6 +85,29 @@ func TestEvaluateSupportsEqualsOperator(t *testing.T) {
 	}
 	if len(result.Violations) != 1 || result.Violations[0].Operator != "equals" {
 		t.Fatalf("expected equals violation, got %+v", result.Violations)
+	}
+}
+
+func TestEvaluateRejectsRuleOperatorOutsideCompiledCapabilities(t *testing.T) {
+	t.Parallel()
+
+	_, prob := Evaluate(configdomain.RuntimeProjection{
+		Scope:              configdomain.DefaultActivationScope(),
+		ConfigSetID:        "set-1",
+		ConfigKey:          "orders-prod",
+		VersionID:          "ver-1",
+		Version:            2,
+		Artifact:           configdomain.CompilationArtifact{ID: "artifact-1", Capabilities: []string{configdomain.RuntimeCapabilityRuleRequired}},
+		DefinitionChecksum: "definition-1",
+		Rules: []configdomain.Rule{
+			{Name: "status_equals", Field: "status", Operator: configdomain.RuleOperatorEquals, ExpectedValue: "approved", Severity: configdomain.RuleSeverityWarn},
+		},
+	}, mustMessage(t, `{"status":"approved"}`), time.Unix(20, 0).UTC())
+	if prob == nil {
+		t.Fatal("expected capability mismatch problem")
+	}
+	if prob.Code != "SYS_CONFLICT" {
+		t.Fatalf("expected conflict problem, got %v", prob)
 	}
 }
 

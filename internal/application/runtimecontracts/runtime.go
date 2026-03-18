@@ -25,6 +25,7 @@ type ArtifactRecord struct {
 	Checksum      string `json:"checksum"`
 	StorageRef    string `json:"storage_ref"`
 	RuntimeLoader string `json:"runtime_loader"`
+	Capabilities  []string `json:"capabilities,omitempty"`
 }
 
 type RuntimeRecord struct {
@@ -53,6 +54,7 @@ func RecordFromProjection(projection configdomain.RuntimeProjection) RuntimeReco
 			Checksum:      projection.Artifact.Checksum,
 			StorageRef:    projection.Artifact.StorageRef,
 			RuntimeLoader: projection.Artifact.RuntimeLoader,
+			Capabilities:  append([]string(nil), projection.Artifact.NormalizedCapabilities()...),
 		},
 		ActivatedAt: projection.ActivatedAt,
 	}
@@ -77,6 +79,7 @@ func RecordFromIngestionProjection(projection configdomain.IngestionRuntimeProje
 			Checksum:      projection.Artifact.Checksum,
 			StorageRef:    projection.Artifact.StorageRef,
 			RuntimeLoader: projection.Artifact.RuntimeLoader,
+			Capabilities:  append([]string(nil), projection.Artifact.NormalizedCapabilities()...),
 		},
 		ActivatedAt: projection.ActivatedAt,
 	}

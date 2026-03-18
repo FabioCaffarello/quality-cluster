@@ -63,6 +63,7 @@ func detailRecordFromDomain(set configdomain.ConfigSet, version configdomain.Con
 			Checksum:        version.Artifact.Checksum,
 			StorageRef:      version.Artifact.StorageRef,
 			RuntimeLoader:   version.Artifact.RuntimeLoader,
+			Capabilities:    append([]string(nil), version.Artifact.NormalizedCapabilities()...),
 			CompilerVersion: version.Artifact.CompilerVersion,
 			CreatedAt:       version.Artifact.CreatedAt,
 		}
@@ -94,6 +95,7 @@ func summaryRecordFromDomain(set configdomain.ConfigSet, version configdomain.Co
 			Checksum:      version.Artifact.Checksum,
 			StorageRef:    version.Artifact.StorageRef,
 			RuntimeLoader: version.Artifact.RuntimeLoader,
+			Capabilities:  append([]string(nil), version.Artifact.NormalizedCapabilities()...),
 		}
 	}
 
@@ -150,6 +152,7 @@ func projectionRecordFromDomain(projection configdomain.RuntimeProjection) contr
 			Checksum:        projection.Artifact.Checksum,
 			StorageRef:      projection.Artifact.StorageRef,
 			RuntimeLoader:   projection.Artifact.RuntimeLoader,
+			Capabilities:    append([]string(nil), projection.Artifact.NormalizedCapabilities()...),
 			CompilerVersion: projection.Artifact.CompilerVersion,
 			CreatedAt:       projection.Artifact.CreatedAt,
 		},

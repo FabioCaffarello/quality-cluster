@@ -126,8 +126,17 @@ Tokens are normalized to lowercase and sanitized for subject-safe routing.
     - config version,
     - checksum,
     - artifact,
+    - compiled capability envelope,
     - activation time.
 - `runtimes`: the deduplicated compact active runtime set for the same bootstrap state.
+
+The artifact carried in runtime projection and bootstrap payloads is now the compiled execution envelope, not just a storage pointer. In practice it includes:
+
+- `schema_version`
+- `runtime_loader`
+- `checksum`
+- optional `storage_ref`
+- explicit `capabilities`
 
 Default scope behavior is operationally important:
 
@@ -162,6 +171,7 @@ The contract is strict:
 - failed results must contain at least one violation
 - `processing_key` must stay stable for replay/redelivery of the same canonical dataplane message
 - scope, binding, config version, and message identity must be populated
+- if a projected rule operator falls outside the artifact `capabilities`, the validator must fail closed before producing a misleading result record
 
 ## Validation incident payloads
 

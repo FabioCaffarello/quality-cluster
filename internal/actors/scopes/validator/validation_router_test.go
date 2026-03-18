@@ -36,7 +36,7 @@ func TestValidationRouterRoutesWorkAndStoresResult(t *testing.T) {
 			ConfigKey:          "orders",
 			VersionID:          "cfg-123",
 			Version:            1,
-			Artifact:           configdomain.CompilationArtifact{ID: "artifact-1", Checksum: "checksum-1", RuntimeLoader: "validator:v1", SchemaVersion: "runtime/v1", StorageRef: "memory://artifact-1", CreatedAt: time.Unix(10, 0).UTC()},
+			Artifact:           configdomain.CompilationArtifact{ID: "artifact-1", Checksum: "checksum-1", RuntimeLoader: "validator:v1", SchemaVersion: "runtime/v1", StorageRef: "memory://artifact-1", Capabilities: []string{configdomain.RuntimeCapabilityRuleRequired}, CreatedAt: time.Unix(10, 0).UTC()},
 			ActivatedAt:        time.Unix(20, 0).UTC(),
 			DefinitionChecksum: "definition-1",
 			Rules: []configdomain.Rule{
